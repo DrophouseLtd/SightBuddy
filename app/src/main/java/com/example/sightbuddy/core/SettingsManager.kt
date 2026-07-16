@@ -27,7 +27,9 @@ class SettingsManager(context: Context) {
     private val _scanColourEnabled = MutableStateFlow(prefs.getBoolean(KEY_SCAN_COLOUR, true))
     val scanColourEnabled = _scanColourEnabled.asStateFlow()
 
-    private val _llmChatEnabled = MutableStateFlow(prefs.getBoolean(KEY_LLM_CHAT, true))
+    // Cloud LLM features are permanently disabled: the backend was decommissioned
+    // when the project went open source (v2.0.0). The app is fully local.
+    private val _llmChatEnabled = MutableStateFlow(false)
     val llmChatEnabled = _llmChatEnabled.asStateFlow()
 
     // --- User preferences ---
@@ -79,9 +81,9 @@ class SettingsManager(context: Context) {
         prefs.edit().putBoolean(KEY_SCAN_COLOUR, enabled).apply()
     }
 
+    @Suppress("UNUSED_PARAMETER")
     fun setLlmChat(enabled: Boolean) {
-        _llmChatEnabled.value = enabled
-        prefs.edit().putBoolean(KEY_LLM_CHAT, enabled).apply()
+        // No-op: cloud chat no longer exists.
     }
 
     fun setHighContrast(enabled: Boolean) {

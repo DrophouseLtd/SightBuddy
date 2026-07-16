@@ -4,8 +4,6 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.google.services)
-    alias(libs.plugins.firebase.crashlytics)
 }
 
 val localProperties = Properties().apply {
@@ -54,7 +52,7 @@ val downloadSherpaOnnx = tasks.register("downloadSherpaOnnx") {
 // Default to the public model release so clones work out of the box;
 // override via local.properties/env to self-host.
 val sttModelBaseUrl = localOrEnv("STT_MODEL_BASE_URL").ifEmpty {
-    "https://github.com/DrophouseLtd/sightbuddy/releases/download/stt-models-v1"
+    "https://github.com/DrophouseLtd/SightBuddy/releases/download/stt-models-v1"
 }
 
 // ---------------------------------------------------------------------------
@@ -78,8 +76,8 @@ android {
         applicationId = "com.drophouse.sightbuddy"
         minSdk = 30
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.1.4"
+        versionCode = 7
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -153,12 +151,6 @@ android {
     }
 }
 
-// Google Services plugin: don't fail when google-services.json is absent (dev flavor)
-googleServices {
-    missingGoogleServicesStrategy =
-        com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy.IGNORE
-}
-
 tasks.named("preBuild") { dependsOn(downloadSherpaOnnx) }
 
 dependencies {
@@ -196,14 +188,6 @@ dependencies {
 
     // Google ML Kit Text Recognition
     implementation(libs.google.mlkit.text.recognition)
-
-    // Firebase Crashlytics (prod flavor only)
-    "prodImplementation"(platform(libs.firebase.bom))
-    "prodImplementation"(libs.firebase.crashlytics)
-    "prodImplementation"(libs.firebase.analytics)
-
-    // Google Play Integrity (prod flavor only)
-    "prodImplementation"(libs.play.integrity)
 
     // In-app updates (prod flavor only)
     "prodImplementation"(libs.play.app.update)

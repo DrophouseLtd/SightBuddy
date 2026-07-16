@@ -128,17 +128,7 @@ fun HelpDialog(
                             contentDescription = closeCd,
                             onClick = { resetAndClose() },
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        HelpActionButton(
-                            label = leaveFeedbackLabel,
-                            background = if (darkTheme) Color(0xFF424242) else Color(0xFFE0E0E0),
-                            textColor = textColor,
-                            contentDescription = leaveFeedbackCd,
-                            onClick = {
-                                submitError = false
-                                pane = HelpPane.FEEDBACK_FORM
-                            },
-                        )
+                        // Feedback flow removed with the backend (v2.0.0, fully local app).
                     }
 
                     HelpPane.FEEDBACK_FORM -> {

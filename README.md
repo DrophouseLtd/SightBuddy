@@ -2,25 +2,22 @@
 
 **AI-assisted vision in your pocket — an Android accessibility app for people with low vision, built camera-first, voice-first, and TalkBack-first.**
 
-> **Status: development ended, open-sourced (July 2026).**
-> Sight Buddy ran as an open beta on Google Play in the UK and Europe. We shut down the paid cloud backend after concluding the product wasn't commercially viable — the honest story is below. Because the app was designed local-first, **everything except cloud chat still works**: object detection, OCR reading, colour and light scanning, and fully on-device speech recognition run with no server at all.
-
-<p>
-  <img src="Assets/sightbuddyicon.png" width="96" alt="Sight Buddy icon">
-</p>
+> **Status: alive on Google Play as a free, fully local app — active development ended (July 2026).**
+> Sight Buddy ran as an open beta in the UK and Europe with a paid cloud-AI backend. We concluded the product wasn't commercially viable and shut the backend down — the honest story is below. But because the app was designed local-first, we didn't have to kill it: **v2.0.0 removed the cloud features and stays published on Play, free forever** — object detection, OCR reading, colour and light scanning, and fully on-device Whisper speech recognition, with zero servers, zero cost, and zero data collection.
 
 ## What it does
 
 | Mode | What it does |
 |------|--------------|
-| **Image chat** | Describes the camera scene; answer follow-up questions by voice (cloud LLM) |
-| **Text chat** | Reads printed text aloud (on-device OCR); voice Q&A about the capture (cloud LLM) |
+| **Read text** | Reads printed text aloud with seekable playback (on-device OCR) |
 | **Discover objects** | Names what the camera sees as you move (on-device TFLite) |
 | **Find objects** | Say "keys" or "cup" — directional audio and haptics guide you to it |
 | **Scan colour** | Speaks the colour at the centre of the frame |
 | **Scan light** | Reports bright, dim, or dark lighting |
 
 Every surface works with TalkBack, spoken announcements, haptics, high-contrast themes, adjustable speech rate (1×–3×), and button navigation instead of swipes.
+
+*(The v1.x beta also had cloud-LLM scene and document Q&A — "Image chat" / "Text chat". That code is still in the repo, and the Supabase Edge backend that powered it is in [`supabase/`](supabase/); wire up your own project and OpenAI key to revive it.)*
 
 ## The post-mortem: why we stopped
 
@@ -29,10 +26,10 @@ We built Sight Buddy because everyday vision tasks — reading a label, finding 
 What didn't hold up was the business:
 
 - **The economics of cloud AI for this audience are unforgiving.** The most valuable features (scene Q&A, document Q&A) ride on per-request LLM inference that someone has to pay for, indefinitely. Our users — visually impaired people — are exactly the audience that should *not* be gated behind a subscription, and a small beta gave no path to covering inference costs with goodwill alone.
-- **We stopped at the moment of maximum honesty.** We had the next step fully built: attribution SDKs integrated, a GDPR consent flow implemented, ad campaigns planned for TikTok and Google. Before spending the first pound on acquisition we ran the numbers — acquisition cost against zero revenue per user and an ongoing per-user inference bill — and killed the plan instead of funding a treadmill. The tracking stack was removed the same week it was written; this repository ships with the original zero-tracking design.
+- **The spreadsheet said no.** Before spending on user acquisition we ran the numbers — acquisition cost against zero revenue per user and an ongoing per-user inference bill — and there was no honest case for monetising. We stopped there.
 - **What we'd do differently:** validate willingness-to-pay (or a grant/partnership funding model — councils, charities, assistive-tech distributors) *before* building the cloud features, and lean even harder into local-first. The on-device half of this app costs nothing to run forever; that half was the right product.
 
-The silver lining of local-first architecture: sunsetting the backend didn't brick anyone's app. Existing installs keep every offline feature.
+The silver lining of local-first architecture: sunsetting the backend didn't brick the product. We cut the cloud features, shipped v2.0.0, and **left the app on the store** — the on-device half costs nothing to run and keeps serving the people it was built for, indefinitely.
 
 ## What's technically interesting here
 
@@ -55,8 +52,8 @@ Requirements: JDK 17+, Android SDK 36. No Android Studio required (`gradlew` han
 ./gradlew assembleDevDebug
 ```
 
-- **Offline features** (object detection, OCR reading, colour/light, Whisper STT) work with zero configuration. Whisper model files download on first run from this repo's `stt-models-v1` release.
-- **Cloud chat features** require deploying your own backend: create a Supabase project, deploy [`supabase/functions/`](supabase/functions/) (`chat`, `feedback`, `delete-my-data`), set the `OPENAI_API_KEY` secret, run the migration, and point `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` in `local.properties` at it. Without a backend the app simply reports cloud chat as unavailable — everything else runs.
+- Everything the shipped app does (object detection, OCR reading, colour/light, Whisper STT) works with zero configuration. Whisper model files download on first run from this repo's `stt-models-v1` release.
+- **Reviving the retired cloud chat**: the full backend lives in [`supabase/functions/`](supabase/functions/) (`chat`, `feedback`, `delete-my-data`). Deploy it to your own Supabase project with an `OPENAI_API_KEY` secret, re-enable the LLM flag in `SettingsManager`, and point `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` in `local.properties` at it.
 - Release signing expects `KEYSTORE_*` entries in `local.properties` (see [AGENT_HANDOVER.md](AGENT_HANDOVER.md)).
 
 ## Licenses

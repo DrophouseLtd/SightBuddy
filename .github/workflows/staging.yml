@@ -30,10 +30,7 @@ jobs:
 
       - name: Build prodRelease AAB
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-          # Public release URL, not a secret
-          STT_MODEL_BASE_URL: https://github.com/DrophouseLtd/sightbuddy/releases/download/stt-models-v1
+          # Backend decommissioned (v2.0.0, fully local app) — no Supabase config.
           KEYSTORE_FILE: upload-keystore.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}

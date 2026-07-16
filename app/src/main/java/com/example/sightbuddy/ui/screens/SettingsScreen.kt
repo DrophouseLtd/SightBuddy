@@ -45,7 +45,6 @@ fun SettingsScreen(
     onDeleteData: suspend () -> Boolean = { false },
 ) {
     val textPreview by settingsManager.textPreviewEnabled.collectAsState()
-    val llmChatEnabled by settingsManager.llmChatEnabled.collectAsState()
     val scanLight by settingsManager.scanLightEnabled.collectAsState()
     val scanColour by settingsManager.scanColourEnabled.collectAsState()
     val highContrastMode by settingsManager.highContrastEnabled.collectAsState()
@@ -112,16 +111,6 @@ fun SettingsScreen(
                 description = "Read text aloud first, then ask AI with mic",
                 checked = textPreview,
                 onCheckedChange = { settingsManager.setTextPreview(it) },
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode
-            )
-
-            SettingsToggle(
-                label = "LLM Chat",
-                description = "Enable cloud AI features (image chat, text questions, smart object search)",
-                checked = llmChatEnabled,
-                onCheckedChange = { settingsManager.setLlmChat(it) },
                 labelColor = labelColor,
                 highContrast = highContrast,
                 whiteMode = whiteMode
@@ -224,18 +213,6 @@ fun SettingsScreen(
             )
 
             Spacer(modifier = Modifier.height(24.dp))
-
-            SectionHeader("Privacy", textColor)
-
-            SettingsNavRow(
-                label = deleteDataLabel,
-                description = deleteDataDescription,
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode,
-                onClick = { if (!isDeleting) showDeleteConfirm = true },
-                contentDescription = deleteDataCd,
-            )
 
             Spacer(modifier = Modifier.height(32.dp))
         }
