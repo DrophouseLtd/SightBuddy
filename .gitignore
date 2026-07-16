@@ -1,0 +1,39 @@
+# Built variants
+**/build
+/build/
+
+# Android Studio
+*.iml
+.idea/
+.gradle/
+local.properties
+.vscode/
+
+# Logs
+*.log
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Kotlin
+/bin/
+/gen/
+
+# Sensitive / local-only
+.env
+payload.json
+*.jks
+*.keystore
+keystore_base64.txt
+
+# Supabase CLI local state (may contain connection strings)
+supabase/.temp/
+
+# Migration artifacts
+migrate_working_dir/
+Worklog.md
+Implementation Plan.md
+
+# sherpa-onnx AAR (48 MB; fetched by the downloadSherpaOnnx gradle task)
+app/libs/*.aar

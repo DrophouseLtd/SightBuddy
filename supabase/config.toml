@@ -1,0 +1,17 @@
+# Linked Supabase project (match Dashboard → Settings → General → Reference ID)
+project_id = "bioeftajdecvphuqjhmh"
+
+[api]
+enabled = true
+
+# JWT verification: Supabase validates the Authorization header before
+# forwarding the request. The app sends the anon key as a Bearer token,
+# which is a valid Supabase JWT — this blocks unauthenticated callers.
+[functions.chat]
+verify_jwt = true
+
+[functions.feedback]
+verify_jwt = true
+
+[functions.delete-my-data]
+verify_jwt = true

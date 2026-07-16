@@ -1,0 +1,62 @@
+<resources>
+    <string name="app_name">SIghtbuddy</string>
+    <string name="welcome_image_cd">Sight Buddy</string>
+    <string name="welcome_skip">Skip welcome</string>
+    <string name="welcome_skip_cd">Skip welcome message and open the app</string>
+    <string name="welcome_help_tap_cd">Help. During welcome, plays a confirmation sound only</string>
+    <string name="welcome_settings_tap_cd">Settings. During welcome, plays a confirmation sound only</string>
+
+    <string name="terms_prompt">Before use, please accept our privacy policy and terms of use.</string>
+    <string name="terms_prompt_cd">Before use, please accept our privacy policy and terms of use</string>
+    <string name="terms_of_use">Terms of use</string>
+    <string name="terms_of_use_cd">Terms of use. Opens terms of use in your browser</string>
+    <string name="terms_privacy_policy">Privacy policy</string>
+    <string name="terms_privacy_policy_cd">Privacy policy. Opens privacy policy in your browser</string>
+    <string name="terms_accept">Accept</string>
+    <string name="terms_accept_cd">Accept privacy policy and terms of use</string>
+
+    <string name="help_button_cd">Open help for this feature</string>
+    <string name="help_close">Close help</string>
+    <string name="help_close_cd">Close help and return to the app</string>
+    <string name="help_leave_feedback">Leave feedback</string>
+    <string name="help_leave_feedback_cd">Leave anonymous feedback about this feature</string>
+
+    <string name="feedback_privacy_notice">All feedback is processed anonymously. Please do not share any personal information.</string>
+    <string name="feedback_field_hint">Your feedback</string>
+    <string name="feedback_submit">Send feedback</string>
+    <string name="feedback_submit_cd">Send anonymous feedback</string>
+    <string name="feedback_back_to_help">Back to help</string>
+    <string name="feedback_thanks_title">Thank you</string>
+    <string name="feedback_thanks_body">Your feedback was received.</string>
+    <string name="feedback_submit_failed">Could not send feedback. Check your connection and try again.</string>
+
+    <string name="settings_delete_data">Delete data</string>
+    <string name="settings_delete_data_description">Remove your cloud quota and feedback from our servers</string>
+    <string name="settings_delete_data_cd">Delete data. Double tap to open confirmation.</string>
+    <string name="delete_data_confirm_message">Are you sure? If you delete your data you will be unable to use LLM chat functions for two days.</string>
+    <string name="delete_data_confirm_yes">Yes</string>
+    <string name="delete_data_confirm_yes_cd">Yes, delete my data</string>
+    <string name="delete_data_confirm_no">No</string>
+    <string name="delete_data_confirm_no_cd">No, keep my data</string>
+
+    <string name="help_title_image_chat">Image chat</string>
+    <string name="help_body_image_chat">Point the camera at a scene and tap Take Picture. Sight Buddy describes what it sees. Hold the mic button and ask follow-up questions about the same image. Swipe between features or use Previous and Next when button navigation is on.</string>
+
+    <string name="help_title_text_chat">Text chat</string>
+    <string name="help_body_text_chat">Point the camera at text and tap Take Picture. The app reads the text aloud and you can ask follow-up questions with the mic. Use Back and Forward to skip through the reading. Hold Back to restart from the beginning. Hold Forward to pause or resume the reader.</string>
+
+    <string name="help_title_discover_objects">Discover objects</string>
+    <string name="help_body_discover_objects">Move the camera slowly. Sight Buddy names the most confident object it sees, with a short pause between announcements so speech stays clear.</string>
+
+    <string name="help_title_find_objects">Find objects</string>
+    <string name="help_body_find_objects">Hold the mic and say what to find, for example \"keys\" or \"cup\". Directional sounds guide you left, right, up, down, or centre. Tap Browse Objects to pick from a list.</string>
+
+    <string name="help_title_scan_light">Scan Light</string>
+    <string name="help_body_scan_light">Point the camera at the scene. Sight Buddy reports whether lighting is bright, dim, or dark based on the camera image.</string>
+
+    <string name="help_title_scan_colour">Scan Colour</string>
+    <string name="help_body_scan_colour">Point the camera at the colour you want identified. Sight Buddy speaks the colour name from the centre of the view.</string>
+
+    <string name="help_title_text_playback_controls">Text playback controls</string>
+    <string name="help_body_text_playback_controls">To start again from the beginning, hold the back button. To pause the reader, hold the forward button. A short tap on back or forward skips about twenty characters. You can open this help any time with the Help button.</string>
+</resources>
