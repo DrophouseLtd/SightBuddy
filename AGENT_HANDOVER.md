@@ -1,6 +1,6 @@
 # Architecture notes: Sight Buddy (native Android)
 
-Kotlin + Jetpack Compose accessibility app for AI-assisted vision. **There is no backend.** Everything runs on-device except optional cloud AI, which calls OpenAI **directly using the user's own API key** (BYOK). Earlier versions used a Supabase proxy; that was removed when the project was open-sourced — see [Worklog.md](Worklog.md) for the full history.
+Kotlin + Jetpack Compose accessibility app for AI-assisted vision. **There is no backend.** Everything runs on-device except optional cloud AI, which calls OpenAI **directly using the user's own API key** (BYOK). Earlier versions used a Supabase proxy; that was removed when the project was open-sourced.
 
 ## 1. Build variants
 

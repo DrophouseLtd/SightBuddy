@@ -30,10 +30,10 @@ keystore_base64.txt
 # Supabase CLI local state (may contain connection strings)
 supabase/.temp/
 
-# Migration artifacts
+# Internal working docs (kept private)
 migrate_working_dir/
-Worklog.md
 Implementation Plan.md
+Worklog.md
 
 # sherpa-onnx AAR (48 MB; fetched by the downloadSherpaOnnx gradle task)
 app/libs/*.aar

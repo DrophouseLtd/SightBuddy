@@ -88,13 +88,13 @@ The silver lining of local-first architecture: shutting down the backend didn't 
 If you're reading this as a portfolio piece, or mining the repo for parts, these are the bits worth a look:
 
 - **On-device Whisper speech-to-text on Android** — [`core/stt/`](app/src/main/java/com/example/sightbuddy/core/stt/). Whisper `base.en` (int8) + Silero VAD via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), wrapped in a push-to-talk/tap-to-talk service with 10 s silence auto-stop and a 60 s cap. Models download once from a public release; until then it transparently falls back to the system recogniser, so the app is never broken while waiting.
-- **"Ask straight away" capture flow** — pressing Ask with nothing captured records your question, snaps the frame at the moment you finish speaking, then pairs frame and transcription in an order-independent effect before sending both. Removes the take-a-photo-*then*-ask two-step for a user who can't see the viewfinder.
+- **"Ask straight away" capture flow** — pressing Ask with nothing captured records your question, snaps the frame at the moment you finish speaking, then pairs frame and transcription in an order-independent effect before sending both.
 - **Encrypted BYOK key storage** — [`ApiKeyStore`](app/src/main/java/com/example/sightbuddy/core/ApiKeyStore.kt) seals the key with an AES-256-GCM key held in the Android Keystore (hardware-backed where available), so the preferences file alone is useless.
 - **Accessible Compose patterns** — TalkBack labels on every control, a high-contrast mode that masks the preview *without* stopping frame analysis, and a character-indexed TTS playback engine whose seek/pause survives speech-rate changes by design.
-- **A disciplined CameraX pipeline** — YUV→RGB without a lossy JPEG round-trip, rotation-aware TFLite input, and a capacity-1 frame `Channel` with explicit ownership accounting to prevent backpressure stalls. The war stories are in [Worklog.md](Worklog.md).
+- **A disciplined CameraX pipeline** — YUV→RGB without a lossy JPEG round-trip, rotation-aware TFLite input, and a capacity-1 frame `Channel` with explicit ownership accounting to prevent backpressure stalls.
 - **Environment isolation without a DI framework** — dev/prod flavors swap real vs. mock behaviour through plain factory functions. Boring, explicit, testable.
 
-Architecture notes: [AGENT_HANDOVER.md](AGENT_HANDOVER.md). Full development history, including the dead ends: [Worklog.md](Worklog.md).
+Architecture notes: [AGENT_HANDOVER.md](AGENT_HANDOVER.md).
 
 ## Building from source
 
@@ -119,7 +119,7 @@ Issues and pull requests are welcome. The project is no longer under active deve
 
 ## Credits
 
-Built by [Drophouse Ltd](https://www.drophouse.uk). Development — including the local-STT migration, the accessibility work, and the sunset/open-sourcing process — was done in close collaboration with **Claude (Anthropic)** via Claude Code, working as a pair-programming partner across the codebase and this repository's documentation.
+Built by [Drophouse Ltd](https://www.drophouse.uk). Development — including the local-STT migration, the accessibility work, and the sunset/open-sourcing process — was done with AI pair-programming throughout: **Claude (Anthropic)** via Claude Code, and **Cursor**.
 
 ## Licence
 
