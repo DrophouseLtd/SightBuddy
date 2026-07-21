@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
  * Manages the Document Chat feature using OpenAI's Chat Completions API:
  * 1. Captures a camera frame
  * 2. Extracts text locally via ML Kit (to save tokens)
- * 3. Sends extracted text + user prompt to OpenAI (or Supabase Edge proxy)
+ * 3. Sends extracted text + user prompt directly to OpenAI (user's own key)
  * 4. Returns the AI response for TTS playback
  */
 class DocumentChatViewModel(

@@ -31,15 +31,42 @@ val sherpaOnnxAar = file("libs/sherpa-onnx-$sherpaOnnxVersion.aar")
 val downloadSherpaOnnx = tasks.register("downloadSherpaOnnx") {
     outputs.file(sherpaOnnxAar)
     doLast {
-        if (!sherpaOnnxAar.exists() || sherpaOnnxAar.length() < 40_000_000L) {
-            sherpaOnnxAar.parentFile.mkdirs()
-            val url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/" +
-                "v$sherpaOnnxVersion/sherpa-onnx-$sherpaOnnxVersion.aar"
-            logger.lifecycle("Downloading $url")
-            URI(url).toURL().openStream().use { input ->
-                sherpaOnnxAar.outputStream().use { output -> input.copyTo(output) }
+        val minBytes = 40_000_000L
+        if (sherpaOnnxAar.exists() && sherpaOnnxAar.length() >= minBytes) return@doLast
+
+        val url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/" +
+            "v$sherpaOnnxVersion/sherpa-onnx-$sherpaOnnxVersion.aar"
+        sherpaOnnxAar.parentFile.mkdirs()
+        // Download to a temp file and only move it into place once complete, so an
+        // interrupted download can never leave a corrupt AAR behind. Retried,
+        // because this is a ~48 MB fetch and clones are often on poor connections.
+        val partial = File(sherpaOnnxAar.parentFile, "${sherpaOnnxAar.name}.part")
+        var lastError: Exception? = null
+        for (attempt in 1..3) {
+            try {
+                logger.lifecycle("Downloading sherpa-onnx runtime (attempt $attempt/3): $url")
+                partial.delete()
+                URI(url).toURL().openStream().use { input ->
+                    partial.outputStream().use { output -> input.copyTo(output) }
+                }
+                if (partial.length() < minBytes) {
+                    error("incomplete download (${partial.length()} bytes)")
+                }
+                partial.renameTo(sherpaOnnxAar)
+                return@doLast
+            } catch (e: Exception) {
+                lastError = e
+                logger.lifecycle("  failed: ${e.message}")
             }
         }
+        partial.delete()
+        throw GradleException(
+            "Could not download the sherpa-onnx runtime after 3 attempts.\n" +
+                "  URL: $url\n" +
+                "  Fix: check your connection, or download it manually to " +
+                "${sherpaOnnxAar.path}\n" +
+                "  Cause: ${lastError?.message}",
+        )
     }
 }
 // Default to the public model release so clones work out of the box;
@@ -141,6 +168,15 @@ android {
 googleServices {
     missingGoogleServicesStrategy =
         com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy.IGNORE
+}
+
+// Uploading the R8 mapping file requires a real Firebase project. Without a
+// google-services.json (any clone of this repo) that task fails and takes the
+// whole release build with it — so skip it. Official builds ship the file and
+// still get deobfuscated crash reports.
+val hasGoogleServices = file("src/prod/google-services.json").exists()
+tasks.matching { it.name.startsWith("uploadCrashlyticsMappingFile") }.configureEach {
+    enabled = hasGoogleServices
 }
 
 tasks.named("preBuild") { dependsOn(downloadSherpaOnnx) }

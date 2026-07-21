@@ -36,7 +36,5 @@
 # ── JSON parsing (org.json is platform API, but keep safety) ─────────────────
 -keep class org.json.** { *; }
 
-# ── App transport classes (Supabase Edge HTTP clients; keep for release parity) ─
+# ── App transport class (direct OpenAI HTTP client; keep for release parity) ───
 -keep class com.example.sightbuddy.core.OpenAiTransport { *; }
--keep class com.example.sightbuddy.core.FeedbackTransport { *; }
--keep class com.example.sightbuddy.core.DeleteDataTransport { *; }

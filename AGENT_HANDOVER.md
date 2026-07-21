@@ -1,84 +1,82 @@
-# Agent Handover: Sight Buddy (Native Android)
+# Architecture notes: Sight Buddy (native Android)
 
-**To the next agent:**  
-Sight Buddy is a Kotlin + Jetpack Compose accessibility app for AI-assisted vision. All cloud LLM calls go through the Supabase Edge `chat` proxy; the Android app never holds an OpenAI API key.
+Kotlin + Jetpack Compose accessibility app for AI-assisted vision. **There is no backend.** Everything runs on-device except optional cloud AI, which calls OpenAI **directly using the user's own API key** (BYOK). Earlier versions used a Supabase proxy; that was removed when the project was open-sourced — see [Worklog.md](Worklog.md) for the full history.
 
-## 1. Build variants (3-tier environment)
+## 1. Build variants
 
-| Variant | Application ID | Supabase | IDs & Integrity | Crashlytics | Where it lives |
-|---------|---------------|----------|-----------------|-------------|---------------|
-| **devDebug** | `com.drophouse.sightbuddy.debug` | Mock (`ghwkdczqihxwhtynpwmd`) | Mock SSAID, `"test-token"` | No | Local laptop / emulator |
-| **prodRelease** (Beta) | `com.drophouse.sightbuddy` | Production | Real SSAID, Play Integrity API | Yes (Firebase) | Play Console Internal Testing → Open Beta |
-| **prodRelease** (Release) | `com.drophouse.sightbuddy` | Production | Real SSAID, Play Integrity API | Yes (Firebase) | Promoted from Beta in Play Console |
+| Variant | Application ID | Crashlytics | Signing |
+|---------|----------------|-------------|---------|
+| **devDebug** | `com.drophouse.sightbuddy.debug` | No | debug |
+| **prodRelease** | `com.drophouse.sightbuddy` | Yes | upload key, or debug if no keystore configured |
 
-Build command: `./gradlew assembleDevDebug` (local) or `./gradlew bundleProdRelease` (CI/Beta/Release).
+```bash
+./gradlew assembleDevDebug      # local development
+./gradlew assembleProdRelease   # release APK (direct download)
+./gradlew bundleProdRelease     # release AAB (Google Play)
+```
 
-## 2. Core features (implemented)
+Release builds are **arm64-only** (`minSdk 30` ⇒ every supported device is arm64), which keeps the direct-download APK reasonable.
 
-- **Object recognition**: EfficientDet-Lite0 (TFLite, COCO). YUV→RGB pipeline, rotation-aware.
-- **Find objects**: Voice target + proximity haptics; local matching first; OpenAI fallback via `ObjectCommandResolver` + `OpenAiTransport`.
-- **Read text / Text chat**: ML Kit OCR; with LLM on, document Q&A uses **gpt-4o-mini**. With LLM off, local OCR only.
-- **Speech-to-text**: local **Whisper base.en int8 + silero VAD** (sherpa-onnx) when model files are present (`filesDir/stt/`, ~154 MB, runtime download from `STT_MODEL_BASE_URL`); falls back to the Android system recognizer otherwise. Mic is tap-to-start/tap-to-stop by default ("Hold to speak" setting restores press-and-hold). Auto-stop: 10 s without speech; 60 s max per utterance. See `core/stt/` (`VoiceInputService`, `WhisperEngine`, `SttModelManager`).
-- **Image chat**: Vision messages (base64 JPEG) via **gpt-4o-mini** through the Supabase Edge proxy.
-- **Vision utilities**: Color ID (HSV), light level (Y-plane luma).
-- **Feedback**: Anonymous feedback via `FeedbackTransport` → Supabase Edge `feedback` function.
-- **Accessibility**: TalkBack semantics, TTS with cooldown, haptics, optional high-contrast / button nav (button nav ON by default). High contrast masks the camera preview but the camera keeps running — analyzers need frames.
-- **In-app updates**: Flexible update prompt via Play In-App Updates API (prod only).
-- **Zero tracking**: no analytics or attribution SDKs. Advertising-ID permissions are stripped in the manifest and Firebase Analytics collection is disabled (`firebase_analytics_collection_enabled=false`); the analytics dependency exists only because Crashlytics ships with it. (An AppsFlyer + consent-gated analytics stack was built in July 2026 for a planned ad campaign, then removed when the project was open-sourced instead — see Worklog Phase 10/12.)
+## 2. Features
+
+| Feature | Implementation |
+|---|---|
+| **Discover objects** | EfficientDet-Lite0 (TFLite, COCO). YUV→RGB without a JPEG round-trip, rotation-aware |
+| **Find objects** | Voice target + proximity haptics and directional earcons; local label matching first, optional LLM fallback via `ObjectCommandResolver` |
+| **Text chat** | ML Kit OCR on-device; character-indexed playback (`TextScriptPlayer`); optional LLM Q&A about the captured text |
+| **Image chat** | Vision request (base64 JPEG) to OpenAI with the user's key |
+| **Scan colour** | Median of a centre patch sampled straight from the YUV planes, mapped to colour names (incl. brown/beige); on-screen focus frame |
+| **Scan light** | Y-plane luma average |
+| **Speech-to-text** | Whisper `base.en` int8 + Silero VAD via sherpa-onnx (`core/stt/`). Models are opt-in (~154 MB, downloaded on request); falls back to the Android system recogniser until present |
+
+Each carousel feature can be hidden in Settings, with a guard that keeps at least one enabled.
 
 ## 3. Architecture
 
-### DI (interface-driven, no framework)
+### Bring-your-own-key
 
-Environment-specific behavior is injected via flavor source sets:
+- [`ApiKeyStore`](app/src/main/java/com/example/sightbuddy/core/ApiKeyStore.kt) — the user's OpenAI key, encrypted with AES-256-GCM using a non-exportable Android Keystore key.
+- [`OpenAiTransport`](app/src/main/java/com/example/sightbuddy/core/OpenAiTransport.kt) — POSTs directly to `api.openai.com/v1/chat/completions`. Distinct spoken errors for 401 (bad key) and 429 (rate limit). The key is never logged.
+- **Key presence is the feature flag**: with a key saved, Image chat appears and Text chat gains AI Q&A; remove it and the app is fully local.
+- Model is read **per request** from `SettingsManager`, so the Settings picker (Fast / Balanced / Most capable) applies with no restart.
 
-| Interface | dev implementation | prod implementation |
-|-----------|-------------------|---------------------|
-| `DeviceIdProvider` | `MockDeviceIdProvider` (hardcoded UUID) | `SsaidDeviceIdProvider` (Android SSAID) |
-| `IntegrityTokenProvider` | `MockIntegrityTokenProvider` (`"test-token"`) | `PlayIntegrityTokenProvider` (Standard API, warm-up in constructor) |
-| `InAppUpdateChecker` | `NoOpUpdateChecker` | `PlayInAppUpdateChecker` (flexible flow) |
+### Speech input
 
-Factory functions in `di/EnvironmentModule.kt` (one per flavor): `createDeviceIdProvider(context)`, `createIntegrityTokenProvider(context)`, `createInAppUpdateChecker(context)`.
+`VoiceInputService` is the single entry point. With models present it records 16 kHz mono via `AudioRecord`, gates on Silero VAD (10 s no-speech auto-stop, 60 s cap) and transcribes with Whisper; otherwise it proxies to the system recogniser. Same flow surface either way (`recognizedText`, `isListening`, `events`).
 
-### Source set layout
+**Mic-first capture** ("ask straight away"): pressing Ask with nothing captured records the question, snaps the frame on release, then pairs frame + transcription in an order-independent `LaunchedEffect`. The request itself runs in a separate scope — consuming the trigger changes the effect's keys, so running it inline would cancel the call mid-flight.
+
+### Flavor split (no DI framework)
+
+Only Crashlytics differs, via one factory function per source set:
 
 ```
-app/src/main/java/    # shared code (interfaces, all features)
-app/src/dev/java/     # mock providers (EnvironmentModule.kt)
-app/src/prod/java/    # real providers (EnvironmentModule.kt)
-app/src/prod/         # google-services.json (Firebase, Crashlytics)
+app/src/main/java/   # everything shared
+app/src/dev/java/    # createCrashReporter() → no-op
+app/src/prod/java/   # createCrashReporter() → FirebaseCrashlytics
+app/src/prod/        # google-services.json (not committed; builds fine without)
 ```
 
-### Play Integrity flow
+### Audio discipline
 
-1. **App**: `PlayIntegrityTokenProvider` calls `StandardIntegrityManager.prepareIntegrityToken()` in the constructor (background warm-up). Each `getToken()` call requests a fresh token via the warmed provider.
-2. **Server**: `_shared/integrity.ts` verifies the token via Google's `decodeIntegrityToken` API using the `GOOGLE_SERVICE_ACCOUNT_KEY` secret. Checks package name + `MEETS_DEVICE_INTEGRITY`.
-3. **Dev bypass**: `"test-token"` is accepted only when the Supabase project has `ALLOW_TEST_INTEGRITY_BYPASS=true` (set on the dev project only).
+Async responses are guarded by `featureStillActive(mode)` so a late API reply can't speak after the user leaves; opening Settings, switching feature, or backgrounding cuts audio and cancels in-flight requests. App speech is suppressed while Settings/Help/onboarding are open — Settings' own confirmations opt in via `speak(force = true)`.
 
-### LLM / Supabase
+### Camera pipeline
 
-- **`OpenAiTransport`**: POSTs to `/functions/v1/chat` with `install_id` + `integrity_token` via `IntegrityTokenProvider`.
-- **`FeedbackTransport`**: POSTs to `/functions/v1/feedback` with same auth pattern.
-- **Quota**: Edge function manages `public.llm_quota`; app handles HTTP 429.
-- **Rate limiting**: In-memory burst limiter (12 req/min per install_id) in the chat function.
-- **JWT verification**: `verify_jwt = true` on both Edge functions — Supabase validates the anon key JWT before forwarding.
-- **Delete data**: `DeleteDataTransport` → Edge `delete-my-data` removes `llm_quota` + `app_feedback`, sets `install_restrictions` (2-day AI block). `chat` / `feedback` return `403` + `install_restricted`.
-- **Repo layout**: `supabase/migrations/`, `supabase/functions/chat/`, `supabase/functions/feedback/`, `supabase/functions/delete-my-data/`, `supabase/functions/_shared/`, `supabase/config.toml`.
+`CameraXManager` uses a capacity-1 `Channel` with `DROP_OLDEST` and explicit frame ownership accounting (emitted/consumed/dropped/closed) to prevent backpressure stalls. Every mode closes its frame exactly once in a `finally`.
 
-## 4. Technical stack
+## 4. Stack
 
 | Area | Implementation |
-|------|----------------|
+|---|---|
 | UI | Jetpack Compose, Material 3 |
-| State | `StateFlow` / `collectAsState`; chat VMs are activity-scoped |
-| Camera | CameraX; capacity-1 `Channel` for frames (`CameraXManager`) |
-| Local AI | TFLite (EfficientDet-Lite0), ML Kit text recognition |
-| Cloud LLM | OpenAI **gpt-4o-mini** via Supabase Edge `chat`; OkHttp |
-| Crash reporting | Firebase Crashlytics (prod only) + Play Vitals |
-| Integrity | Play Integrity Standard API (prod) → server-side verification |
-| In-app updates | Play In-App Updates API, flexible flow (prod only) |
+| State | `StateFlow` / `collectAsState` |
+| Camera | CameraX |
+| On-device AI | TFLite (EfficientDet-Lite0), ML Kit OCR, sherpa-onnx (Whisper + Silero VAD) |
+| Cloud AI | OpenAI Chat Completions, direct, user's key |
+| Crash reporting | Firebase Crashlytics (prod only, **no Analytics**, opt-out in Settings) |
 | Build | AGP 9.1, Kotlin 2.2, Gradle version catalog |
-| CI/CD | GitHub Actions (`.github/workflows/staging.yml`) |
+| CI | GitHub Actions — builds and signs the AAB + APK, attaches them to a release |
 | minSdk / targetSdk | 30 / 36 |
 
 ## 5. Configuration
@@ -101,52 +99,19 @@ KEY_ALIAS=<alias>
 KEY_PASSWORD=<password>
 ```
 
-There is **no API key in the build**: cloud AI is bring-your-own-key, entered by
-the user at runtime and stored encrypted on-device (`ApiKeyStore`).
+There is **no API key in the build** — cloud AI is bring-your-own-key, entered at runtime and stored encrypted on-device.
 
 ### GitHub Actions secrets
 
 `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`
 
-### Supabase secrets
+## 6. Privacy model
 
-```bash
-npx supabase secrets set OPENAI_API_KEY=sk-...
-npx supabase secrets set GOOGLE_SERVICE_ACCOUNT_KEY='{ ... }'
-# Dev project only (enables devDebug "test-token"):
-npx supabase secrets set ALLOW_TEST_INTEGRITY_BYPASS=true
-```
+- No accounts, no analytics, no advertising SDKs; AD_ID permissions are stripped in the manifest and Firebase Analytics collection is disabled.
+- Camera frames and audio are processed in memory and never uploaded by the app.
+- The only outbound data is user-initiated AI requests (to OpenAI, on the user's own key) and anonymous crash reports (opt-out in Settings → Privacy).
+- The speech models are fetched once from a public GitHub release.
 
-### Deploy backend
+## 7. Files worth reading first
 
-```bash
-npx supabase link
-npx supabase db push
-npx supabase functions deploy chat
-npx supabase functions deploy feedback
-npx supabase functions deploy delete-my-data
-```
-
-## 6. Rollout procedure
-
-1. Merge to `staging` branch → CI builds `prodRelease` AAB
-2. Download artifact, upload to Play Console Internal Testing Track
-3. Staged rollout: 1% → 10% → 100% over 48 hours
-4. **Halt criteria**: crash rate > 0.1%, missing TalkBack labels, Supabase 5xx errors
-5. If halted: fix forward to v+1, re-run CI, restart staged rollout
-
-## 7. Security model
-
-- Zero tracking: no analytics/attribution SDKs; AD_ID permissions stripped; Firebase Analytics collection disabled.
-- OpenAI key: **server-side only** (Supabase Edge secret)
-- Supabase anon key: embedded in BuildConfig (public by design, gated by RLS)
-- Play Integrity: Standard API on device → server-side verification via Google API; `"test-token"` disabled on prod Edge unless `ALLOW_TEST_INTEGRITY_BYPASS=true`
-- JWT verification: enabled on all Edge functions
-- Rate limiting: 12 requests/minute per install_id (in-memory, chat function)
-- R8 minification: enabled on release builds
-- No certificate pinning (standard HTTPS)
-- Zero PII retention (images and audio processed in memory only)
-
-## 8. Files to read first
-
-`MainActivity.kt`, `OpenAiTransport.kt`, `di/DeviceIdProvider.kt`, `di/IntegrityTokenProvider.kt`, `di/InAppUpdateChecker.kt`, `di/EnvironmentModule.kt` (both flavors), `app/build.gradle.kts`, `supabase/functions/_shared/integrity.ts`, `supabase/functions/chat/index.ts`, `.github/workflows/staging.yml`.
+`MainActivity.kt` (orchestration), `core/ApiKeyStore.kt`, `core/OpenAiTransport.kt`, `core/stt/VoiceInputService.kt`, `core/SettingsManager.kt`, `ui/screens/HomeScreen.kt`, `app/build.gradle.kts`.

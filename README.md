@@ -19,7 +19,7 @@ Point your phone's camera to hear your surroundings described, read printed text
 | Mode | What it does | Runs where |
 |------|--------------|-----------|
 | **Discover objects** | Names what the camera sees as you move | On device |
-| **Find objects** | Say "keys" or "cup" — directional sounds and haptics guide you to it | On device |
+| **Find objects** | Say "keys" or "cup" — directional sounds and haptics guide you to it | On device; if you've added a key, unclear phrases are disambiguated by AI |
 | **Text chat** | Reads printed text aloud with seekable playback; ask questions about it | OCR on device, Q&A via your key |
 | **Image chat** | Describes a scene and answers follow-up questions about it | Your key |
 | **Scan colour** | Speaks the colour inside the on-screen focus frame | On device |
@@ -59,21 +59,27 @@ Your key is encrypted on your device using the Android Keystore and is sent **on
 | Balanced | `gpt-4o` | Default — strong vision at low cost |
 | Most capable | `gpt-4.1` | Complex questions; slower and pricier |
 
-**A note on privacy:** when you use an AI feature, the captured photo (or text read from it) and your question are sent to OpenAI to generate the answer, under their privacy policy. Local features never send anything anywhere.
+**A note on privacy.** With a key saved, three things can leave your device, and only at the moment you ask for them:
+
+- **Image chat** — the captured photo and your question.
+- **Text chat** — the text read from your capture (not the image itself) and your question.
+- **Find objects** — the spoken phrase, *only* when the app can't match it to a known object locally. No image is ever sent.
+
+That's the complete list. Everything else — object detection, reading text aloud, colour, light, and speech recognition once the models are downloaded — happens on your device and sends nothing. **With no key saved, the app makes no AI requests at all.** Requests go to OpenAI under their privacy policy, billed to your own account.
 
 ## Why this is free
 
-Sight Buddy started as a commercial project and ran as an open beta on Google Play in the UK and Europe. After a proper market and financial analysis I concluded it couldn't work as a paid product: the core features are already offered free by far better-resourced players (Microsoft's Seeing AI, Be My Eyes, Envision), and the per-request cost of cloud AI has to be paid by someone — indefinitely — for an audience that shouldn't be gated behind a subscription.
+Sight Buddy started as a commercial project and ran as an open beta on Google Play in the UK and Europe. After a proper market and financial analysis we concluded it couldn't work as a paid product: the core features are already offered free by far better-resourced players (Microsoft's Seeing AI, Be My Eyes, Envision), and the per-request cost of cloud AI has to be paid by someone.
 
-The spreadsheet said no. Before spending anything on user acquisition I ran the numbers on acquisition cost against zero revenue per user and an ongoing per-user inference bill, and there was no honest case for monetising. So rather than quietly shelve the code, I shut down the backend and released the app as a gift to the people it was built for.
+Monetising was not realistic. So rather than quietly shelve the code, we shut down the backend and released the app as a gift to the people it was built for.
 
 What that means in practice:
 
 - **No subscription and no ads — ever.** Not a marketing line: the app contains no billing code and no advertising SDKs, and the advertising-ID permissions are explicitly stripped from the manifest.
-- **You own your data and your costs.** With BYOK, your usage goes directly to your own OpenAI account. Nothing routes through a server I control, because there isn't one.
+- **You own your data and your costs.** With BYOK, your usage goes directly to your own OpenAI account. Nothing routes through a server we control, because there isn't one.
 - **It's yours to fork.** MIT licensed.
 
-**What I'd do differently:** validate willingness-to-pay — or a grant/partnership funding model via councils, charities and assistive-tech distributors — *before* building the cloud features, and lean even harder into local-first. The on-device half of this app costs nothing to run forever, and that half was the right product.
+**What we'd do differently:** validate willingness-to-pay — or a grant/partnership funding model via councils, charities and assistive-tech distributors — *before* building the cloud features, and lean even harder into local-first. The on-device half of this app costs nothing to run forever, and that half was the right product.
 
 The silver lining of local-first architecture: shutting down the backend didn't brick anything. The cloud features became BYOK, everything else kept working, and the app stayed on the store.
 
@@ -101,18 +107,15 @@ Requirements: **JDK 17+**, **Android SDK 36**. No Android Studio needed — the 
 
 Release builds fall back to debug signing when no keystore is configured, so a clone builds and installs out of the box. To sign with your own key, add `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` to `local.properties`.
 
-Crash reporting (Firebase Crashlytics) is prod-flavor only and silently inactive without a `google-services.json`, which is not committed — clones build fine without one.
-
-## Privacy
-
-- No accounts, no analytics, no advertising SDKs, no tracking identifiers.
-- Camera frames and microphone audio are processed **in memory on your device** and are never uploaded by the app.
-- The only data sent anywhere is what **you** trigger with your own API key (to OpenAI), plus anonymous **crash reports** to Firebase Crashlytics so faults can be fixed. Google Analytics is explicitly disabled.
-- Full policy: [drophouse.uk privacy policy](https://www.drophouse.uk/products/sightbuddy/privacypolicy).
+Crash reporting (Firebase Crashlytics) is prod-flavor only and inactive without a `google-services.json`, which is not committed — clones build fine without one.
 
 ## Contributing
 
-Issues and pull requests are welcome, though this project is no longer actively developed — expect slow responses. Good first contributions: additional languages (the STT model and UI strings are English-only today), a swap to an Apache-licensed YOLO-family detector, or Play Asset Delivery for the speech models.
+Issues and pull requests are welcome. The project is no longer under active development, so it's a good candidate for anyone who wants to take a piece further. Ideas that would genuinely help:
+
+- **More languages.** Both the speech model and the UI strings are English-only today. The app deliberately ships `base.en` because the whole chain — object labels, announcements, text-to-speech — assumes English; proper localisation means changing all of it together, not just the model.
+- **An iOS version.** There isn't one, and the people this app is for are split roughly evenly across platforms. The on-device pieces (Whisper via sherpa-onnx, OCR, object detection) all have iOS equivalents.
+- **An Apache-licensed detector.** Worth a note, since the licensing here is easy to get wrong: the popular Ultralytics YOLO models (v5/v8/v11) are **AGPL-3.0**, which would force this whole MIT project to relicense — so they are *not* an option. **YOLOX** (Megvii) is genuinely Apache-2.0 and would be a clean swap for the current EfficientDet-Lite0 detector.
 
 ## Credits
 
