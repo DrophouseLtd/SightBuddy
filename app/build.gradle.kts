@@ -87,7 +87,7 @@ android {
         applicationId = "com.drophouse.sightbuddy"
         minSdk = 30
         targetSdk = 36
-        versionCode = 10
+        versionCode = 11
         versionName = "2.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -127,9 +127,6 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            // GitHub-release APKs: arm64 only keeps the download reasonable.
-            // (x86/emulator users build from source with this line removed.)
-            ndk { abiFilters += listOf("arm64-v8a") }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -149,6 +146,19 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    // GitHub-release APKs: arm64 only keeps the download reasonable.
+    // (x86/emulator users build from source with x86_64 added to include().)
+    // Splits only affect APK outputs — the AAB still carries every ABI, so
+    // Play can serve 32-bit and x86 devices their own native libs.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a")
+            isUniversalApk = false
+        }
     }
 
     buildFeatures {
