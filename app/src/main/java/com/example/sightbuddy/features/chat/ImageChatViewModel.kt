@@ -62,6 +62,11 @@ class ImageChatViewModel(
         "something that is not in the image, do not just say it is absent — describe " +
         "what you DO see and its relevant details (such as colours), since the wording " +
         "was probably misheard. " +
+        OpenAiTransport.LLM_USER_SAFETY_INSTRUCTION + " " +
+        // A camera snapshot must never be used as a mobility aid: the scene is
+        // stale by the time the answer is spoken, and errors are dangerous.
+        "Do not provide traffic, navigation, road-crossing, or mobility routing guidance. " +
+        "If the user asks about those topics, politely decline and suggest dedicated mobility aids or a sighted companion. " +
         OpenAiTransport.LLM_MAX_WORDS_INSTRUCTION
 
     fun cancelActiveRequest() {

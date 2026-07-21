@@ -92,10 +92,9 @@ class DocumentChatViewModel(
                     return@withContext "I couldn't detect any text in the image. Try pointing the camera at text and holding it steady."
                 }
 
-                val systemMsg = "You are a helpful assistant for a visually impaired user. " +
-                    "Be clear, concise, and conversational. " +
-                    "When describing documents, start with what kind of document it is. " +
-                    OpenAiTransport.LLM_MAX_WORDS_INSTRUCTION
+                val systemMsg = documentChatSystemMessage(
+                    "When describing documents, start with what kind of document it is. "
+                )
 
                 val userMsg = if (userPrompt.isBlank()) {
                     "I just scanned a document with my camera. " +
@@ -142,9 +141,7 @@ class DocumentChatViewModel(
                     "${msg.role}: ${msg.text}"
                 }
 
-                val systemMsg = "You are a helpful assistant for a visually impaired user. " +
-                    "Be clear, concise, and conversational. " +
-                    OpenAiTransport.LLM_MAX_WORDS_INSTRUCTION
+                val systemMsg = documentChatSystemMessage()
 
                 val userMsg = "Here is text from a document I scanned:\n\n" +
                     "\"$lastExtractedText\"\n\n" +
@@ -169,6 +166,13 @@ class DocumentChatViewModel(
             "An error occurred. Please try again."
         }
     }
+
+    private fun documentChatSystemMessage(extra: String = ""): String =
+        "You are a helpful assistant for a visually impaired user. " +
+            "Be clear, concise, and conversational. " +
+            extra +
+            OpenAiTransport.LLM_USER_SAFETY_INSTRUCTION + " " +
+            OpenAiTransport.LLM_MAX_WORDS_INSTRUCTION
 
     private fun callOpenAI(systemMessage: String, userMessage: String): String {
         val messages = JSONArray().apply {

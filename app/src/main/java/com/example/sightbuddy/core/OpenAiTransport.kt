@@ -31,6 +31,12 @@ class OpenAiTransport(private val apiKeyProvider: () -> String) {
         private const val CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 
         /**
+         * Appended to every LLM system prompt. The model must weigh user safety in all replies.
+         */
+        const val LLM_USER_SAFETY_INSTRUCTION: String =
+            "Always prioritize user safety in your responses and avoid guidance that could put the user at risk."
+
+        /**
          * Appended to system prompts so answers stay within TTS-friendly length.
          * Pair with [LLM_MAX_OUTPUT_TOKENS] in the request body.
          */

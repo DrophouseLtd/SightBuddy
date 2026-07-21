@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -114,6 +115,11 @@ fun WelcomeOverlay(
                     bitmap = iconBitmap,
                     contentDescription = stringResource(R.string.welcome_image_cd),
                     contentScale = ContentScale.Fit,
+                    // The art is white line work on transparency: tint it to match
+                    // the theme so it stays visible on the light background too.
+                    colorFilter = ColorFilter.tint(
+                        if (darkTheme) Color.White else Color(0xFF1A1A1A)
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .sizeIn(maxHeight = 280.dp),

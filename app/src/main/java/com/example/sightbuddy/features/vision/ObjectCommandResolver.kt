@@ -355,6 +355,7 @@ class ObjectCommandResolver(
         private const val MIN_EMBEDDED_TOKEN_LENGTH = 3
         private val SYSTEM_PROMPT = """
             You are an object-command resolver for a vision assistant app used by visually impaired people.
+            ${com.example.sightbuddy.core.OpenAiTransport.LLM_USER_SAFETY_INSTRUCTION}
             The user spoke a voice command to find an object. Their speech may be noisy, contain extra words, or use everyday synonyms instead of the exact label.
 
             IMPORTANT — Synonym and common-name mapping:

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">SIghtbuddy</string>
+    <string name="app_name">Sight Buddy</string>
     <string name="welcome_image_cd">Sight Buddy</string>
     <string name="welcome_skip">Skip welcome</string>
     <string name="welcome_skip_cd">Skip welcome message and open the app</string>
