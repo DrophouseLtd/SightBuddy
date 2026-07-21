@@ -8,6 +8,9 @@ import com.example.sightbuddy.features.vision.filterVisibleCocoObjects
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** A selectable OpenAI model shown in Settings (bring-your-own-key). */
+data class LlmModelOption(val id: String, val label: String, val description: String)
+
 /**
  * Centralised, observable app settings backed by SharedPreferences.
  * Every toggle is exposed as a StateFlow so Compose recomposes automatically.
@@ -21,14 +24,30 @@ class SettingsManager(context: Context) {
     private val _textPreviewEnabled = MutableStateFlow(prefs.getBoolean(KEY_TEXT_PREVIEW, true))
     val textPreviewEnabled = _textPreviewEnabled.asStateFlow()
 
+    // Per-feature carousel visibility. These five are always-available (local)
+    // features; the guarded setters keep at least one of them enabled so the
+    // carousel is never empty. Image chat is separate (key-gated).
+    private val _textChatEnabled = MutableStateFlow(prefs.getBoolean(KEY_TEXT_CHAT, true))
+    val textChatEnabled = _textChatEnabled.asStateFlow()
+
+    private val _discoverEnabled = MutableStateFlow(prefs.getBoolean(KEY_DISCOVER, true))
+    val discoverEnabled = _discoverEnabled.asStateFlow()
+
+    private val _findEnabled = MutableStateFlow(prefs.getBoolean(KEY_FIND, true))
+    val findEnabled = _findEnabled.asStateFlow()
+
     private val _scanLightEnabled = MutableStateFlow(prefs.getBoolean(KEY_SCAN_LIGHT, true))
     val scanLightEnabled = _scanLightEnabled.asStateFlow()
 
     private val _scanColourEnabled = MutableStateFlow(prefs.getBoolean(KEY_SCAN_COLOUR, true))
     val scanColourEnabled = _scanColourEnabled.asStateFlow()
 
-    // Cloud LLM features are permanently disabled: the backend was decommissioned
-    // when the project went open source (v2.0.0). The app is fully local.
+    // Image chat visibility (only shown when an API key is also set).
+    private val _imageChatEnabled = MutableStateFlow(prefs.getBoolean(KEY_IMAGE_CHAT, true))
+    val imageChatEnabled = _imageChatEnabled.asStateFlow()
+
+    // Unused since BYOK (LLM availability now derives from ApiKeyStore); kept
+    // so legacy callers of llmChatEnabled/setLlmChat still compile.
     private val _llmChatEnabled = MutableStateFlow(false)
     val llmChatEnabled = _llmChatEnabled.asStateFlow()
 
@@ -47,6 +66,36 @@ class SettingsManager(context: Context) {
     private val _holdToSpeak = MutableStateFlow(prefs.getBoolean(KEY_HOLD_TO_SPEAK, false))
     val holdToSpeak = _holdToSpeak.asStateFlow()
 
+    // ON (default) = Ask with no capture snaps a picture automatically on release.
+    // OFF = the user must press Capture first, then Ask for follow-ups.
+    private val _autoCaptureEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_CAPTURE, true))
+    val autoCaptureEnabled = _autoCaptureEnabled.asStateFlow()
+
+    // Anonymous crash diagnostics (Firebase Crashlytics). On by default; users
+    // can opt out in Settings → Privacy.
+    private val _crashReportingEnabled =
+        MutableStateFlow(prefs.getBoolean(KEY_CRASH_REPORTING, true))
+    val crashReportingEnabled = _crashReportingEnabled.asStateFlow()
+
+    fun setCrashReporting(enabled: Boolean) {
+        _crashReportingEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_CRASH_REPORTING, enabled).apply()
+    }
+
+    /** OpenAI model used for Image/Text chat (BYOK — the user pays, so they choose). */
+    private val _llmModel = MutableStateFlow(
+        prefs.getString(KEY_LLM_MODEL, MODEL_BALANCED)
+            ?.takeIf { id -> LLM_MODEL_OPTIONS.any { it.id == id } }
+            ?: MODEL_BALANCED,
+    )
+    val llmModel = _llmModel.asStateFlow()
+
+    fun setLlmModel(id: String) {
+        if (LLM_MODEL_OPTIONS.none { it.id == id }) return
+        _llmModel.value = id
+        prefs.edit().putString(KEY_LLM_MODEL, id).apply()
+    }
+
     /** TTS speech rate multiplier; one of [TTS_RATE_OPTIONS]. */
     private val _ttsSpeechRate = MutableStateFlow(
         prefs.getFloat(KEY_TTS_SPEECH_RATE, 1.0f).let { stored ->
@@ -60,6 +109,15 @@ class SettingsManager(context: Context) {
     )
     val featureActivationAnnouncementsEnabled = _featureActivationAnnouncementsEnabled.asStateFlow()
 
+    /** "": undecided (ask each launch), STT_CHOICE_LATER: ask again, STT_CHOICE_NEVER: don't ask. */
+    private val _sttDownloadChoice = MutableStateFlow(prefs.getString(KEY_STT_CHOICE, "") ?: "")
+    val sttDownloadChoice = _sttDownloadChoice.asStateFlow()
+
+    fun setSttDownloadChoice(choice: String) {
+        _sttDownloadChoice.value = choice
+        prefs.edit().putString(KEY_STT_CHOICE, choice).apply()
+    }
+
     /** COCO labels hidden from the Find-objects picker (UI only). */
     private val _hiddenCocoObjects = MutableStateFlow(loadHiddenCocoObjects())
     val hiddenCocoObjects = _hiddenCocoObjects.asStateFlow()
@@ -71,14 +129,32 @@ class SettingsManager(context: Context) {
         prefs.edit().putBoolean(KEY_TEXT_PREVIEW, enabled).apply()
     }
 
-    fun setScanLight(enabled: Boolean) {
-        _scanLightEnabled.value = enabled
-        prefs.edit().putBoolean(KEY_SCAN_LIGHT, enabled).apply()
+    /** Number of enabled always-available (local) carousel features. */
+    fun localFeatureEnabledCount(): Int = listOf(
+        _textChatEnabled, _discoverEnabled, _findEnabled, _scanLightEnabled, _scanColourEnabled,
+    ).count { it.value }
+
+    /**
+     * Toggle a local feature. Disabling the last enabled one is refused so the
+     * carousel is never empty. Returns true if applied, false if blocked.
+     */
+    private fun setLocalFeature(flow: MutableStateFlow<Boolean>, key: String, enabled: Boolean): Boolean {
+        if (!enabled && flow.value && localFeatureEnabledCount() <= 1) return false
+        flow.value = enabled
+        prefs.edit().putBoolean(key, enabled).apply()
+        return true
     }
 
-    fun setScanColour(enabled: Boolean) {
-        _scanColourEnabled.value = enabled
-        prefs.edit().putBoolean(KEY_SCAN_COLOUR, enabled).apply()
+    fun setTextChat(enabled: Boolean): Boolean = setLocalFeature(_textChatEnabled, KEY_TEXT_CHAT, enabled)
+    fun setDiscover(enabled: Boolean): Boolean = setLocalFeature(_discoverEnabled, KEY_DISCOVER, enabled)
+    fun setFind(enabled: Boolean): Boolean = setLocalFeature(_findEnabled, KEY_FIND, enabled)
+    fun setScanLight(enabled: Boolean): Boolean = setLocalFeature(_scanLightEnabled, KEY_SCAN_LIGHT, enabled)
+    fun setScanColour(enabled: Boolean): Boolean = setLocalFeature(_scanColourEnabled, KEY_SCAN_COLOUR, enabled)
+
+    /** Image chat is key-gated, so it has no minimum guard. */
+    fun setImageChat(enabled: Boolean) {
+        _imageChatEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_IMAGE_CHAT, enabled).apply()
     }
 
     @Suppress("UNUSED_PARAMETER")
@@ -106,6 +182,11 @@ class SettingsManager(context: Context) {
         prefs.edit().putBoolean(KEY_HOLD_TO_SPEAK, enabled).apply()
     }
 
+    fun setAutoCapture(enabled: Boolean) {
+        _autoCaptureEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_AUTO_CAPTURE, enabled).apply()
+    }
+
     fun setTtsSpeechRate(rate: Float) {
         val valid = TTS_RATE_OPTIONS.minByOrNull { kotlin.math.abs(it - rate) } ?: 1.0f
         _ttsSpeechRate.value = valid
@@ -116,6 +197,14 @@ class SettingsManager(context: Context) {
     fun cycleTtsSpeechRate(): Float {
         val idx = TTS_RATE_OPTIONS.indexOf(_ttsSpeechRate.value)
         val next = TTS_RATE_OPTIONS[(idx + 1) % TTS_RATE_OPTIONS.size]
+        setTtsSpeechRate(next)
+        return next
+    }
+
+    /** Step one rate option up or down (clamped at the ends). Returns the new rate. */
+    fun stepTtsSpeechRate(up: Boolean): Float {
+        val idx = TTS_RATE_OPTIONS.indexOf(_ttsSpeechRate.value)
+        val next = TTS_RATE_OPTIONS[(idx + if (up) 1 else -1).coerceIn(0, TTS_RATE_OPTIONS.size - 1)]
         setTtsSpeechRate(next)
         return next
     }
@@ -159,12 +248,34 @@ class SettingsManager(context: Context) {
         private const val KEY_TEXT_PREVIEW = "text_preview_enabled"
         private const val KEY_SCAN_LIGHT = "scan_light_enabled"
         private const val KEY_SCAN_COLOUR = "scan_colour_enabled"
+        private const val KEY_TEXT_CHAT = "text_chat_enabled"
+        private const val KEY_DISCOVER = "discover_enabled"
+        private const val KEY_FIND = "find_enabled"
+        private const val KEY_IMAGE_CHAT = "image_chat_enabled"
         private const val KEY_LLM_CHAT = "llm_chat_enabled"
         private const val KEY_HIGH_CONTRAST = "high_contrast_enabled"
         private const val KEY_WHITE_MODE = "white_mode_enabled"
         private const val KEY_BUTTON_NAV = "button_nav_enabled"
         private const val KEY_HOLD_TO_SPEAK = "hold_to_speak_enabled"
+        private const val KEY_AUTO_CAPTURE = "auto_capture_enabled"
+        private const val KEY_LLM_MODEL = "llm_model"
+        private const val KEY_CRASH_REPORTING = "crash_reporting_enabled"
+
+        const val MODEL_FAST = "gpt-4o-mini"
+        const val MODEL_BALANCED = "gpt-4o"
+        const val MODEL_SMART = "gpt-4.1"
+
+        /** Selectable models, cheapest first. Only one is active at a time. */
+        val LLM_MODEL_OPTIONS = listOf(
+            LlmModelOption(MODEL_FAST, "Fast", "Quickest and cheapest. Fine for simple questions"),
+            LlmModelOption(MODEL_BALANCED, "Balanced", "Recommended. Strong vision at low cost"),
+            LlmModelOption(MODEL_SMART, "Most capable", "Best for complex questions. Slower and costs more"),
+        )
         private const val KEY_TTS_SPEECH_RATE = "tts_speech_rate"
+        private const val KEY_STT_CHOICE = "stt_download_choice"
+
+        const val STT_CHOICE_LATER = "later"
+        const val STT_CHOICE_NEVER = "never"
 
         val TTS_RATE_OPTIONS = listOf(1.0f, 1.5f, 2.0f, 3.0f)
 

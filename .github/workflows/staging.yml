@@ -5,7 +5,7 @@ on:
     branches: [staging]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -28,21 +28,30 @@ jobs:
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/upload-keystore.jks
 
-      - name: Build prodRelease AAB
+      - name: Build prodRelease AAB + arm64 APK
         env:
-          # Backend decommissioned (v2.0.0, fully local app) — no Supabase config.
+          # Backend decommissioned (BYOK, fully on-device) — no Supabase config.
           KEYSTORE_FILE: upload-keystore.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           chmod +x ./gradlew
-          ./gradlew bundleProdRelease --no-daemon
+          ./gradlew bundleProdRelease assembleProdRelease --no-daemon
 
-      - name: Upload AAB artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: sightbuddy-${{ github.sha }}
-          path: app/build/outputs/bundle/prodRelease/*.aab
-          retention-days: 30
-          if-no-files-found: error
+      # Published as release assets rather than Actions artifacts: release
+      # storage is unlimited and free, and these are the files we ship anyway
+      # (AAB → Play, APK → direct download).
+      - name: Publish build to CI prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="ci-${GITHUB_SHA::7}"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease \
+                 --title "CI build $TAG" \
+                 --notes "Automated prodRelease build from ${GITHUB_SHA}."
+          gh release upload "$TAG" \
+            app/build/outputs/bundle/prodRelease/*.aab \
+            app/build/outputs/apk/prod/release/*.apk \
+            --repo "$GITHUB_REPOSITORY" --clobber

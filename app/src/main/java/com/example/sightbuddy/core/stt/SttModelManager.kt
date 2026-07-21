@@ -62,12 +62,18 @@ class SttModelManager(context: Context, private val baseUrl: String) {
      * Download any missing model files. Safe to call repeatedly; skips files
      * already fully present. No-op (returns false) when downloads are disabled.
      */
+    @Volatile
+    private var downloadInProgress = false
+
     suspend fun downloadIfNeeded(): Boolean = withContext(Dispatchers.IO) {
         if (isReady()) {
             _downloadState.value = DownloadState.Ready
             return@withContext true
         }
         if (!downloadEnabled) return@withContext false
+        // Reject a second concurrent trigger.
+        if (downloadInProgress) return@withContext false
+        downloadInProgress = true
         try {
             modelDir.mkdirs()
             val totalBytes = FILES.values.sum().toFloat()
@@ -110,6 +116,8 @@ class SttModelManager(context: Context, private val baseUrl: String) {
             Log.e(TAG, "STT model download failed", e)
             _downloadState.value = DownloadState.Failed(e.message ?: "download failed")
             false
+        } finally {
+            downloadInProgress = false
         }
     }
 

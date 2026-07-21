@@ -1,6 +1,7 @@
 package com.example.sightbuddy.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -54,6 +55,8 @@ fun HomeScreen(
     onMicTapped: () -> Unit = {},
     showTextPlaybackControls: Boolean = false,
     textPlaybackEnabled: Boolean = false,
+    playbackPlaying: Boolean = false,
+    onPlaybackRateStep: (up: Boolean) -> Unit = {},
     onPlaybackPauseToggle: () -> Unit = {},
     onPlaybackSeekBack: () -> Unit = {},
     onPlaybackSeekForward: () -> Unit = {},
@@ -152,106 +155,154 @@ fun HomeScreen(
                 val showMic = isActive && activeMode in micModes
                 val showPlaybackRow = isActive && showTextPlaybackControls && pageTitle == "Text chat"
 
-                if (showMic || showPlaybackRow) {
+                // Mic button — fixed centre position, identical on every feature.
+                if (showMic) {
+                    val micCd = if (holdToSpeak) {
+                        "Ask. Hold and speak your question, then release"
+                    } else if (isRecording) {
+                        "Listening. Tap to send"
+                    } else {
+                        "Ask. Tap, speak your question, then tap to send"
+                    }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(100.dp)
+                            .background(micPrimaryBg, shape = CircleShape)
+                            .pointerInput(holdToSpeak) {
+                                detectTapGestures(
+                                    onPress = {
+                                        if (holdToSpeak) {
+                                            val pressTime = System.currentTimeMillis()
+                                            onMicPressed()
+                                            tryAwaitRelease()
+                                            val holdMs = System.currentTimeMillis() - pressTime
+                                            onMicReleased(holdMs)
+                                        }
+                                    },
+                                    onTap = {
+                                        if (!holdToSpeak) onMicTapped()
+                                    },
+                                )
+                            }
+                            .semantics {
+                                contentDescription = micCd
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = if (!holdToSpeak && isRecording) "Send" else "Ask",
+                            color = micPrimaryText,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+
+                // Text playback transport row (Back · Play · Forward). Sits above
+                // the mic when both show — so the mic never moves — and centres
+                // itself when there is no mic (AI features off).
+                if (showPlaybackRow) {
                     Row(
-                        modifier = Modifier.align(Alignment.Center),
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .offset(y = if (showMic) (-110).dp else 0.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center,
                     ) {
-                        if (showPlaybackRow) {
-                            PlaybackTransportButton(
-                                label = "Back",
-                                contentDescription =
-                                    "Backwards. Tap skips back twenty characters. " +
-                                        "Hold one second to restart from the beginning.",
-                                enabled = textPlaybackEnabled,
-                                background = micPrimaryBg,
-                                textColor = micPrimaryText,
-                                holdThresholdMs = TextScriptPlayer.HOLD_BACK_RESTART_MS,
-                                onHoldTriggered = {
-                                    onPlaybackTransportInteraction()
-                                    onPlaybackRestartFromBeginning()
-                                },
-                                onShortRelease = {
-                                    onPlaybackTransportInteraction()
-                                    onPlaybackSeekBack()
-                                },
-                                onDisabledInteraction = {
-                                    onPlaybackTransportInteraction()
-                                    onPlaybackDisabled()
-                                },
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                        }
-
-                        if (showMic) {
-                            val micCd = if (holdToSpeak) {
-                                "Hold mic button and speak"
-                            } else if (isRecording) {
-                                "Recording. Tap to stop"
+                        PlaybackTransportButton(
+                            label = "Back",
+                            contentDescription =
+                                "Backwards. Tap skips back twenty characters. " +
+                                    "Hold one second to read slower.",
+                            enabled = textPlaybackEnabled,
+                            background = micPrimaryBg,
+                            textColor = micPrimaryText,
+                            holdThresholdMs = TextScriptPlayer.HOLD_BACK_RESTART_MS,
+                            onHoldTriggered = {
+                                onPlaybackTransportInteraction()
+                                onPlaybackRateStep(false)
+                            },
+                            onShortRelease = {
+                                onPlaybackTransportInteraction()
+                                onPlaybackSeekBack()
+                            },
+                            onDisabledInteraction = {
+                                onPlaybackTransportInteraction()
+                                onPlaybackDisabled()
+                            },
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        PlaybackTransportButton(
+                            label = if (playbackPlaying) "Pause" else "Play",
+                            contentDescription = if (playbackPlaying) {
+                                "Pause. Tap to pause reading. " +
+                                    "Hold one second to restart from the beginning."
                             } else {
-                                "Mic. Tap to start recording, tap again to stop"
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(100.dp)
-                                    .background(micPrimaryBg, shape = CircleShape)
-                                    .pointerInput(holdToSpeak) {
-                                        detectTapGestures(
-                                            onPress = {
-                                                if (holdToSpeak) {
-                                                    val pressTime = System.currentTimeMillis()
-                                                    onMicPressed()
-                                                    tryAwaitRelease()
-                                                    val holdMs = System.currentTimeMillis() - pressTime
-                                                    onMicReleased(holdMs)
-                                                }
-                                            },
-                                            onTap = {
-                                                if (!holdToSpeak) onMicTapped()
-                                            },
-                                        )
-                                    }
-                                    .semantics {
-                                        contentDescription = micCd
-                                    },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = if (!holdToSpeak && isRecording) "Stop" else "Mic",
-                                    color = micPrimaryText,
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
-
-                        if (showPlaybackRow) {
-                            Spacer(modifier = Modifier.width(12.dp))
-                            PlaybackTransportButton(
-                                label = "Fwd",
-                                contentDescription =
-                                    "Forward. Tap skips ahead twenty characters. " +
-                                        "Hold one second to play or stop reading.",
-                                enabled = textPlaybackEnabled,
-                                background = micPrimaryBg,
-                                textColor = micPrimaryText,
-                                holdThresholdMs = TextScriptPlayer.HOLD_FORWARD_TOGGLE_MS,
-                                onHoldTriggered = {
-                                    onPlaybackTransportInteraction()
-                                    onPlaybackPauseToggle()
-                                },
-                                onShortRelease = {
-                                    onPlaybackTransportInteraction()
-                                    onPlaybackSeekForward()
-                                },
-                                onDisabledInteraction = {
-                                    onPlaybackTransportInteraction()
-                                    onPlaybackDisabled()
-                                },
-                            )
-                        }
+                                "Play. Tap to start or resume reading. " +
+                                    "Hold one second to restart from the beginning."
+                            },
+                            enabled = textPlaybackEnabled,
+                            background = micPrimaryBg,
+                            textColor = micPrimaryText,
+                            holdThresholdMs = TextScriptPlayer.HOLD_BACK_RESTART_MS,
+                            onHoldTriggered = {
+                                onPlaybackTransportInteraction()
+                                onPlaybackRestartFromBeginning()
+                            },
+                            onShortRelease = {
+                                onPlaybackTransportInteraction()
+                                onPlaybackPauseToggle()
+                            },
+                            onDisabledInteraction = {
+                                onPlaybackTransportInteraction()
+                                onPlaybackDisabled()
+                            },
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        PlaybackTransportButton(
+                            label = "Fwd",
+                            contentDescription =
+                                "Forward. Tap skips ahead twenty characters. " +
+                                    "Hold one second to read faster.",
+                            enabled = textPlaybackEnabled,
+                            background = micPrimaryBg,
+                            textColor = micPrimaryText,
+                            holdThresholdMs = TextScriptPlayer.HOLD_FORWARD_TOGGLE_MS,
+                            onHoldTriggered = {
+                                onPlaybackTransportInteraction()
+                                onPlaybackRateStep(true)
+                            },
+                            onShortRelease = {
+                                onPlaybackTransportInteraction()
+                                onPlaybackSeekForward()
+                            },
+                            onDisabledInteraction = {
+                                onPlaybackTransportInteraction()
+                                onPlaybackDisabled()
+                            },
+                        )
                     }
+                }
+
+                // Colour scanner focus frame — marks the sampled centre region.
+                // Two-tone border stays visible over any camera scene and in both
+                // high-contrast themes (where it hints aim over the solid mask).
+                if (isActive && pageTitle == "Scan Colour") {
+                    val frameOuter = if (highContrast && whiteMode) Color.Black else Color.White
+                    val frameInner = if (highContrast && whiteMode) Color.White else Color.Black
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(130.dp)
+                            .border(4.dp, frameOuter, RoundedCornerShape(14.dp))
+                            .padding(4.dp)
+                            .border(2.dp, frameInner, RoundedCornerShape(10.dp))
+                            .semantics {
+                                contentDescription =
+                                    "Colour scanner focus frame. Point the centre of the screen at the colour."
+                            },
+                    )
                 }
 
                 // Keep action controls a fixed distance below the centered mic.
@@ -269,11 +320,11 @@ fun HomeScreen(
                                 shape = CircleShape
                             )
                             .clickable { onTakePicture?.invoke() }
-                            .semantics { contentDescription = "Take picture" },
+                            .semantics { contentDescription = "Capture" },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Take\nPicture",
+                            text = "Capture",
                             color = if (highContrast && whiteMode) Color.White else Color.Black,
                             textAlign = TextAlign.Center,
                             fontWeight = FontWeight.Bold,

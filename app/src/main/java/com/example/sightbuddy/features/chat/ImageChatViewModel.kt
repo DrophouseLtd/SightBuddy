@@ -25,6 +25,8 @@ import java.util.concurrent.TimeUnit
  */
 class ImageChatViewModel(
     private val transport: OpenAiTransport,
+    /** Model id, read per request so a Settings change applies immediately. */
+    private val modelProvider: () -> String = { "gpt-4o" },
     private val onQuotaExhausted: () -> Unit = {},
     private val onInstallRestricted: () -> Unit = {},
 ) {
@@ -39,8 +41,6 @@ class ImageChatViewModel(
 
     private val _lastResponse = MutableStateFlow("")
     val lastResponse = _lastResponse.asStateFlow()
-
-    private val model = "gpt-4o-mini"
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -57,8 +57,11 @@ class ImageChatViewModel(
         // IS attached to every request.
         "The user's photo is attached to every message, so you can always see it. " +
         "Never say you cannot access, view, or see images. " +
-        "Questions are transcribed from speech and may contain recognition errors; " +
-        "interpret them charitably as questions about the photo. " +
+        "Questions are transcribed from speech and may contain recognition errors. " +
+        "Interpret them charitably as being about the photo. If a question mentions " +
+        "something that is not in the image, do not just say it is absent — describe " +
+        "what you DO see and its relevant details (such as colours), since the wording " +
+        "was probably misheard. " +
         OpenAiTransport.LLM_MAX_WORDS_INSTRUCTION
 
     fun cancelActiveRequest() {
@@ -102,7 +105,6 @@ class ImageChatViewModel(
                 // New photo always starts a fresh conversation session.
                 _chatHistory.value = emptyList()
                 lastImageBase64 = bitmapToBase64(bitmap)
-                Log.i("ImageChatViewModel", "processImage: encoded image, b64Len=${lastImageBase64.length}")
 
                 val prompt = if (userPrompt.isBlank()) {
                     "Describe what you see in this image clearly and concisely for a visually impaired user. " +
@@ -133,7 +135,7 @@ class ImageChatViewModel(
 
     suspend fun askFollowUp(userPrompt: String): String {
         if (lastImageBase64.isBlank()) {
-            return "Please take a picture first."
+            return "Please capture first."
         }
         if (userPrompt.isBlank()) {
             return "Please ask a question about the image."
@@ -146,12 +148,7 @@ class ImageChatViewModel(
                 // details the first description didn't mention, and without the
                 // image the model can only answer from its own earlier text
                 // (and says "I can't access images" for anything else).
-                Log.i(
-                    "ImageChatViewModel",
-                    "askFollowUp: prompt='${userPrompt.take(80)}', b64Len=${lastImageBase64.length}, history=${_chatHistory.value.size}",
-                )
                 val response = callOpenAIVision(userText = userPrompt, includeImage = true)
-                Log.i("ImageChatViewModel", "askFollowUp response: '${response.take(120)}'")
 
                 val newHistory = _chatHistory.value.toMutableList()
                 newHistory.add(ChatMessage("user", userPrompt))
@@ -204,7 +201,7 @@ class ImageChatViewModel(
         }
 
         val body = JSONObject().apply {
-            put("model", model)
+            put("model", modelProvider())
             put("messages", messages)
             put("max_tokens", OpenAiTransport.LLM_MAX_OUTPUT_TOKENS)
             put("temperature", 0.7)

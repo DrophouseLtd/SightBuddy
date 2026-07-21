@@ -1,7 +1,6 @@
 package com.example.sightbuddy.core
 
 import android.util.Log
-import com.example.sightbuddy.di.IntegrityTokenProvider
 import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -10,50 +9,26 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 /**
- * Sends Chat Completions payloads to the Supabase Edge [chat] proxy only.
- * The OpenAI API key lives on the server (Edge secret), not in the app.
+ * Sends Chat Completions requests **directly to OpenAI** using the user's own
+ * API key (bring-your-own-key mode). No proxy, no server of ours — usage and
+ * billing go straight to the user's OpenAI account.
  */
-class OpenAiTransport(
-    private val chatProxyUrl: String,
-    private val supabaseAnonKey: String,
-    private val installId: String,
-    private val integrityTokenProvider: IntegrityTokenProvider,
-) {
+class OpenAiTransport(private val apiKeyProvider: () -> String) {
 
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
 
-    fun isConfigured(): Boolean =
-        chatProxyUrl.isNotBlank() &&
-            supabaseAnonKey.isNotBlank() &&
-            installId.isNotBlank()
+    fun isConfigured(): Boolean = apiKeyProvider().isNotBlank()
 
-    fun buildChatCompletionsRequest(openAiRequestBody: JSONObject): Request {
-        val wrapped = JSONObject()
-        wrapped.put("install_id", installId)
-        wrapped.put("integrity_token", integrityTokenProvider.getToken())
-        for (key in openAiRequestBody.keys()) {
-            wrapped.put(key, openAiRequestBody.get(key))
-        }
-        return Request.Builder()
-            .url(chatProxyUrl)
-            .addHeader("Authorization", "Bearer ${supabaseAnonKey.trim()}")
-            .addHeader("apikey", supabaseAnonKey.trim())
+    fun buildChatCompletionsRequest(openAiRequestBody: JSONObject): Request =
+        Request.Builder()
+            .url(CHAT_COMPLETIONS_URL)
+            .addHeader("Authorization", "Bearer ${apiKeyProvider().trim()}")
             .addHeader("Content-Type", "application/json")
-            .post(wrapped.toString().toRequestBody(jsonMedia))
+            .post(openAiRequestBody.toString().toRequestBody(jsonMedia))
             .build()
-    }
 
     companion object {
-        const val ERROR_INSTALL_RESTRICTED = "install_restricted"
-
-        fun isInstallRestrictedError(responseBody: String): Boolean {
-            if (responseBody.isBlank()) return false
-            return try {
-                JSONObject(responseBody).optString("error") == ERROR_INSTALL_RESTRICTED
-            } catch (_: Exception) {
-                false
-            }
-        }
+        private const val CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 
         /**
          * Appended to system prompts so answers stay within TTS-friendly length.
@@ -65,37 +40,41 @@ class OpenAiTransport(
         const val LLM_MAX_OUTPUT_TOKENS: Int = 150
 
         /**
-         * Runs a chat/completions request via the Supabase Edge proxy.
+         * Runs a chat/completions request against OpenAI with the user's key.
          * [registerCall] receives the in-flight [Call] or null when finished.
+         * [onQuotaExhausted] / [onInstallRestricted] are legacy hooks kept for
+         * caller compatibility; only [onQuotaExhausted] fires (on HTTP 429).
          */
         fun executeChatCompletion(
             httpClient: OkHttpClient,
             transport: OpenAiTransport,
             openAiRequestBody: JSONObject,
             logTag: String,
-            onQuotaExhausted: () -> Unit,
-            onInstallRestricted: () -> Unit = {},
+            onQuotaExhausted: () -> Unit = {},
+            @Suppress("UNUSED_PARAMETER") onInstallRestricted: () -> Unit = {},
             registerCall: (Call?) -> Unit,
         ): String {
             if (!transport.isConfigured()) {
-                return "AI service is unavailable right now."
+                return "No API key set. Add your OpenAI API key in settings to use AI features."
             }
             val request = transport.buildChatCompletionsRequest(openAiRequestBody)
             val call = httpClient.newCall(request)
             registerCall(call)
             val response = try {
                 call.execute()
+            } catch (e: Exception) {
+                Log.e(logTag, "Chat request failed", e)
+                return "Could not reach OpenAI. Check your internet connection."
             } finally {
                 registerCall(null)
             }
             val responseBody = response.body?.string().orEmpty()
+            if (response.code == 401 || response.code == 403) {
+                return "Your OpenAI API key was rejected. Please check it in settings."
+            }
             if (response.code == 429) {
                 onQuotaExhausted()
-                return "Daily AI limit reached. Chat features will reset tomorrow."
-            }
-            if (response.code == 403 && isInstallRestrictedError(responseBody)) {
-                onInstallRestricted()
-                return "Cloud AI is unavailable for two days after deleting your data."
+                return "OpenAI rate limit or spending cap reached. Please try again later."
             }
             if (!response.isSuccessful) {
                 Log.e(logTag, "Chat API error ${response.code}: $responseBody")

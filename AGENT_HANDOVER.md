@@ -85,21 +85,28 @@ app/src/prod/         # google-services.json (Firebase, Crashlytics)
 
 ### `local.properties` (never committed)
 
+All entries are optional — a clone builds and runs without any of them.
+
 ```properties
 sdk.dir=...
-SUPABASE_URL=https://<prod-project-ref>.supabase.co
-SUPABASE_PUBLISHABLE_KEY=<prod anon key>
-STT_MODEL_BASE_URL=<public release URL for Whisper model files>
 
+# Override the Whisper model download source (defaults to the public
+# sightbuddy-stt-models release).
+STT_MODEL_BASE_URL=<release URL serving the model files>
+
+# Release signing. Omit these and release builds fall back to debug signing.
 KEYSTORE_FILE=<path-to-keystore.jks>
 KEYSTORE_PASSWORD=<password>
 KEY_ALIAS=<alias>
 KEY_PASSWORD=<password>
 ```
 
+There is **no API key in the build**: cloud AI is bring-your-own-key, entered by
+the user at runtime and stored encrypted on-device (`ApiKeyStore`).
+
 ### GitHub Actions secrets
 
-`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`
+`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`
 
 ### Supabase secrets
 

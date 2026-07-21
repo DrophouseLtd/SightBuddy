@@ -1,63 +1,125 @@
 # Sight Buddy
 
-**AI-assisted vision in your pocket — an Android accessibility app for people with low vision, built camera-first, voice-first, and TalkBack-first.**
+**A free, open-source, bring-your-own-key assistive vision app for blind and low-vision users.**
 
-> **Status: alive on Google Play as a free, fully local app — active development ended (July 2026).**
-> Sight Buddy ran as an open beta in the UK and Europe with a paid cloud-AI backend. We concluded the product wasn't commercially viable and shut the backend down — the honest story is below. But because the app was designed local-first, we didn't have to kill it: **v2.0.0 removed the cloud features and stays published on Play, free forever** — object detection, OCR reading, colour and light scanning, and fully on-device Whisper speech recognition, with zero servers, zero cost, and zero data collection.
+Point your phone's camera to hear your surroundings described, read printed text aloud, find objects, and identify colours and lighting. Most of it runs **entirely on your device**. The optional AI features run on **your own OpenAI API key** — so there's no subscription, no ads, no accounts, and no server of ours in the middle.
+
+<p>
+  <a href="#install">Install</a> ·
+  <a href="#using-the-ai-features-bring-your-own-key">BYOK setup</a> ·
+  <a href="#why-this-is-free">Why it's free</a> ·
+  <a href="#whats-technically-interesting-here">Technical notes</a> ·
+  <a href="#building-from-source">Build</a>
+</p>
+
+---
 
 ## What it does
 
-| Mode | What it does |
-|------|--------------|
-| **Read text** | Reads printed text aloud with seekable playback (on-device OCR) |
-| **Discover objects** | Names what the camera sees as you move (on-device TFLite) |
-| **Find objects** | Say "keys" or "cup" — directional audio and haptics guide you to it |
-| **Scan colour** | Speaks the colour at the centre of the frame |
-| **Scan light** | Reports bright, dim, or dark lighting |
+| Mode | What it does | Runs where |
+|------|--------------|-----------|
+| **Discover objects** | Names what the camera sees as you move | On device |
+| **Find objects** | Say "keys" or "cup" — directional sounds and haptics guide you to it | On device |
+| **Text chat** | Reads printed text aloud with seekable playback; ask questions about it | OCR on device, Q&A via your key |
+| **Image chat** | Describes a scene and answers follow-up questions about it | Your key |
+| **Scan colour** | Speaks the colour inside the on-screen focus frame | On device |
+| **Scan light** | Reports bright, dim, or dark lighting | On device |
 
-Every surface works with TalkBack, spoken announcements, haptics, high-contrast themes, adjustable speech rate (1×–3×), and button navigation instead of swipes.
+**Speech recognition runs on your device too** — optional Whisper models (~154 MB, downloaded once on request) give offline, accent-tolerant transcription. Until you download them the app falls back to Android's built-in recogniser, so it works immediately either way.
 
-*(The v1.x beta also had cloud-LLM scene and document Q&A — "Image chat" / "Text chat". That code is still in the repo, and the Supabase Edge backend that powered it is in [`supabase/`](supabase/); wire up your own project and OpenAI key to revive it.)*
+Every surface is built accessibility-first: TalkBack labels throughout, spoken announcements, haptics, high-contrast light/dark themes, adjustable speech rate (1×–3×), button navigation instead of swipes, per-feature show/hide, and a choice of tap-to-speak or hold-to-speak.
 
-## The post-mortem: why we stopped
+## Install
 
-We built Sight Buddy because everyday vision tasks — reading a label, finding dropped keys, knowing whether the lights are on — still depend on sighted help or clunky tools. The beta worked, real users used it, and the accessibility-first design decisions held up.
+**From Google Play** — search for Sight Buddy, or use the listing link on [drophouse.uk](https://www.drophouse.uk/products/sightbuddy). Easiest option; updates arrive automatically.
 
-What didn't hold up was the business:
+**Directly, without Google Play** — every release has an APK attached:
 
-- **The economics of cloud AI for this audience are unforgiving.** The most valuable features (scene Q&A, document Q&A) ride on per-request LLM inference that someone has to pay for, indefinitely. Our users — visually impaired people — are exactly the audience that should *not* be gated behind a subscription, and a small beta gave no path to covering inference costs with goodwill alone.
-- **The spreadsheet said no.** Before spending on user acquisition we ran the numbers — acquisition cost against zero revenue per user and an ongoing per-user inference bill — and there was no honest case for monetising. We stopped there.
-- **What we'd do differently:** validate willingness-to-pay (or a grant/partnership funding model — councils, charities, assistive-tech distributors) *before* building the cloud features, and lean even harder into local-first. The on-device half of this app costs nothing to run forever; that half was the right product.
+1. Open [Releases](../../releases) and download the `.apk` (arm64 — any phone from roughly 2017 onward).
+2. Open the file on your phone. Android will ask permission to install from this source — allow it for your browser or file manager.
+3. Install, then grant **camera** and **microphone** permissions on first run.
 
-The silver lining of local-first architecture: sunsetting the backend didn't brick the product. We cut the cloud features, shipped v2.0.0, and **left the app on the store** — the on-device half costs nothing to run and keeps serving the people it was built for, indefinitely.
+Requires **Android 11 (API 30)** or newer.
+
+## Using the AI features (bring your own key)
+
+Image chat and the AI answers in Text chat need an OpenAI API key. Everything else works without one.
+
+1. Create a key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+2. **Set a spending limit** on your OpenAI account (Billing → Limits). Worth doing before you start.
+3. In Sight Buddy: **Settings → OpenAI API key → paste → Save**.
+
+Your key is encrypted on your device using the Android Keystore and is sent **only** to OpenAI, never to us. Usage bills to your own OpenAI account — typically a fraction of a penny per question. Remove the key any time to switch the app back to fully-local mode.
+
+**Choosing a model** (Settings, under the key):
+
+| Option | Model | When to use |
+|---|---|---|
+| Fast | `gpt-4o-mini` | Cheapest, fine for simple questions |
+| Balanced | `gpt-4o` | Default — strong vision at low cost |
+| Most capable | `gpt-4.1` | Complex questions; slower and pricier |
+
+**A note on privacy:** when you use an AI feature, the captured photo (or text read from it) and your question are sent to OpenAI to generate the answer, under their privacy policy. Local features never send anything anywhere.
+
+## Why this is free
+
+Sight Buddy started as a commercial project and ran as an open beta on Google Play in the UK and Europe. After a proper market and financial analysis I concluded it couldn't work as a paid product: the core features are already offered free by far better-resourced players (Microsoft's Seeing AI, Be My Eyes, Envision), and the per-request cost of cloud AI has to be paid by someone — indefinitely — for an audience that shouldn't be gated behind a subscription.
+
+The spreadsheet said no. Before spending anything on user acquisition I ran the numbers on acquisition cost against zero revenue per user and an ongoing per-user inference bill, and there was no honest case for monetising. So rather than quietly shelve the code, I shut down the backend and released the app as a gift to the people it was built for.
+
+What that means in practice:
+
+- **No subscription and no ads — ever.** Not a marketing line: the app contains no billing code and no advertising SDKs, and the advertising-ID permissions are explicitly stripped from the manifest.
+- **You own your data and your costs.** With BYOK, your usage goes directly to your own OpenAI account. Nothing routes through a server I control, because there isn't one.
+- **It's yours to fork.** MIT licensed.
+
+**What I'd do differently:** validate willingness-to-pay — or a grant/partnership funding model via councils, charities and assistive-tech distributors — *before* building the cloud features, and lean even harder into local-first. The on-device half of this app costs nothing to run forever, and that half was the right product.
+
+The silver lining of local-first architecture: shutting down the backend didn't brick anything. The cloud features became BYOK, everything else kept working, and the app stayed on the store.
 
 ## What's technically interesting here
 
-If you're mining this repo for parts, these are the good bits:
+If you're reading this as a portfolio piece, or mining the repo for parts, these are the bits worth a look:
 
-- **On-device Whisper speech-to-text on Android** — [`app/src/main/java/com/example/sightbuddy/core/stt/`](app/src/main/java/com/example/sightbuddy/core/stt/). Whisper base.en (int8) + Silero VAD via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), wrapped in a push-to-talk/tap-to-talk service with silence auto-stop (10 s) and a hard cap (60 s). Model files (~154 MB) auto-download once from this repo's release assets; the service transparently falls back to the system `SpeechRecognizer` until they're present. This replaced the OEM recognizer lottery with consistent, offline transcription.
-- **A zero-key client security model** — the APK contains no OpenAI key. All LLM calls go through a Supabase Edge proxy ([`supabase/functions/chat/`](supabase/functions/chat/index.ts)) that verifies **Play Integrity** tokens server-side, enforces per-install daily token quotas and burst rate limits, and supports a user-facing delete-my-data flow. The client holds only a public anon key.
-- **Accessible Compose UI patterns** — every control TalkBack-labelled, a full-screen high-contrast mode that masks the camera preview *without* stopping frame analysis, carousel navigation with an optional button-based alternative, and TTS with per-announcement cooldowns and a character-indexed text playback player (seek/pause survives speech-rate changes by design).
-- **A disciplined CameraX frame pipeline** — YUV→RGB conversion without lossy JPEG round-trips, rotation-aware TFLite input, and a capacity-1 frame `Channel` with explicit ownership/closure accounting to prevent backpressure stalls (the war stories are in [Worklog.md](Worklog.md)).
-- **Environment isolation without a DI framework** — dev/prod product flavors swap mock vs. real implementations (device IDs, Play Integrity, in-app updates) through four factory functions. Boring, explicit, testable.
+- **On-device Whisper speech-to-text on Android** — [`core/stt/`](app/src/main/java/com/example/sightbuddy/core/stt/). Whisper `base.en` (int8) + Silero VAD via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), wrapped in a push-to-talk/tap-to-talk service with 10 s silence auto-stop and a 60 s cap. Models download once from a public release; until then it transparently falls back to the system recogniser, so the app is never broken while waiting.
+- **"Ask straight away" capture flow** — pressing Ask with nothing captured records your question, snaps the frame at the moment you finish speaking, then pairs frame and transcription in an order-independent effect before sending both. Removes the take-a-photo-*then*-ask two-step for a user who can't see the viewfinder.
+- **Encrypted BYOK key storage** — [`ApiKeyStore`](app/src/main/java/com/example/sightbuddy/core/ApiKeyStore.kt) seals the key with an AES-256-GCM key held in the Android Keystore (hardware-backed where available), so the preferences file alone is useless.
+- **Accessible Compose patterns** — TalkBack labels on every control, a high-contrast mode that masks the preview *without* stopping frame analysis, and a character-indexed TTS playback engine whose seek/pause survives speech-rate changes by design.
+- **A disciplined CameraX pipeline** — YUV→RGB without a lossy JPEG round-trip, rotation-aware TFLite input, and a capacity-1 frame `Channel` with explicit ownership accounting to prevent backpressure stalls. The war stories are in [Worklog.md](Worklog.md).
+- **Environment isolation without a DI framework** — dev/prod flavors swap real vs. mock behaviour through plain factory functions. Boring, explicit, testable.
 
-Deeper architecture notes: [AGENT_HANDOVER.md](AGENT_HANDOVER.md). Full development history: [Worklog.md](Worklog.md).
+Architecture notes: [AGENT_HANDOVER.md](AGENT_HANDOVER.md). Full development history, including the dead ends: [Worklog.md](Worklog.md).
 
-## Building it
+## Building from source
 
-Requirements: JDK 17+, Android SDK 36. No Android Studio required (`gradlew` handles everything; the sherpa-onnx AAR downloads automatically at build time).
+Requirements: **JDK 17+**, **Android SDK 36**. No Android Studio needed — the Gradle wrapper handles everything, and the sherpa-onnx runtime downloads automatically at build time.
 
 ```bash
-# Local development build (mock backend expectations, no keys needed)
-./gradlew assembleDevDebug
+./gradlew assembleDevDebug      # local dev build
+./gradlew assembleProdRelease   # release APK
 ```
 
-- Everything the shipped app does (object detection, OCR reading, colour/light, Whisper STT) works with zero configuration. Whisper model files download on first run from this repo's `stt-models-v1` release.
-- **Reviving the retired cloud chat**: the full backend lives in [`supabase/functions/`](supabase/functions/) (`chat`, `feedback`, `delete-my-data`). Deploy it to your own Supabase project with an `OPENAI_API_KEY` secret, re-enable the LLM flag in `SettingsManager`, and point `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` in `local.properties` at it.
-- Release signing expects `KEYSTORE_*` entries in `local.properties` (see [AGENT_HANDOVER.md](AGENT_HANDOVER.md)).
+Release builds fall back to debug signing when no keystore is configured, so a clone builds and installs out of the box. To sign with your own key, add `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` to `local.properties`.
 
-## Licenses
+Crash reporting (Firebase Crashlytics) is prod-flavor only and silently inactive without a `google-services.json`, which is not committed — clones build fine without one.
+
+## Privacy
+
+- No accounts, no analytics, no advertising SDKs, no tracking identifiers.
+- Camera frames and microphone audio are processed **in memory on your device** and are never uploaded by the app.
+- The only data sent anywhere is what **you** trigger with your own API key (to OpenAI), plus anonymous **crash reports** to Firebase Crashlytics so faults can be fixed. Google Analytics is explicitly disabled.
+- Full policy: [drophouse.uk privacy policy](https://www.drophouse.uk/products/sightbuddy/privacypolicy).
+
+## Contributing
+
+Issues and pull requests are welcome, though this project is no longer actively developed — expect slow responses. Good first contributions: additional languages (the STT model and UI strings are English-only today), a swap to an Apache-licensed YOLO-family detector, or Play Asset Delivery for the speech models.
+
+## Credits
+
+Built by [Drophouse Ltd](https://www.drophouse.uk). Development — including the local-STT migration, the accessibility work, and the sunset/open-sourcing process — was done in close collaboration with **Claude (Anthropic)** via Claude Code, working as a pair-programming partner across the codebase and this repository's documentation.
+
+## Licence
 
 Code is [MIT](LICENSE) © 2026 Drophouse Ltd.
 
-Bundled/downloaded third-party components keep their own licenses: OpenAI Whisper models (MIT; ONNX export via sherpa-onnx, Apache-2.0), Silero VAD (MIT), sherpa-onnx runtime (Apache-2.0), EfficientDet-Lite0 (Apache-2.0, [legal/](legal/)), tutorial & sound-effect audio generated with Voicertool (free incl. commercial use; terms archived in `app/src/main/assets/licenses/`).
+Third-party components keep their own licences: OpenAI Whisper models (MIT; ONNX export via sherpa-onnx, Apache-2.0), Silero VAD (MIT), sherpa-onnx runtime (Apache-2.0), EfficientDet-Lite0 (Apache-2.0, see [legal/](legal/)), and tutorial/sound-effect audio generated with Voicertool (free for commercial use; terms archived in `app/src/main/assets/licenses/`).

@@ -158,6 +158,12 @@ class TextScriptPlayer(
         }
     }
 
+    /** Resume speech at the current cursor (with the usual resume rewind). */
+    fun resumeAtCursor(): Boolean {
+        if (script.isBlank()) return false
+        return playFrom(charIndex, applyResumeRewind = true)
+    }
+
     /** Hold backward 2s — always restart from the beginning. */
     fun restartFromBeginning(): Boolean {
         if (script.isBlank()) return false

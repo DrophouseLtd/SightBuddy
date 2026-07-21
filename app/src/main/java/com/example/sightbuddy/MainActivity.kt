@@ -25,6 +25,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,8 +37,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.example.sightbuddy.core.OpenAiTransport
 import com.example.sightbuddy.core.BeepService
-import com.example.sightbuddy.core.DeleteDataTransport
-import com.example.sightbuddy.core.FeedbackTransport
 import com.example.sightbuddy.core.CameraXManager
 import com.example.sightbuddy.core.HapticManager
 import com.example.sightbuddy.core.NetworkStatusManager
@@ -45,9 +44,8 @@ import com.example.sightbuddy.core.SettingsManager
 import com.example.sightbuddy.core.SoundFXService
 import com.example.sightbuddy.core.TermsStore
 import com.example.sightbuddy.core.WelcomeStore
-import com.example.sightbuddy.di.createDeviceIdProvider
-import com.example.sightbuddy.di.createInAppUpdateChecker
-import com.example.sightbuddy.di.createIntegrityTokenProvider
+import com.example.sightbuddy.core.ApiKeyStore
+import com.example.sightbuddy.core.createCrashReporter
 import com.example.sightbuddy.core.hints.FeatureHelpLibrary
 import com.example.sightbuddy.core.hints.HelpContent
 import com.example.sightbuddy.core.hints.HintId
@@ -69,6 +67,7 @@ import com.example.sightbuddy.ui.screens.HelpDialog
 import com.example.sightbuddy.ui.screens.HomeScreen
 import com.example.sightbuddy.ui.screens.ObjectPickerDialog
 import com.example.sightbuddy.ui.screens.SettingsScreen
+import com.example.sightbuddy.ui.screens.SttDownloadDialog
 import com.example.sightbuddy.ui.screens.TermsAcceptanceOverlay
 import com.example.sightbuddy.ui.screens.WelcomeOverlay
 import com.example.sightbuddy.ui.theme.SIghtbuddyTheme
@@ -79,6 +78,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.delay
+
+/** Minimum gap between accepted Ask taps (tap-to-speak mode). */
+private const val MIC_TAP_DEBOUNCE_MS = 500L
 
 private const val SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000L
 private const val SESSION_CHECK_INTERVAL_MS = 15_000L
@@ -97,8 +99,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var welcomeStore: WelcomeStore
     private lateinit var termsStore: TermsStore
     private lateinit var hintStore: HintStore
-    private lateinit var feedbackTransport: FeedbackTransport
-    private lateinit var deleteDataTransport: DeleteDataTransport
+    private lateinit var apiKeyStore: ApiKeyStore
 
     private lateinit var colorIdAnalyzer: ColorIdAnalyzer
     private lateinit var lightLevelAnalyzer: LightLevelAnalyzer
@@ -117,13 +118,8 @@ class MainActivity : ComponentActivity() {
         ttsService = TTSService(this)
         sttModelManager = SttModelManager(this, BuildConfig.STT_MODEL_BASE_URL)
         voiceInputService = VoiceInputService(this, sttModelManager)
-        // Fetch the Whisper model in the background (no-op when already present
-        // or when downloads are disabled); load the engine once available.
-        MainScope().launch {
-            if (sttModelManager.downloadIfNeeded()) {
-                voiceInputService.loadEngineIfReady()
-            }
-        }
+        // Whisper models are downloaded only on user request (Settings or the
+        // first-launch prompt) — no automatic 154 MB download.
         hapticManager = HapticManager(this)
         beepService = BeepService()
         soundFXService = SoundFXService(this)
@@ -132,68 +128,28 @@ class MainActivity : ComponentActivity() {
         termsStore = TermsStore(this)
         hintStore = HintStore(this)
 
-        val deviceIdProvider = createDeviceIdProvider(this)
-        val integrityProvider = createIntegrityTokenProvider(this)
-        val installId = deviceIdProvider.getId()
+        // Honour the saved crash-diagnostics choice before anything can crash.
+        createCrashReporter().setEnabled(settingsManager.crashReportingEnabled.value)
 
-        feedbackTransport = FeedbackTransport(
-            feedbackUrl = BuildConfig.SUPABASE_FEEDBACK_URL,
-            supabaseAnonKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY,
-            installId = installId,
-            integrityTokenProvider = integrityProvider,
-        )
-        deleteDataTransport = DeleteDataTransport(
-            deleteDataUrl = BuildConfig.SUPABASE_DELETE_DATA_URL,
-            supabaseAnonKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY,
-            installId = installId,
-            integrityTokenProvider = integrityProvider,
-        )
-        val llmTransport = OpenAiTransport(
-            chatProxyUrl = BuildConfig.SUPABASE_CHAT_URL,
-            supabaseAnonKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY,
-            installId = installId,
-            integrityTokenProvider = integrityProvider,
-        )
-        val onQuotaExhausted: () -> Unit = {
-            runOnUiThread {
-                settingsManager.setLlmChat(false)
-                ttsService.speak(
-                    "Daily AI limit reached. Chat features will reset tomorrow.",
-                    flush = true,
-                )
-            }
-        }
-        val onInstallRestricted: () -> Unit = {
-            runOnUiThread {
-                settingsManager.setLlmChat(false)
-                ttsService.speak(
-                    "Cloud AI is unavailable for two days after deleting your data.",
-                    flush = true,
-                )
-            }
-        }
+        // Bring-your-own-key: all AI calls go directly to OpenAI with the
+        // user's key. No proxy, no server of ours.
+        apiKeyStore = ApiKeyStore(this)
+        val llmTransport = OpenAiTransport { apiKeyStore.getKey() }
 
         colorIdAnalyzer = ColorIdAnalyzer()
         lightLevelAnalyzer = LightLevelAnalyzer()
         objectAnalyzer = TFLiteObjectAnalyzer(this)
-        objectCommandResolver = ObjectCommandResolver(
-            transport = llmTransport,
-            onQuotaExhausted = onQuotaExhausted,
-            onInstallRestricted = onInstallRestricted,
-        )
+        val modelProvider = { settingsManager.llmModel.value }
+        objectCommandResolver = ObjectCommandResolver(transport = llmTransport)
         documentChatViewModel = DocumentChatViewModel(
             transport = llmTransport,
-            onQuotaExhausted = onQuotaExhausted,
-            onInstallRestricted = onInstallRestricted,
+            modelProvider = modelProvider,
         )
         imageChatViewModel = ImageChatViewModel(
             transport = llmTransport,
-            onQuotaExhausted = onQuotaExhausted,
-            onInstallRestricted = onInstallRestricted,
+            modelProvider = modelProvider,
         )
         localTextExtractor = LocalTextExtractor()
-
-        createInAppUpdateChecker(this).checkForUpdate(this)
 
         enableEdgeToEdge()
         setContent {
@@ -213,8 +169,8 @@ class MainActivity : ComponentActivity() {
                         welcomeStore = welcomeStore,
                         termsStore = termsStore,
                         hintStore = hintStore,
-                        feedbackTransport = feedbackTransport,
-                        deleteDataTransport = deleteDataTransport,
+                        apiKeyStore = apiKeyStore,
+                        sttModelManager = sttModelManager,
                         settingsManager = settingsManager,
                         networkStatusManager = networkStatusManager,
                         colorIdAnalyzer = colorIdAnalyzer,
@@ -256,8 +212,8 @@ fun SightBuddyApp(
     welcomeStore: WelcomeStore,
     termsStore: TermsStore,
     hintStore: HintStore,
-    feedbackTransport: FeedbackTransport,
-    deleteDataTransport: DeleteDataTransport,
+    apiKeyStore: ApiKeyStore,
+    sttModelManager: SttModelManager,
     settingsManager: SettingsManager,
     networkStatusManager: NetworkStatusManager,
     colorIdAnalyzer: ColorIdAnalyzer,
@@ -335,26 +291,108 @@ fun SightBuddyApp(
     var imageScanned by remember { mutableStateOf(false) }
     var triggerScan by remember { mutableStateOf(false) }
 
-    // True when a hold-mode mic press was rejected (no picture yet) so the
-    // matching release must not speak the "please hold" hint over the message.
-    var micBlockedPress by remember { mutableStateOf(false) }
+    // Mic-first "ask straight away": pressing the mic in Image/Text chat with no
+    // capture yet records the (optional) question, then on release snaps a frame
+    // and sends frame + question together. Pairing is order-independent: the
+    // pipeline stores the frame, the transcription resolves the question, and a
+    // LaunchedEffect fires once both are ready.
+    var pendingCaptureBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var pendingQuestion by remember { mutableStateOf<String?>(null) } // null = unresolved, "" = describe
+    var captureForQuestion by remember { mutableStateOf(false) }       // signal pipeline to grab+store a frame
+    var micFirstActive by remember { mutableStateOf(false) }
+    var micFirstMode by remember { mutableStateOf<String?>(null) }
+    // Independent scope for the mic-first request so consuming the trigger state
+    // (which recomposes the pairing effect) cannot cancel the in-flight call.
+    val micFirstScope = rememberCoroutineScope()
+    // Hold-mode: a press rejected because auto-capture is off must not act on release.
+    var micCaptureBlocked by remember { mutableStateOf(false) }
+    // Tap-mode debounce: ignore a second Ask tap fired within this window.
+    var lastMicTapMs by remember { mutableStateOf(0L) }
+
+    // Whisper model download — user-consented only, never automatic (154 MB).
+    val sttModelDownloadState by sttModelManager.downloadState.collectAsState()
+    val sttModelsReady = sttModelDownloadState is SttModelManager.DownloadState.Ready
+    val sttDownloadPercent =
+        (sttModelDownloadState as? SttModelManager.DownloadState.Downloading)?.percent
+    var showSttDownloadDialog by remember { mutableStateOf(false) }
+    var sttPromptShownThisLaunch by remember { mutableStateOf(false) }
+
+    fun startSttDownload() {
+        showSttDownloadDialog = false
+        // A download decision has been made — don't auto-prompt again this launch.
+        sttPromptShownThisLaunch = true
+        MainScope().launch {
+            // force: the user asked for this download, often from inside Settings.
+            ttsService.speak(
+                "Downloading voice models. This may take a few minutes.",
+                flush = false,
+                force = true,
+            )
+            val ok = sttModelManager.downloadIfNeeded()
+            if (ok) {
+                voiceInputService.loadEngineIfReady()
+                ttsService.speak(
+                    "Voice models installed. Speech recognition upgraded.",
+                    flush = false,
+                    force = true,
+                )
+            } else {
+                ttsService.speak(
+                    "Voice model download failed. You can retry from settings.",
+                    flush = false,
+                    force = true,
+                )
+            }
+        }
+    }
 
     /**
      * Message to speak instead of recording when the chat mode has nothing
      * captured yet (same wording the voice-command router uses); null = proceed.
      */
-    fun missingCaptureMessage(mode: String?): String? = when (mode) {
-        "Image chat" -> if (!imageScanned) "Please take a picture first." else null
-        "Text chat" -> if (!textScanned) "Please take a picture of the text first." else null
-        else -> null
+    /** Image/Text chat with nothing captured yet → use the mic-first capture flow. */
+    fun modeNeedsCapture(mode: String?): Boolean = when (mode) {
+        "Image chat" -> !imageScanned
+        "Text chat" -> !textScanned
+        else -> false
     }
+
+    /** Clear any in-progress mic-first capture (e.g. on leaving the feature). */
+    fun cancelMicFirst() {
+        micFirstActive = false
+        micFirstMode = null
+        captureForQuestion = false
+        pendingQuestion = null
+        pendingCaptureBitmap?.recycle()
+        pendingCaptureBitmap = null
+    }
+
+    /** Begin a mic-first capture: stop recording, snap a frame, await the question. */
+    fun beginMicFirstCapture(mode: String) {
+        cancelMicFirst()
+        micFirstActive = true
+        micFirstMode = mode
+        captureForQuestion = true
+        voiceInputService.stopListening()
+        soundFXService.play(SFX.CAMERA_CLICK)
+    }
+
+    /** Guard for async responses: only speak if the user is still in the feature. */
+    fun featureStillActive(mode: String): Boolean =
+        activeMode == mode && !showSettings && !showHelp && appInForeground
+
     var lastSessionActivityAtMs by remember { mutableStateOf(System.currentTimeMillis()) }
 
     val textPreviewEnabled by settingsManager.textPreviewEnabled.collectAsState()
-    val llmChatEnabled by settingsManager.llmChatEnabled.collectAsState()
+    // BYOK: AI features are enabled exactly when the user has saved their own key.
+    val llmChatEnabled by apiKeyStore.keyPresent.collectAsState()
     val isOnline by networkStatusManager.isOnline.collectAsState()
     val scanLightEnabled by settingsManager.scanLightEnabled.collectAsState()
     val scanColourEnabled by settingsManager.scanColourEnabled.collectAsState()
+    val imageChatEnabled by settingsManager.imageChatEnabled.collectAsState()
+    val textChatEnabled by settingsManager.textChatEnabled.collectAsState()
+    val discoverEnabled by settingsManager.discoverEnabled.collectAsState()
+    val findEnabled by settingsManager.findEnabled.collectAsState()
     val highContrast by settingsManager.highContrastEnabled.collectAsState()
     val whiteMode by settingsManager.whiteModeEnabled.collectAsState()
     val effectiveDarkTheme = if (highContrast) !whiteMode else isSystemInDarkTheme()
@@ -366,6 +404,7 @@ fun SightBuddyApp(
     }
     val effectiveTextPreviewEnabled = textPreviewEnabled || !llmChatEnabled
     val textScriptPlayer = remember { TextScriptPlayer(ttsService) }
+    val playbackState by textScriptPlayer.playbackState.collectAsState()
     var textPlaybackReady by remember { mutableStateOf(false) }
     var offlineNoticeShown by remember { mutableStateOf(false) }
 
@@ -412,6 +451,9 @@ fun SightBuddyApp(
     fun pauseForBackground() {
         voiceInputService.stopListening()
         cutAllAudio()
+        cancelMicFirst()
+        imageChatViewModel.cancelActiveRequest()
+        documentChatViewModel.cancelActiveRequest()
         cameraXManager.stopCamera()
     }
 
@@ -434,21 +476,13 @@ fun SightBuddyApp(
     val ttsInitialized by ttsService.isInitialized.collectAsState()
     val isListening by voiceInputService.isListening.collectAsState()
     val holdToSpeak by settingsManager.holdToSpeak.collectAsState()
+    val autoCaptureEnabled by settingsManager.autoCaptureEnabled.collectAsState()
     val ttsRate by settingsManager.ttsSpeechRate.collectAsState()
-    var lastAppliedTtsRate by remember { mutableStateOf<Float?>(null) }
 
-    // Apply speech rate on start and whenever the setting changes; speak a short
-    // sample on user-initiated changes so the new speed is heard immediately.
+    // Apply speech rate on start and whenever the setting changes. Announcements
+    // are made at the interaction sites (Settings row, playback hold buttons).
     LaunchedEffect(ttsRate, ttsInitialized) {
-        if (!ttsInitialized) return@LaunchedEffect
-        ttsService.setSpeechRate(ttsRate)
-        if (lastAppliedTtsRate != null && lastAppliedTtsRate != ttsRate) {
-            ttsService.speak(
-                "Speech rate ${SettingsManager.ttsRateLabel(ttsRate)}",
-                flush = true,
-            )
-        }
-        lastAppliedTtsRate = ttsRate
+        if (ttsInitialized) ttsService.setSpeechRate(ttsRate)
     }
     val now = { System.currentTimeMillis() }
 
@@ -479,14 +513,19 @@ fun SightBuddyApp(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(appInForeground, isListening, showWelcome, showTerms, showHelp, tutorialBlocking) {
+    LaunchedEffect(
+        appInForeground, isListening, showWelcome, showTerms, showHelp, showSettings,
+        tutorialBlocking,
+    ) {
+        // Settings is included: feature output must never leak over it. Settings'
+        // own confirmations use speak(force = true) and still come through.
         ttsService.setSuppressAppSpeech(
             !appInForeground || isListening || showWelcome || showTerms || showHelp ||
-                tutorialBlocking,
+                showSettings || tutorialBlocking,
         )
         // Do not stop STT when isListening — mic press already called cutAllAudio(); stopping here
         // would cancel SpeechRecognizer immediately after startListening().
-        if (!appInForeground || showWelcome || showTerms || showHelp) {
+        if (!appInForeground || showWelcome || showTerms || showHelp || showSettings) {
             cutAllTtsFeedback()
         }
     }
@@ -543,12 +582,15 @@ fun SightBuddyApp(
         !appInForeground || showSettings || showWelcome || showTerms ||
             showHelp || tutorialBlocking
 
-    val pages = remember(scanLightEnabled, scanColourEnabled, llmChatEnabled) {
+    val pages = remember(
+        scanLightEnabled, scanColourEnabled, llmChatEnabled,
+        imageChatEnabled, textChatEnabled, discoverEnabled, findEnabled,
+    ) {
         buildList {
-            if (llmChatEnabled) add("Image chat")
-            add("Text chat")
-            add("Discover objects")
-            add("Find objects")
+            if (llmChatEnabled && imageChatEnabled) add("Image chat")
+            if (textChatEnabled) add("Text chat")
+            if (discoverEnabled) add("Discover objects")
+            if (findEnabled) add("Find objects")
             if (scanLightEnabled) add("Scan Light")
             if (scanColourEnabled) add("Scan Colour")
         }
@@ -630,10 +672,50 @@ fun SightBuddyApp(
         }
     }
 
+    // Offer the voice-model download once onboarding is out of the way. Shown on
+    // every launch while undecided or "Later"; never again after "Never".
+    LaunchedEffect(tutorialBlocking, showWelcome, showTerms, appInForeground) {
+        if (tutorialBlocking || showWelcome || showTerms || !appInForeground) return@LaunchedEffect
+        if (sttPromptShownThisLaunch || sttModelManager.isReady()) return@LaunchedEffect
+        // Never interrupt an in-progress download with the prompt.
+        if (sttModelDownloadState is SttModelManager.DownloadState.Downloading) return@LaunchedEffect
+        if (settingsManager.sttDownloadChoice.value == SettingsManager.STT_CHOICE_NEVER) {
+            return@LaunchedEffect
+        }
+        sttPromptShownThisLaunch = true
+        showSttDownloadDialog = true
+    }
+
+    // Returning to the app must be silent, with one exception: Find objects with a
+    // cached target, where re-announcing tells the user tracking is still live.
+    // Anything queued by the previous session is cut rather than replayed.
+    var appHasStartedOnce by remember { mutableStateOf(false) }
+    LaunchedEffect(appInForeground, ttsInitialized) {
+        if (!appInForeground) return@LaunchedEffect
+        if (!appHasStartedOnce) {
+            appHasStartedOnce = true
+            return@LaunchedEffect // first launch keeps the normal onboarding flow
+        }
+        cutAllAudio()
+        // Suppress the "<mode> activated" announcement on resume.
+        lastAnnouncedMode = activeMode
+        if (ttsInitialized && !showSettings && !showHelp && !tutorialBlocking &&
+            activeMode == "Find objects" && findObjectTarget.isNotBlank()
+        ) {
+            ttsService.speak("Looking for $findObjectTarget", flush = true)
+        }
+    }
+
     // Voice input outcome feedback: auto-stop sounds and "nothing heard" prompts.
     LaunchedEffect(Unit) {
         voiceInputService.events.collect { event ->
             if (!appInForeground) return@collect
+            // Mic-first with no speech = "just describe the scene": pair an empty
+            // question with the snapped frame instead of prompting to repeat.
+            if (micFirstActive) {
+                pendingQuestion = ""
+                return@collect
+            }
             when (event) {
                 is VoiceInputService.SttEvent.AutoStopped -> {
                     soundFXService.play(SFX.STOP_LISTENING)
@@ -651,6 +733,51 @@ fun SightBuddyApp(
         }
     }
 
+    // Mic-first pairing: once the snapped frame and the (optional) question are
+    // both ready, send them together and speak the answer.
+    LaunchedEffect(pendingCaptureBitmap, pendingQuestion, micFirstActive) {
+        val bmp = pendingCaptureBitmap
+        val q = pendingQuestion
+        val mode = micFirstMode
+        if (!micFirstActive || bmp == null || q == null || mode == null) return@LaunchedEffect
+        // Consume the trigger atomically. NOTE: these writes change this effect's
+        // keys, so the effect itself is cancelled/relaunched — the real work must
+        // run in an independent scope or it would be killed mid-request.
+        micFirstActive = false
+        micFirstMode = null
+        pendingCaptureBitmap = null
+        pendingQuestion = null
+        micFirstScope.launch {
+            try {
+                when (mode) {
+                    "Image chat" -> {
+                        imageChatViewModel.resetSession()
+                        val response = withContext(Dispatchers.Default) {
+                            imageChatViewModel.processImage(bmp, q)
+                        }
+                        imageScanned = true
+                        touchSessionActivity()
+                        if (featureStillActive("Image chat")) ttsService.speak(response, flush = true)
+                    }
+                    "Text chat" -> {
+                        documentChatViewModel.resetSession()
+                        clearTextPlayback()
+                        val response = withContext(Dispatchers.Default) {
+                            documentChatViewModel.processDocument(bmp, q)
+                        }
+                        // Only "scanned" if OCR actually found text — otherwise the
+                        // next Ask would do a follow-up against an empty document.
+                        textScanned = documentChatViewModel.hasCachedDocument()
+                        touchSessionActivity()
+                        if (featureStillActive("Text chat")) speakOutsidePlayer(response)
+                    }
+                }
+            } finally {
+                bmp.recycle()
+            }
+        }
+    }
+
     // Voice command handler — only after permissions and welcome are done
     LaunchedEffect(showWelcome, showTerms, tutorialBlocking, appInForeground) {
         if (!appInForeground || showWelcome || showTerms || tutorialBlocking) {
@@ -660,6 +787,11 @@ fun SightBuddyApp(
             if (!appInForeground) return@collectLatest
             if (command.isNotEmpty()) {
                 touchSessionActivity()
+                if (micFirstActive) {
+                    // Mic-first: this is the question paired with the snapped frame.
+                    pendingQuestion = command
+                    return@collectLatest
+                }
                 when (activeMode) {
                     "Find objects" -> {
                         try {
@@ -715,12 +847,11 @@ fun SightBuddyApp(
                             return@collectLatest
                         }
                         if (imageScanned) {
-                            soundFXService.play(SFX.LISTENING)
                             val response = imageChatViewModel.askFollowUp(command)
-                            ttsService.speak(response, flush = true)
+                            if (featureStillActive("Image chat")) ttsService.speak(response, flush = true)
                             touchSessionActivity()
                         } else {
-                            ttsService.speak("Please take a picture first.", flush = true)
+                            ttsService.speak("Please capture first.", flush = true)
                         }
                     }
                     "Text chat" -> {
@@ -729,12 +860,11 @@ fun SightBuddyApp(
                             return@collectLatest
                         }
                         if (textScanned) {
-                            soundFXService.play(SFX.LISTENING)
                             val response = documentChatViewModel.askFollowUp(command)
-                            speakOutsidePlayer(response)
+                            if (featureStillActive("Text chat")) speakOutsidePlayer(response)
                             touchSessionActivity()
                         } else {
-                            ttsService.speak("Please take a picture of the text first.", flush = true)
+                            ttsService.speak("Please capture the text first.", flush = true)
                         }
                     }
                 }
@@ -910,7 +1040,14 @@ fun SightBuddyApp(
                 cameraXManager.throttleIntervalMs = 500L
                 cameraXManager.frameFlow.collectLatest { proxy ->
                     try {
-                        if (triggerScan) {
+                        if (captureForQuestion) {
+                            // Mic-first: store the snapped frame; the pairing effect
+                            // sends it once the transcribed question resolves.
+                            captureForQuestion = false
+                            pendingCaptureBitmap = withContext(Dispatchers.Default) {
+                                imageProxyToBitmap(proxy)
+                            }
+                        } else if (triggerScan) {
                             triggerScan = false
                             soundFXService.play(SFX.CAMERA_CLICK)
                             val response = withContext(Dispatchers.Default) {
@@ -920,7 +1057,7 @@ fun SightBuddyApp(
                                 text
                             }
                             imageScanned = true
-                            ttsService.speak(response, flush = true)
+                            if (featureStillActive("Image chat")) ttsService.speak(response, flush = true)
                         }
                     } catch (e: Exception) {
                         Log.e("SightBuddyApp", "Image chat failed", e)
@@ -934,7 +1071,12 @@ fun SightBuddyApp(
                 cameraXManager.throttleIntervalMs = 500L
                 cameraXManager.frameFlow.collectLatest { proxy ->
                     try {
-                        if (triggerScan) {
+                        if (captureForQuestion) {
+                            captureForQuestion = false
+                            pendingCaptureBitmap = withContext(Dispatchers.Default) {
+                                imageProxyToBitmap(proxy)
+                            }
+                        } else if (triggerScan) {
                             triggerScan = false
                             soundFXService.play(SFX.CAMERA_CLICK)
 
@@ -946,13 +1088,17 @@ fun SightBuddyApp(
                                     text
                                 }
                                 if (extractedText.isBlank()) {
-                                    speakOutsidePlayer("I couldn't detect any text in the image.")
+                                    if (featureStillActive("Text chat")) {
+                                        speakOutsidePlayer("I couldn't detect any text in the image.")
+                                    }
                                 } else {
                                     documentChatViewModel.setExtractedText(extractedText)
                                     textScanned = true
-                                    loadTextPlaybackScript(
-                                        documentChatViewModel.extractedTextForPlayback(),
-                                    )
+                                    if (featureStillActive("Text chat")) {
+                                        loadTextPlaybackScript(
+                                            documentChatViewModel.extractedTextForPlayback(),
+                                        )
+                                    }
                                 }
                             } else {
                                 val response = withContext(Dispatchers.Default) {
@@ -961,11 +1107,13 @@ fun SightBuddyApp(
                                     bitmap.recycle()
                                     text
                                 }
-                                textScanned = true
-                                loadTextPlaybackScript(
-                                    documentChatViewModel.firstAssistantResponseForPlayback()
-                                        .ifBlank { response },
-                                )
+                                textScanned = documentChatViewModel.hasCachedDocument()
+                                if (featureStillActive("Text chat")) {
+                                    loadTextPlaybackScript(
+                                        documentChatViewModel.firstAssistantResponseForPlayback()
+                                            .ifBlank { response },
+                                    )
+                                }
                             }
                         }
                     } catch (e: Exception) {
@@ -1028,25 +1176,39 @@ fun SightBuddyApp(
                         whiteMode = whiteMode,
                         modifier = Modifier.fillMaxSize(),
                         onBack = { showSettings = false },
-                        onDeleteData = {
-                            val ok = withContext(Dispatchers.IO) {
-                                deleteDataTransport.deleteMyData()
-                            }
-                            if (ok) {
-                                settingsManager.setLlmChat(false)
-                                documentChatViewModel.resetSession()
-                                imageChatViewModel.resetSession()
-                                ttsService.speak(
-                                    "Your data was deleted. Cloud AI is unavailable for two days.",
-                                    flush = true,
-                                )
-                            } else {
-                                ttsService.speak(
-                                    "Could not delete your data. Check your connection and try again.",
-                                    flush = true,
-                                )
-                            }
-                            ok
+                        apiKeyPresent = llmChatEnabled,
+                        onSaveApiKey = { raw ->
+                            apiKeyStore.setKey(raw)
+                            ttsService.speak(
+                                if (apiKeyStore.keyPresent.value) {
+                                    "API key saved. AI chat features are now enabled."
+                                } else {
+                                    "API key removed. AI chat features are disabled."
+                                },
+                                flush = true,
+                                force = true,
+                            )
+                        },
+                        onSpeechRateCycle = {
+                            val newRate = settingsManager.cycleTtsSpeechRate()
+                            ttsService.speak(
+                                "Speech rate ${SettingsManager.ttsRateLabel(newRate)}",
+                                flush = true,
+                                force = true,
+                            )
+                        },
+                        sttModelsReady = sttModelsReady,
+                        sttDownloadPercent = sttDownloadPercent,
+                        onRequestSttDownload = { showSttDownloadDialog = true },
+                        onFeatureHideBlocked = {
+                            ttsService.speak(
+                                "At least one feature must stay on.",
+                                flush = true,
+                                force = true,
+                            )
+                        },
+                        onCrashReportingChange = { enabled ->
+                            createCrashReporter().setEnabled(enabled)
                         },
                     )
                 }
@@ -1083,10 +1245,13 @@ fun SightBuddyApp(
                     onModeSelected = { mode ->
                         if (activeMode != mode) {
                             cutAllAudio()
+                            cancelMicFirst()
+                            imageChatViewModel.cancelActiveRequest()
+                            documentChatViewModel.cancelActiveRequest()
                             activeMode = mode
                             announceModeActivated(mode)
                             // Preserve Image/Text chat cache across feature switches.
-                            // Session reset is user-driven via "Take Picture".
+                            // Session reset is user-driven via Capture.
                             triggerScan = false
                             touchSessionActivity()
 
@@ -1103,14 +1268,18 @@ fun SightBuddyApp(
                             add("Find objects")
                         }
                         if (activeMode in micModes) {
-                            val captureMsg = missingCaptureMessage(activeMode)
-                            if (captureMsg != null) {
-                                // No picture yet — skip recording entirely.
-                                micBlockedPress = true
+                            val mode = activeMode
+                            if (mode != null && modeNeedsCapture(mode) && !autoCaptureEnabled) {
+                                // Auto-capture off: require an explicit Capture first.
+                                micCaptureBlocked = true
                                 cutAllAudio()
-                                ttsService.speak(captureMsg, flush = true)
+                                ttsService.speak(
+                                    if (mode == "Text chat") "Please capture the text first."
+                                    else "Please capture first.",
+                                    flush = true,
+                                )
                             } else {
-                                micBlockedPress = false
+                                micCaptureBlocked = false
                                 cutAllAudio()
                                 soundFXService.play(SFX.LISTENING)
                                 voiceInputService.startListening()
@@ -1123,19 +1292,25 @@ fun SightBuddyApp(
                             if (llmChatEnabled) add("Text chat")
                             add("Find objects")
                         }
-                        if (activeMode in micModes && !micBlockedPress) {
-                            voiceInputService.stopListening()
-                            if (holdMs < 1000L) {
-                                ttsService.speak(
-                                    "Please hold the mic button and speak",
-                                    flush = true
-                                )
+                        if (activeMode in micModes && !micCaptureBlocked) {
+                            val mode = activeMode
+                            if (mode != null && modeNeedsCapture(mode)) {
+                                // Mic-first: snap a frame and send it with the question.
+                                beginMicFirstCapture(mode)
                             } else {
-                                soundFXService.play(SFX.STOP_LISTENING)
-                                // Empty results are announced via voiceInputService.events.
+                                voiceInputService.stopListening()
+                                if (holdMs < 1000L) {
+                                    ttsService.speak(
+                                        "Please hold the Ask button and speak",
+                                        flush = true
+                                    )
+                                } else {
+                                    soundFXService.play(SFX.STOP_LISTENING)
+                                    // Empty results are announced via voiceInputService.events.
+                                }
                             }
                         }
-                        micBlockedPress = false
+                        micCaptureBlocked = false
                     },
                     onMicTapped = {
                         val micModes = buildSet {
@@ -1143,15 +1318,29 @@ fun SightBuddyApp(
                             if (llmChatEnabled) add("Text chat")
                             add("Find objects")
                         }
-                        if (activeMode in micModes) {
+                        // Debounce: a stray double-tap would otherwise start and
+                        // immediately stop a recording, yielding an empty result.
+                        val tapNow = System.currentTimeMillis()
+                        val tapAccepted = tapNow - lastMicTapMs >= MIC_TAP_DEBOUNCE_MS
+                        if (tapAccepted) lastMicTapMs = tapNow
+                        if (tapAccepted && activeMode in micModes) {
                             if (isListening) {
-                                voiceInputService.stopListening()
-                                soundFXService.play(SFX.STOP_LISTENING)
+                                val mode = activeMode
+                                if (mode != null && modeNeedsCapture(mode)) {
+                                    beginMicFirstCapture(mode)
+                                } else {
+                                    voiceInputService.stopListening()
+                                    soundFXService.play(SFX.STOP_LISTENING)
+                                }
                             } else {
-                                val captureMsg = missingCaptureMessage(activeMode)
-                                if (captureMsg != null) {
+                                val mode = activeMode
+                                if (mode != null && modeNeedsCapture(mode) && !autoCaptureEnabled) {
                                     cutAllAudio()
-                                    ttsService.speak(captureMsg, flush = true)
+                                    ttsService.speak(
+                                        if (mode == "Text chat") "Please capture the text first."
+                                        else "Please capture first.",
+                                        flush = true,
+                                    )
                                 } else {
                                     cutAllAudio()
                                     soundFXService.play(SFX.LISTENING)
@@ -1162,6 +1351,7 @@ fun SightBuddyApp(
                     },
                     onTakePicture = if (activeMode == "Image chat" || activeMode == "Text chat") {
                         {
+                            cancelMicFirst()
                             when (activeMode) {
                                 "Image chat" -> {
                                     imageChatViewModel.resetSession()
@@ -1184,10 +1374,14 @@ fun SightBuddyApp(
                     onOpenHelp = { openFeatureHelp(activeMode ?: pages.first()) },
                     onOpenSettings = {
                         cutAllAudio()
+                        cancelMicFirst()
+                        imageChatViewModel.cancelActiveRequest()
+                        documentChatViewModel.cancelActiveRequest()
                         showSettings = true
                     },
                     showTextPlaybackControls = activeMode == "Text chat",
                     textPlaybackEnabled = textPlaybackReady,
+                    playbackPlaying = playbackState == TextScriptPlayer.State.PLAYING,
                     onPlaybackPauseToggle = { textScriptPlayer.togglePause() },
                     onPlaybackTransportInteraction = {
                         tryShowAutoHint(HintId.TEXT_CHAT_PLAYBACK_CONTROLS)
@@ -1195,6 +1389,21 @@ fun SightBuddyApp(
                     onPlaybackSeekBack = { textScriptPlayer.seekBack() },
                     onPlaybackSeekForward = { textScriptPlayer.seekForward() },
                     onPlaybackRestartFromBeginning = { textScriptPlayer.restartFromBeginning() },
+                    onPlaybackRateStep = { up ->
+                        // Announce the new speed, then resume reading automatically
+                        // at the new rate from where the reader left off.
+                        val wasPlaying = playbackState == TextScriptPlayer.State.PLAYING
+                        textScriptPlayer.interrupt()
+                        val newRate = settingsManager.stepTtsSpeechRate(up)
+                        ttsService.setSpeechRate(newRate)
+                        ttsService.speak(
+                            SettingsManager.ttsRateLabel(newRate),
+                            flush = true,
+                            utteranceId = "RATE_ANNOUNCE",
+                        ) {
+                            if (wasPlaying) textScriptPlayer.resumeAtCursor()
+                        }
+                    },
                     onPlaybackDisabled = {
                         speakOutsidePlayer("Please scan text first")
                     },
@@ -1207,10 +1416,8 @@ fun SightBuddyApp(
                             body = content.body,
                             darkTheme = effectiveDarkTheme,
                             onClose = { closeHelp() },
-                            onSubmitFeedback = { text ->
-                                withContext(Dispatchers.IO) {
-                                    feedbackTransport.submit(text)
-                                }
+                            onSubmitFeedback = { _ ->
+                                false // Feedback flow removed with the backend.
                             },
                         )
                     }
@@ -1231,6 +1438,24 @@ fun SightBuddyApp(
             }
         } else {
             Text(text = "Waiting for Camera Permission...")
+        }
+
+        // Voice-model download dialog — rendered at the top level so it also
+        // appears over the Settings screen (where the download row lives).
+        if (showSttDownloadDialog) {
+            SttDownloadDialog(
+                highContrast = highContrast,
+                whiteMode = whiteMode,
+                onDownload = { startSttDownload() },
+                onLater = {
+                    settingsManager.setSttDownloadChoice(SettingsManager.STT_CHOICE_LATER)
+                    showSttDownloadDialog = false
+                },
+                onNever = {
+                    settingsManager.setSttDownloadChoice(SettingsManager.STT_CHOICE_NEVER)
+                    showSttDownloadDialog = false
+                },
+            )
         }
     }
 }

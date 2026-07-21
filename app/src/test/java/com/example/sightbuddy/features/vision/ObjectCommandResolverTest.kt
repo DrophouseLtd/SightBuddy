@@ -1,7 +1,6 @@
 package com.example.sightbuddy.features.vision
 
 import com.example.sightbuddy.core.OpenAiTransport
-import com.example.sightbuddy.di.IntegrityTokenProvider
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -9,16 +8,7 @@ import org.junit.Test
 
 class ObjectCommandResolverTest {
 
-    private val noopTokenProvider = object : IntegrityTokenProvider {
-        override fun getToken(): String = ""
-    }
-
-    private val noopTransport = OpenAiTransport(
-        chatProxyUrl = "",
-        supabaseAnonKey = "",
-        installId = "",
-        integrityTokenProvider = noopTokenProvider,
-    )
+    private val noopTransport = OpenAiTransport { "" }
 
     @Test
     fun resolvesItemWordEmbeddedInLongerCommandLocally() = runBlocking {

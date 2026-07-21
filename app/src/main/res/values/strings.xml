@@ -40,23 +40,23 @@
     <string name="delete_data_confirm_no_cd">No, keep my data</string>
 
     <string name="help_title_image_chat">Image chat</string>
-    <string name="help_body_image_chat">Point the camera at a scene and tap Take Picture. Sight Buddy describes what it sees. Hold the mic button and ask follow-up questions about the same image. Swipe between features or use Previous and Next when button navigation is on.</string>
+    <string name="help_body_image_chat">Point the camera at what you want to know about, then use the Ask button to ask a question — for example \"what colour is this?\" Sight Buddy captures the picture as you finish and answers. Ask nothing to simply hear the scene described. After that, use Ask again to ask more about the same picture, or tap Capture for a fresh description. Swipe between features, or use Previous and Next when button navigation is on.</string>
 
     <string name="help_title_text_chat">Text chat</string>
-    <string name="help_body_text_chat">Point the camera at text and tap Take Picture. The app reads the text aloud and you can ask follow-up questions with the mic. Use Back and Forward to skip through the reading. Hold Back to restart from the beginning. Hold Forward to pause or resume the reader.</string>
+    <string name="help_body_text_chat">Point the camera at text. Tap Capture to have it read aloud, or use the Ask button to ask a question about it — Sight Buddy captures the picture as you finish and answers. While it reads: tap Play to pause or resume, tap Back or Forward to skip, hold Forward to read faster and hold Back to read slower (the new speed is announced and reading continues), and hold Play to restart from the beginning.</string>
 
     <string name="help_title_discover_objects">Discover objects</string>
     <string name="help_body_discover_objects">Move the camera slowly. Sight Buddy names the most confident object it sees, with a short pause between announcements so speech stays clear.</string>
 
     <string name="help_title_find_objects">Find objects</string>
-    <string name="help_body_find_objects">Hold the mic and say what to find, for example \"keys\" or \"cup\". Directional sounds guide you left, right, up, down, or centre. Tap Browse Objects to pick from a list.</string>
+    <string name="help_body_find_objects">Use the Ask button and say what to find, for example \"keys\" or \"cup\". Directional sounds guide you left, right, up, down, or centre. Tap Browse Objects to pick from a list.</string>
 
     <string name="help_title_scan_light">Scan Light</string>
     <string name="help_body_scan_light">Point the camera at the scene. Sight Buddy reports whether lighting is bright, dim, or dark based on the camera image.</string>
 
     <string name="help_title_scan_colour">Scan Colour</string>
-    <string name="help_body_scan_colour">Point the camera at the colour you want identified. Sight Buddy speaks the colour name from the centre of the view.</string>
+    <string name="help_body_scan_colour">Point the camera so the colour fills the small frame in the centre of the screen. Sight Buddy speaks the colour name. Works best in good, even lighting — dim or warm indoor light can shift colours.</string>
 
     <string name="help_title_text_playback_controls">Text playback controls</string>
-    <string name="help_body_text_playback_controls">To start again from the beginning, hold the back button. To pause the reader, hold the forward button. A short tap on back or forward skips about twenty characters. You can open this help any time with the Help button.</string>
+    <string name="help_body_text_playback_controls">Tap the middle Play button to pause or resume the reader. Hold Play to start again from the beginning. A short tap on Back or Forward skips about twenty characters. Hold Forward to read faster, or hold Back to read slower — the new speed is announced and reading continues. You can open this help any time with the Help button.</string>
 </resources>

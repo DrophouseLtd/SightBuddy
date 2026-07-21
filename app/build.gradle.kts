@@ -4,6 +4,8 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
 }
 
 val localProperties = Properties().apply {
@@ -18,15 +20,6 @@ fun localOrEnv(name: String): String =
         ?: "").trim()
 
 fun escaped(value: String): String = value.replace("\"", "\\\"")
-
-// ---------------------------------------------------------------------------
-// Production Supabase (from local.properties or CI env)
-// ---------------------------------------------------------------------------
-val prodSupabaseUrl = localOrEnv("SUPABASE_URL")
-val prodSupabaseKey = localOrEnv("SUPABASE_PUBLISHABLE_KEY")
-val prodChatUrl = if (prodSupabaseUrl.isEmpty()) "" else "${prodSupabaseUrl.trimEnd('/')}/functions/v1/chat"
-val prodFeedbackUrl = if (prodSupabaseUrl.isEmpty()) "" else "${prodSupabaseUrl.trimEnd('/')}/functions/v1/feedback"
-val prodDeleteDataUrl = if (prodSupabaseUrl.isEmpty()) "" else "${prodSupabaseUrl.trimEnd('/')}/functions/v1/delete-my-data"
 
 // ---------------------------------------------------------------------------
 // Local Whisper STT (sherpa-onnx). The AAR is fetched from the official GitHub
@@ -52,17 +45,8 @@ val downloadSherpaOnnx = tasks.register("downloadSherpaOnnx") {
 // Default to the public model release so clones work out of the box;
 // override via local.properties/env to self-host.
 val sttModelBaseUrl = localOrEnv("STT_MODEL_BASE_URL").ifEmpty {
-    "https://github.com/DrophouseLtd/SightBuddy/releases/download/stt-models-v1"
+    "https://github.com/DrophouseLtd/sightbuddy-stt-models/releases/download/whisper-base-en-v1"
 }
-
-// ---------------------------------------------------------------------------
-// Mock Supabase (hardcoded — safe to commit)
-// ---------------------------------------------------------------------------
-val devSupabaseUrl = "https://ghwkdczqihxwhtynpwmd.supabase.co"
-val devSupabaseKey = "sb_publishable_KG59DggNXuusz4p0RVDldQ_7-3kCerO"
-val devChatUrl = "$devSupabaseUrl/functions/v1/chat"
-val devFeedbackUrl = "$devSupabaseUrl/functions/v1/feedback"
-val devDeleteDataUrl = "$devSupabaseUrl/functions/v1/delete-my-data"
 
 android {
     namespace = "com.example.sightbuddy"
@@ -76,8 +60,8 @@ android {
         applicationId = "com.drophouse.sightbuddy"
         minSdk = 30
         targetSdk = 36
-        versionCode = 7
-        versionName = "2.0.0"
+        versionCode = 10
+        versionName = "2.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -101,20 +85,10 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-dev"
-            buildConfigField("String", "SUPABASE_URL", "\"${escaped(devSupabaseUrl)}\"")
-            buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${escaped(devSupabaseKey)}\"")
-            buildConfigField("String", "SUPABASE_CHAT_URL", "\"${escaped(devChatUrl)}\"")
-            buildConfigField("String", "SUPABASE_FEEDBACK_URL", "\"${escaped(devFeedbackUrl)}\"")
-            buildConfigField("String", "SUPABASE_DELETE_DATA_URL", "\"${escaped(devDeleteDataUrl)}\"")
             buildConfigField("String", "STT_MODEL_BASE_URL", "\"${escaped(sttModelBaseUrl)}\"")
         }
         create("prod") {
             dimension = "environment"
-            buildConfigField("String", "SUPABASE_URL", "\"${escaped(prodSupabaseUrl)}\"")
-            buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${escaped(prodSupabaseKey)}\"")
-            buildConfigField("String", "SUPABASE_CHAT_URL", "\"${escaped(prodChatUrl)}\"")
-            buildConfigField("String", "SUPABASE_FEEDBACK_URL", "\"${escaped(prodFeedbackUrl)}\"")
-            buildConfigField("String", "SUPABASE_DELETE_DATA_URL", "\"${escaped(prodDeleteDataUrl)}\"")
             buildConfigField("String", "STT_MODEL_BASE_URL", "\"${escaped(sttModelBaseUrl)}\"")
         }
     }
@@ -126,11 +100,22 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            // GitHub-release APKs: arm64 only keeps the download reasonable.
+            // (x86/emulator users build from source with this line removed.)
+            ndk { abiFilters += listOf("arm64-v8a") }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("release")
+            // Official builds (CI / local with a keystore configured) sign with the
+            // upload key. Without one — OSS clones, local release testing — fall
+            // back to debug signing so `assembleProdRelease` still produces an
+            // installable APK. Play always re-signs with the real key anyway.
+            signingConfig = if (localOrEnv("KEYSTORE_FILE").isNotBlank()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
@@ -149,6 +134,13 @@ android {
             isReturnDefaultValues = true
         }
     }
+}
+
+// Don't fail when google-services.json is absent (dev flavor, or OSS clones
+// without a Firebase project). Crashlytics simply stays inactive.
+googleServices {
+    missingGoogleServicesStrategy =
+        com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy.IGNORE
 }
 
 tasks.named("preBuild") { dependsOn(downloadSherpaOnnx) }
@@ -189,7 +181,9 @@ dependencies {
     // Google ML Kit Text Recognition
     implementation(libs.google.mlkit.text.recognition)
 
-    // In-app updates (prod flavor only)
-    "prodImplementation"(libs.play.app.update)
-    "prodImplementation"(libs.play.app.update.ktx)
+    // Firebase Crashlytics (prod flavor only). No Analytics — crash diagnostics
+    // only, no advertising ID, no behavioural tracking.
+    "prodImplementation"(platform(libs.firebase.bom))
+    "prodImplementation"(libs.firebase.crashlytics)
+
 }

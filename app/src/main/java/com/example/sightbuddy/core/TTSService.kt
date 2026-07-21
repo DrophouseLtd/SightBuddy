@@ -22,6 +22,9 @@ class TTSService(context: Context) : TextToSpeech.OnInitListener {
     private var utteranceDoneListener: ((String?) -> Unit)? = null
     private var utteranceRangeListener: ((String?, Int, Int) -> Unit)? = null
 
+    /** One-shot per-utterance completion callbacks (e.g. resume reading after a rate announcement). */
+    private val oneShotDone = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
+
     fun setOnUtteranceDone(listener: ((String?) -> Unit)?) {
         utteranceDoneListener = listener
     }
@@ -79,11 +82,18 @@ class TTSService(context: Context) : TextToSpeech.OnInitListener {
                     }
 
                     override fun onDone(utteranceId: String?) {
+                        utteranceId?.let { oneShotDone.remove(it)?.invoke() }
                         utteranceDoneListener?.invoke(utteranceId)
+                    }
+
+                    override fun onStop(utteranceId: String?, interrupted: Boolean) {
+                        // Flushed/stopped utterances never complete; drop their callback.
+                        utteranceId?.let { oneShotDone.remove(it) }
                     }
 
                     @Deprecated("Deprecated in Java")
                     override fun onError(utteranceId: String?) {
+                        utteranceId?.let { oneShotDone.remove(it)?.invoke() }
                         utteranceDoneListener?.invoke(utteranceId)
                     }
                 })
@@ -96,16 +106,25 @@ class TTSService(context: Context) : TextToSpeech.OnInitListener {
     /**
      * @return true if speech was queued (initialized and not suppressed).
      */
+    /**
+     * @param force speak even while app speech is suppressed. Use only for
+     *   directly user-initiated feedback (e.g. Settings confirmations), never
+     *   for background/feature output — that is what suppression exists to stop.
+     */
     fun speak(
         text: String,
         flush: Boolean = false,
         utteranceId: String = "TTS_ID_${System.currentTimeMillis()}",
+        force: Boolean = false,
+        onDone: (() -> Unit)? = null,
     ): Boolean {
-        if (_suppressAppSpeech.value || text.isBlank()) return false
+        if ((_suppressAppSpeech.value && !force) || text.isBlank()) return false
         if (!_isInitialized.value) return false
         val queueMode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
         val params = Bundle()
+        if (onDone != null) oneShotDone[utteranceId] = onDone
         val result = tts?.speak(text, queueMode, params, utteranceId)
+        if (result == TextToSpeech.ERROR) oneShotDone.remove(utteranceId)
         return result != TextToSpeech.ERROR
     }
 

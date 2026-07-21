@@ -22,6 +22,8 @@ import java.util.concurrent.TimeUnit
  */
 class DocumentChatViewModel(
     private val transport: OpenAiTransport,
+    /** Model id, read per request so a Settings change applies immediately. */
+    private val modelProvider: () -> String = { "gpt-4o" },
     private val onQuotaExhausted: () -> Unit = {},
     private val onInstallRestricted: () -> Unit = {},
 ) {
@@ -38,8 +40,6 @@ class DocumentChatViewModel(
     val lastResponse = _lastResponse.asStateFlow()
 
     private val textExtractor = LocalTextExtractor()
-
-    private val model = "gpt-4o-mini"
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -177,7 +177,7 @@ class DocumentChatViewModel(
         }
 
         val body = JSONObject().apply {
-            put("model", model)
+            put("model", modelProvider())
             put("messages", messages)
             put("max_tokens", OpenAiTransport.LLM_MAX_OUTPUT_TOKENS)
             put("temperature", 0.7)
