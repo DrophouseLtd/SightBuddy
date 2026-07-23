@@ -67,6 +67,8 @@ Your key is encrypted on your device using the Android Keystore and is sent **on
 
 That's the complete list. Everything else — object detection, reading text aloud, colour, light, and speech recognition once the models are downloaded — happens on your device and sends nothing. **With no key saved, the app makes no AI requests at all.** Requests go to OpenAI under their privacy policy, billed to your own account.
 
+**Crash diagnostics.** The official builds — from Google Play, or the release APK here — include Firebase Crashlytics. If the app crashes, an anonymous report (stack trace, device model, OS version, app version — no images, audio, text, or advertising ID) is sent to Google so we can fix the fault. Turn it off any time at **Settings → Privacy → "Send crash reports."** Builds you compile from source send nothing: Crashlytics is inactive without a `google-services.json`, which isn't in this repo.
+
 ## Why this is free
 
 Sight Buddy started as a commercial project and ran as an open beta on Google Play in the UK and Europe. After a proper market and financial analysis we concluded it couldn't work as a paid product: the core features are already offered free by far better-resourced players (Microsoft's Seeing AI, Be My Eyes, Envision), and the per-request cost of cloud AI has to be paid by someone.
@@ -78,8 +80,6 @@ What that means in practice:
 - **No subscription and no ads — ever.** Not a marketing line: the app contains no billing code and no advertising SDKs, and the advertising-ID permissions are explicitly stripped from the manifest.
 - **You own your data and your costs.** With BYOK, your usage goes directly to your own OpenAI account. Nothing routes through a server we control, because there isn't one.
 - **It's yours to fork.** MIT licensed.
-
-**What we'd do differently:** validate willingness-to-pay — or a grant/partnership funding model via councils, charities and assistive-tech distributors — *before* building the cloud features, and lean even harder into local-first. The on-device half of this app costs nothing to run forever, and that half was the right product.
 
 The silver lining of local-first architecture: shutting down the backend didn't brick anything. The cloud features became BYOK, everything else kept working, and the app stayed on the store.
 
@@ -121,8 +121,12 @@ Issues and pull requests are welcome. The project is no longer under active deve
 
 Built by [Drophouse Ltd](https://www.drophouse.uk). Development — including the local-STT migration, the accessibility work, and the sunset/open-sourcing process — was done with AI pair-programming throughout: **Claude (Anthropic)** via Claude Code, and **Cursor**.
 
+Questions or feedback: **contact@drophouse.uk**.
+
 ## Licence
 
 Code is [MIT](LICENSE) © 2026 Drophouse Ltd.
 
-Third-party components keep their own licences: OpenAI Whisper models (MIT; ONNX export via sherpa-onnx, Apache-2.0), Silero VAD (MIT), sherpa-onnx runtime (Apache-2.0), EfficientDet-Lite0 (Apache-2.0, see [legal/](legal/)), and tutorial/sound-effect audio generated with Voicertool (free for commercial use; terms archived in `app/src/main/assets/licenses/`).
+Third-party components keep their own licences: OpenAI Whisper models (MIT; ONNX export via sherpa-onnx, Apache-2.0), Silero VAD (MIT), sherpa-onnx runtime (Apache-2.0), and EfficientDet-Lite0 (Apache-2.0, see [legal/](legal/)).
+
+Sound effects: the camera-shutter cue is from [Freesound](https://freesound.org/s/520684/) (CC0), the spoken voice prompts were generated with [Voicertool](https://voicertool.com/terms) (free for commercial use), and the remaining UI sounds are original works by Drophouse Ltd. Full attributions are in [`app/src/main/assets/licenses/`](app/src/main/assets/licenses/).

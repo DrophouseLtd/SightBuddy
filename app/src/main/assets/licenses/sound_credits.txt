@@ -1,0 +1,21 @@
+Sound effect credits — Sight Buddy
+==================================
+
+The in-app sound effects (app/src/main/res/raw/sfx_*.mp3) come from three
+sources. All are cleared for commercial use and redistribution.
+
+1. Camera-shutter cue (sfx_camera_click)
+   "Contarex camera shutter.wav" by Tonik1105, from Freesound.
+   https://freesound.org/s/520684/
+   Licence: Creative Commons 0 (CC0, public domain). No attribution required;
+   given here as a courtesy. See camera_shutter_attribution.txt.
+
+2. Spoken voice prompts (directional cues, listening/stop, tutorial narration)
+   Generated with Voicertool text-to-speech (https://voicertool.com).
+   Free for commercial use per their Terms of Service; terms archived in
+   voicertool_terms.txt.
+
+3. Remaining UI sounds (non-speech tones and cues)
+   Original works created in-house by Drophouse Ltd using FL Studio.
+   No third-party audio is embedded in them. © 2026 Drophouse Ltd, released
+   under the project's MIT licence along with the rest of the app.
