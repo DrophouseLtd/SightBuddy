@@ -41,7 +41,7 @@ Every surface is built accessibility-first: TalkBack labels throughout, spoken a
 
 Requires **Android 11 (API 30)** or newer.
 
-**Pick one source and stay with it.** Google Play re-signs the apps it distributes, so the Play build and the APK here can carry different signatures — and Android refuses to replace an installed app with a differently-signed copy. If an install or update stops with a signature error, that is why. Switching sources means uninstalling first, which **erases your saved API key and any downloaded voice models**. If you want updates to arrive on their own, install from Google Play.
+**Pick one source and stay with it.** Google Play re-signs the apps it distributes, so the Play build and the APK here are signed with different keys — and Android refuses to replace an installed app with a differently-signed copy. If an install or update stops with a signature error, that is why. Switching sources means uninstalling first, which **erases your saved API key and any downloaded voice models**. If you want updates to arrive on their own, install from Google Play.
 
 ## Using the AI features (bring your own key)
 
