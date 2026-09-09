@@ -1140,6 +1140,8 @@ fun SightBuddyApp(
         if (showTerms) {
             TermsAcceptanceOverlay(
                 darkTheme = effectiveDarkTheme,
+                highContrast = highContrast,
+                whiteMode = whiteMode,
                 onTermsOfUse = { openUrlInBrowser(TermsStore.TERMS_OF_USE_URL) },
                 onPrivacyPolicy = { openUrlInBrowser(TermsStore.PRIVACY_POLICY_URL) },
                 onAccept = { acceptTerms() },
@@ -1415,6 +1417,8 @@ fun SightBuddyApp(
                             title = content.title,
                             body = content.body,
                             darkTheme = effectiveDarkTheme,
+                            highContrast = highContrast,
+                            whiteMode = whiteMode,
                             onClose = { closeHelp() },
                             onSubmitFeedback = { _ ->
                                 false // Feedback flow removed with the backend.
@@ -1426,6 +1430,7 @@ fun SightBuddyApp(
                 if (showObjectPicker) {
                     ObjectPickerDialog(
                         visibleObjects = visibleCocoObjects,
+                        highContrast = highContrast,
                         onObjectSelected = { selected ->
                             findObjectTarget = selected
                             showObjectPicker = false

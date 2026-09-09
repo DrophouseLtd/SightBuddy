@@ -33,6 +33,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.sightbuddy.R
 import com.example.sightbuddy.core.SettingsManager
+import com.example.sightbuddy.ui.theme.actionButtonBackground
+import com.example.sightbuddy.ui.theme.actionButtonText
 import kotlinx.coroutines.launch
 
 @Composable
@@ -512,7 +514,7 @@ private fun ApiKeyDialog(
                     trailingIcon = {
                         Text(
                             text = if (keyVisible) "Hide" else "Show",
-                            color = Color(0xFF2196F3),
+                            color = if (highContrast) textColor else Color(0xFF3DBAD0),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier
@@ -528,8 +530,8 @@ private fun ApiKeyDialog(
                 Spacer(modifier = Modifier.height(20.dp))
                 ConfirmDialogButton(
                     label = "Save key",
-                    background = Color(0xFF4CAF50),
-                    textColor = Color.White,
+                    background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
+                    textColor = actionButtonText(highContrast, whiteMode, Color.Black),
                     contentDescription = "Save the entered API key",
                     enabled = keyInput.isNotBlank(),
                     onClick = { onSave(keyInput) },
@@ -538,8 +540,8 @@ private fun ApiKeyDialog(
                     Spacer(modifier = Modifier.height(12.dp))
                     ConfirmDialogButton(
                         label = "Remove saved key",
-                        background = Color(0xFFC62828),
-                        textColor = Color.White,
+                        background = actionButtonBackground(highContrast, whiteMode, Color(0xFFC62828)),
+                        textColor = actionButtonText(highContrast, whiteMode, Color.White),
                         contentDescription = "Remove the saved API key and disable AI features",
                         enabled = true,
                         onClick = onRemove,
@@ -611,8 +613,8 @@ private fun DeleteDataConfirmDialog(
                 Spacer(modifier = Modifier.height(24.dp))
                 ConfirmDialogButton(
                     label = yesLabel,
-                    background = Color(0xFFC62828),
-                    textColor = Color.White,
+                    background = actionButtonBackground(highContrast, whiteMode, Color(0xFFC62828)),
+                    textColor = actionButtonText(highContrast, whiteMode, Color.White),
                     contentDescription = yesCd,
                     enabled = !isDeleting,
                     onClick = onConfirm,
@@ -727,7 +729,7 @@ private fun SettingsChoiceRow(
     val markColor = if (highContrast) {
         if (whiteMode) Color.Black else Color.White
     } else {
-        Color(0xFF2196F3)
+        Color(0xFF3DBAD0)
     }
     Row(
         modifier = Modifier
@@ -815,7 +817,7 @@ private fun SettingsToggle(
                 checkedThumbColor = if (highContrast && whiteMode) Color.White else Color.Black,
                 checkedTrackColor = if (highContrast) {
                     if (whiteMode) Color.Black else Color.White
-                } else Color(0xFF2196F3),
+                } else Color(0xFF3DBAD0),
                 // White high-contrast: OFF must read clearly lighter than ON (black track).
                 uncheckedThumbColor = if (highContrast && whiteMode) {
                     Color(0xFF757575)

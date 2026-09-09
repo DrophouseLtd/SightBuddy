@@ -86,7 +86,7 @@ fun HomeScreen(
     val micPrimaryBg = when {
         highContrast && whiteMode -> Color.Black
         highContrast -> Color.White
-        else -> Color(0xFF2196F3).copy(alpha = 0.8f)
+        else -> Color(0xFF3DBAD0).copy(alpha = 0.8f)
     }
     val micPrimaryText = when {
         highContrast && whiteMode -> Color.White
@@ -343,7 +343,7 @@ fun HomeScreen(
                                 when {
                                     highContrast && whiteMode -> Color.Black
                                     highContrast -> Color.White
-                                    else -> Color(0xFF2196F3)
+                                    else -> Color(0xFF3DBAD0)
                                 },
                                 shape = RoundedCornerShape(16.dp)
                             )

@@ -91,7 +91,7 @@ fun CocoObjectsSettingsScreen(
                     focusedTextColor = labelColor,
                     unfocusedTextColor = labelColor,
                     cursorColor = labelColor,
-                    focusedBorderColor = if (highContrast) labelColor else Color(0xFF2196F3),
+                    focusedBorderColor = if (highContrast) labelColor else Color(0xFF3DBAD0),
                     unfocusedBorderColor = labelColor.copy(alpha = 0.4f),
                 ),
                 modifier = Modifier
@@ -183,7 +183,7 @@ private fun CocoObjectVisibilityRow(
                 checkedThumbColor = if (highContrast && whiteMode) Color.White else Color.Black,
                 checkedTrackColor = if (highContrast) {
                     if (whiteMode) Color.Black else Color.White
-                } else Color(0xFF2196F3),
+                } else Color(0xFF3DBAD0),
                 uncheckedThumbColor = if (highContrast && whiteMode) {
                     Color(0xFF757575)
                 } else {

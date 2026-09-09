@@ -22,6 +22,7 @@ import androidx.compose.ui.window.DialogProperties
 @Composable
 fun ObjectPickerDialog(
     visibleObjects: List<String>,
+    highContrast: Boolean,
     onObjectSelected: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -63,7 +64,7 @@ fun ObjectPickerDialog(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
                     cursorColor = Color.White,
-                    focusedBorderColor = Color(0xFF4CAF50),
+                    focusedBorderColor = if (highContrast) Color.White else Color(0xFF3DBAD0),
                     unfocusedBorderColor = Color.Gray
                 ),
                 modifier = Modifier
@@ -101,7 +102,10 @@ fun ObjectPickerDialog(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFD32F2F), shape = RoundedCornerShape(12.dp))
+                    .background(
+                        if (highContrast) Color.White else Color(0xFF3DBAD0),
+                        shape = RoundedCornerShape(12.dp),
+                    )
                     .clickable { onDismiss() }
                     .padding(vertical = 18.dp)
                     .semantics { contentDescription = "Cancel and go back" },
@@ -109,7 +113,7 @@ fun ObjectPickerDialog(
             ) {
                 Text(
                     text = "Cancel",
-                    color = Color.White,
+                    color = if (highContrast) Color.Black else Color.White,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )

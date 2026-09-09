@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.sightbuddy.R
+import com.example.sightbuddy.ui.theme.actionButtonBackground
+import com.example.sightbuddy.ui.theme.actionButtonText
 import kotlinx.coroutines.launch
 
 private enum class HelpPane {
@@ -49,6 +51,8 @@ fun HelpDialog(
     title: String,
     body: String,
     darkTheme: Boolean,
+    highContrast: Boolean,
+    whiteMode: Boolean,
     onClose: () -> Unit,
     onSubmitFeedback: suspend (String) -> Boolean,
 ) {
@@ -124,7 +128,8 @@ fun HelpDialog(
                         Spacer(modifier = Modifier.height(24.dp))
                         HelpActionButton(
                             label = closeLabel,
-                            background = Color(0xFF4CAF50),
+                            background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
+                            textColor = actionButtonText(highContrast, whiteMode, Color.Black),
                             contentDescription = closeCd,
                             onClick = { resetAndClose() },
                         )
@@ -161,7 +166,7 @@ fun HelpDialog(
                                 focusedTextColor = textColor,
                                 unfocusedTextColor = textColor,
                                 cursorColor = textColor,
-                                focusedBorderColor = Color(0xFF4CAF50),
+                                focusedBorderColor = if (highContrast) textColor else Color(0xFF3DBAD0),
                                 unfocusedBorderColor = fieldBorder,
                             ),
                         )
@@ -176,7 +181,8 @@ fun HelpDialog(
                         Spacer(modifier = Modifier.height(20.dp))
                         HelpActionButton(
                             label = if (isSubmitting) "…" else submitLabel,
-                            background = Color(0xFF4CAF50),
+                            background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
+                            textColor = actionButtonText(highContrast, whiteMode, Color.Black),
                             contentDescription = submitCd,
                             onClick = {
                                 val text = feedbackText.trim()
@@ -224,7 +230,8 @@ fun HelpDialog(
                         Spacer(modifier = Modifier.height(24.dp))
                         HelpActionButton(
                             label = closeLabel,
-                            background = Color(0xFF4CAF50),
+                            background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
+                            textColor = actionButtonText(highContrast, whiteMode, Color.Black),
                             contentDescription = closeCd,
                             onClick = { resetAndClose() },
                         )

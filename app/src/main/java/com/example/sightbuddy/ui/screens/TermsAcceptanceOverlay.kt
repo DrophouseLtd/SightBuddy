@@ -25,10 +25,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.sightbuddy.R
+import com.example.sightbuddy.ui.theme.actionButtonBackground
+import com.example.sightbuddy.ui.theme.actionButtonText
 
 @Composable
 fun TermsAcceptanceOverlay(
     darkTheme: Boolean,
+    highContrast: Boolean,
+    whiteMode: Boolean,
     onTermsOfUse: () -> Unit,
     onPrivacyPolicy: () -> Unit,
     onAccept: () -> Unit,
@@ -94,8 +98,8 @@ fun TermsAcceptanceOverlay(
 
             TermsActionButton(
                 label = acceptLabel,
-                background = Color(0xFF4CAF50),
-                textColor = Color.White,
+                background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
+                textColor = actionButtonText(highContrast, whiteMode, Color.Black),
                 contentDescription = acceptCd,
                 onClick = onAccept,
             )

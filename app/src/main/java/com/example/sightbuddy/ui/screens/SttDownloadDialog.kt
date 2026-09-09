@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.sightbuddy.ui.theme.actionButtonBackground
+import com.example.sightbuddy.ui.theme.actionButtonText
 
 /**
  * Asks permission for the one-time ~154 MB Whisper voice-model download.
@@ -88,8 +90,8 @@ fun SttDownloadDialog(
                 Spacer(modifier = Modifier.height(24.dp))
                 DialogButton(
                     label = "Download now",
-                    background = Color(0xFF4CAF50),
-                    textColor = Color.White,
+                    background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
+                    textColor = actionButtonText(highContrast, whiteMode, Color.Black),
                     contentDescription = "Download voice models now. About 154 megabytes.",
                     onClick = onDownload,
                 )

@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -33,10 +34,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.sightbuddy.R
+import com.example.sightbuddy.ui.theme.actionButtonBackground
+import com.example.sightbuddy.ui.theme.actionButtonText
 
 /**
  * First-launch welcome screen: brand image, skip control, and preview Help / Settings buttons.
  * Spoken tutorial audio is played separately by [com.example.sightbuddy.core.SoundFXService].
+ *
+ * Normal mode shows the full-screen brand frame ([R.drawable.welcome_frame]) under the corner
+ * buttons. High-contrast mode is left unchanged: the tinted line-art mark on the solid theme
+ * background, so the accessibility scheme stays intact.
  */
 @Composable
 fun WelcomeOverlay(
@@ -52,6 +59,7 @@ fun WelcomeOverlay(
     val skipCd = stringResource(R.string.welcome_skip_cd)
     val helpButtonCd = stringResource(R.string.welcome_help_tap_cd)
     val settingsButtonCd = stringResource(R.string.welcome_settings_tap_cd)
+    val imageCd = stringResource(R.string.welcome_image_cd)
     val context = LocalContext.current
 
     val chipBg = when {
@@ -80,6 +88,16 @@ fun WelcomeOverlay(
             .fillMaxSize()
             .background(bg),
     ) {
+        if (!highContrast) {
+            // Full-screen brand frame fills the whole screen under the corner buttons.
+            Image(
+                painter = painterResource(R.drawable.welcome_frame),
+                contentDescription = imageCd,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
         WelcomeCornerButton(
             label = "?",
             fontSizeSp = 28,
@@ -104,48 +122,69 @@ fun WelcomeOverlay(
                 .padding(top = 24.dp, end = 20.dp),
         )
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 32.dp, vertical = 48.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            if (iconBitmap != null) {
-                Image(
-                    bitmap = iconBitmap,
-                    contentDescription = stringResource(R.string.welcome_image_cd),
-                    contentScale = ContentScale.Fit,
-                    // The art is white line work on transparency: tint it to match
-                    // the theme so it stays visible on the light background too.
-                    colorFilter = ColorFilter.tint(
-                        if (darkTheme) Color.White else Color(0xFF1A1A1A)
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .sizeIn(maxHeight = 280.dp),
-                )
+        if (highContrast) {
+            // High-contrast: unchanged — tinted line-art mark on the solid background.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 32.dp, vertical = 48.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (iconBitmap != null) {
+                    Image(
+                        bitmap = iconBitmap,
+                        contentDescription = imageCd,
+                        contentScale = ContentScale.Fit,
+                        colorFilter = ColorFilter.tint(
+                            if (darkTheme) Color.White else Color(0xFF1A1A1A)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .sizeIn(maxHeight = 280.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                WelcomeSkipButton(highContrast, whiteMode, skipLabel, skipCd, onSkip)
             }
-
-            Spacer(modifier = Modifier.weight(1f))
-
+        } else {
+            // Skip control anchored to the bottom, over the brand frame.
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF4CAF50))
-                    .clickable(onClick = onSkip)
-                    .padding(horizontal = 32.dp, vertical = 16.dp)
-                    .semantics { contentDescription = skipCd },
-                contentAlignment = Alignment.Center,
+                    .fillMaxSize()
+                    .padding(horizontal = 32.dp, vertical = 48.dp),
+                contentAlignment = Alignment.BottomCenter,
             ) {
-                Text(
-                    text = skipLabel,
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                )
+                WelcomeSkipButton(highContrast, whiteMode, skipLabel, skipCd, onSkip)
             }
         }
+    }
+}
+
+@Composable
+private fun WelcomeSkipButton(
+    highContrast: Boolean,
+    whiteMode: Boolean,
+    label: String,
+    contentDescription: String,
+    onSkip: () -> Unit,
+) {
+    // Brand green + black text normally; plain black/white in high contrast.
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)))
+            .clickable(onClick = onSkip)
+            .padding(horizontal = 32.dp, vertical = 16.dp)
+            .semantics { this.contentDescription = contentDescription },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = actionButtonText(highContrast, whiteMode, Color.Black),
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
