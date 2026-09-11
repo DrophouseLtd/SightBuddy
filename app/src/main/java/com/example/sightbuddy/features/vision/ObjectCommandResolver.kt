@@ -15,7 +15,21 @@ class ObjectCommandResolver(
     private val model: String = "gpt-4o-mini",
     private val onQuotaExhausted: () -> Unit = {},
     private val onInstallRestricted: () -> Unit = {},
+    private val messages: Messages = Messages(),
 ) {
+
+    /**
+     * The sentences the resolver speaks on its own, as opposed to the ones the
+     * API writes. The caller passes localised text; the English defaults keep
+     * previews and tests working without a Context.
+     */
+    class Messages(
+        val didNotCatch: String = "I did not catch that. Please say an object name.",
+        val couldNotMatch: String = "I could not safely match that. Please try again or open Browse Objects.",
+        val sayAnotherWay: String = "Can you say that in another way?",
+        val notSupported: String = "That object is not supported.",
+        val notOnList: (String) -> String = { raw -> "I'm sorry I couldn't find \"$raw\" from the item list." },
+    )
 
     sealed class ResolveResult {
         data class Activate(
@@ -60,6 +74,26 @@ class ObjectCommandResolver(
     private val localOnlyActivationThreshold = 0.80f
     private val minApiActivationConfidence = 0.72f
 
+    /**
+     * Alias table actually used for matching: the English synonyms plus, when the
+     * app is in Finnish, the Finnish words. [CocoFinnish.aliases] is empty in any
+     * other language, so English behaviour is untouched.
+     */
+    private fun activeAliases(): Map<String, String> =
+        aliasMap + CocoFinnish.aliases().mapKeys { (term, _) -> normalize(term) }
+
+    /**
+     * Every spoken form that should score against a given COCO item: the English
+     * label always, plus the Finnish name and its aliases when the app is in
+     * Finnish. Fuzzy-matching these locally keeps inflected Finnish words
+     * ("kirjaan", "tuolilla") off the API path.
+     */
+    private fun surfaceForms(): Map<String, List<String>> {
+        val forms = COCO_OBJECTS.associateWith { mutableListOf(normalize(it)) }
+        CocoFinnish.aliases().forEach { (term, item) -> forms[item]?.add(normalize(term)) }
+        return forms
+    }
+
     private val aliasMap = mapOf(
         "bike" to "bicycle",
         "cycle" to "bicycle",
@@ -95,15 +129,13 @@ class ObjectCommandResolver(
     suspend fun resolve(userInput: String, llmEnabled: Boolean = true): ResolveResult = withContext(Dispatchers.Default) {
         val raw = userInput.trim()
         if (raw.isBlank()) {
-            return@withContext ResolveResult.Clarify(
-                message = "I did not catch that. Please say an object name."
-            )
+            return@withContext ResolveResult.Clarify(message = messages.didNotCatch)
         }
 
         val normalized = normalize(raw)
 
         // --- Path 1a: direct alias lookup ---
-        val directAlias = aliasMap[normalized]
+        val directAlias = activeAliases()[normalized]
         if (directAlias != null && directAlias in COCO_OBJECTS) {
             Log.i(TAG, "Resolved locally by alias: '$raw' -> '$directAlias'")
             return@withContext ResolveResult.Activate(directAlias, Source.LOCAL, 1.0f)
@@ -174,16 +206,16 @@ class ObjectCommandResolver(
                 } else {
                     Log.w(TAG, "API returned activate but failed validation (item=$item, conf=${decision.confidence})")
                     ResolveResult.Clarify(
-                        message = decision.message.ifBlank { "I could not safely match that. Please try again or open Browse Objects." }
+                        message = decision.message.ifBlank { messages.couldNotMatch }
                     )
                 }
             }
             "clarify" -> ResolveResult.Clarify(
-                message = decision.message.ifBlank { "Can you say that in another way?" },
+                message = decision.message.ifBlank { messages.sayAnotherWay },
                 options = listOfNotNull(decision.item).filter { it in COCO_OBJECTS }
             )
             else -> ResolveResult.Unavailable(
-                message = decision.message.ifBlank { "That object is not supported." }
+                message = decision.message.ifBlank { messages.notSupported }
             )
         }
     }
@@ -193,7 +225,10 @@ class ObjectCommandResolver(
     private fun normalize(text: String): String {
         val camelSpaced = text.replace(Regex("([a-z])([A-Z])"), "\$1 \$2")
         val lower = camelSpaced.lowercase(Locale.US)
-        val cleaned = lower.replace(Regex("[^a-z0-9\\s]"), " ")
+        // Fold the Finnish vowels before the a-z filter below strips them: without
+        // this, "henkilö" would normalize to "henkil" and never match its alias.
+        val folded = lower.replace('ä', 'a').replace('ö', 'o').replace('å', 'a')
+        val cleaned = folded.replace(Regex("[^a-z0-9\\s]"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
         return when {
@@ -212,7 +247,8 @@ class ObjectCommandResolver(
         if (inputTokens.isEmpty()) return null
 
         val compactInput = normalizedInput.replace(" ", "")
-        val terms = COCO_OBJECTS.map { item -> item to item } + aliasMap.map { (term, item) -> term to item }
+        val terms = COCO_OBJECTS.map { item -> item to item } +
+            activeAliases().map { (term, item) -> term to item }
 
         return terms.asSequence()
             .mapNotNull { (term, item) ->
@@ -253,23 +289,34 @@ class ObjectCommandResolver(
 
     private fun scoreCandidates(normalizedInput: String): List<ScoredCandidate> {
         val inputTokens = normalizedInput.split(" ").filter { it.isNotBlank() }.toSet()
+        val forms = surfaceForms()
         return COCO_OBJECTS.map { item ->
-            val normalizedItem = normalize(item)
-            val distanceScore = 1f - (levenshtein(normalizedInput, normalizedItem).toFloat() /
-                max(normalizedInput.length, normalizedItem.length).toFloat())
-            val itemTokens = normalizedItem.split(" ").filter { it.isNotBlank() }.toSet()
-            val overlap = if (inputTokens.isEmpty() || itemTokens.isEmpty()) 0f
-            else inputTokens.intersect(itemTokens).size.toFloat() / itemTokens.size.toFloat()
-            val containment = if (normalizedItem.contains(normalizedInput) ||
-                normalizedInput.contains(normalizedItem)
-            ) 1f else 0f
-            val score = (distanceScore * 0.55f) + (overlap * 0.30f) + (containment * 0.15f)
-            ScoredCandidate(item = item, score = score.coerceIn(0f, 1f))
+            // Best score across the item's spoken forms. In English that is the label
+            // and nothing else, so scoring is unchanged from before.
+            val best = forms[item].orEmpty()
+                .maxOfOrNull { scoreSurface(normalizedInput, inputTokens, it) } ?: 0f
+            ScoredCandidate(item = item, score = best)
         }.sortedByDescending { it.score }
     }
 
-    private fun itemListUnavailableMessage(raw: String): String =
-        "I'm sorry I couldn't find \"$raw\" from the item list."
+    private fun scoreSurface(
+        normalizedInput: String,
+        inputTokens: Set<String>,
+        normalizedItem: String,
+    ): Float {
+        val distanceScore = 1f - (levenshtein(normalizedInput, normalizedItem).toFloat() /
+            max(normalizedInput.length, normalizedItem.length).toFloat())
+        val itemTokens = normalizedItem.split(" ").filter { it.isNotBlank() }.toSet()
+        val overlap = if (inputTokens.isEmpty() || itemTokens.isEmpty()) 0f
+        else inputTokens.intersect(itemTokens).size.toFloat() / itemTokens.size.toFloat()
+        val containment = if (normalizedItem.contains(normalizedInput) ||
+            normalizedInput.contains(normalizedItem)
+        ) 1f else 0f
+        val score = (distanceScore * 0.55f) + (overlap * 0.30f) + (containment * 0.15f)
+        return score.coerceIn(0f, 1f)
+    }
+
+    private fun itemListUnavailableMessage(raw: String): String = messages.notOnList(raw)
 
     private fun levenshtein(a: String, b: String): Int {
         if (a == b) return 0
@@ -303,7 +350,7 @@ class ObjectCommandResolver(
                 .toString()
 
             val messages = org.json.JSONArray().apply {
-                put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT))
+                put(JSONObject().put("role", "system").put("content", systemPrompt()))
                 put(JSONObject().put("role", "user").put("content", userPrompt))
             }
             val body = JSONObject().apply {
@@ -327,6 +374,14 @@ class ObjectCommandResolver(
             null
         }
     }
+
+    /**
+     * Only the prompt for the language in use is sent. The two synonym sections
+     * never travel together: an English user pays no Finnish tokens, and a
+     * Finnish user pays no English ones.
+     */
+    private fun systemPrompt(): String =
+        if (CocoFinnish.isActive()) SYSTEM_PROMPT_FI else SYSTEM_PROMPT
 
     private fun parseApiDecision(content: String): ApiDecision? {
         return try {
@@ -379,6 +434,41 @@ class ObjectCommandResolver(
             - message: a short TTS-friendly sentence for the user (80 words maximum).
             - confidence: a number between 0.0 and 1.0.
             Never return an item that is not in the allowed list.
+        """.trimIndent()
+
+        /**
+         * The Finnish counterpart. Same contract, but the spoken command arrives in
+         * Finnish while allowed_items stays English, and the reply to the user must
+         * be Finnish. Sent instead of [SYSTEM_PROMPT], never alongside it.
+         */
+        private val SYSTEM_PROMPT_FI = """
+            You are an object-command resolver for a vision assistant app used by visually impaired people.
+            ${com.example.sightbuddy.core.OpenAiTransport.LLM_USER_SAFETY_INSTRUCTION}
+            The user speaks FINNISH. Their speech may be noisy, contain extra words, or use everyday Finnish synonyms.
+            The allowed_items list is in ENGLISH and you must return an English item from it.
+
+            IMPORTANT - Finnish to English mapping:
+            Translate the Finnish object the user meant into the matching English item, including inflected
+            and colloquial forms. Examples:
+            - "muki", "kuppi", "kahvikuppi" -> "cup"
+            - "sohva" -> "couch"
+            - "jaakaappi", "jaakaappia" -> "refrigerator"
+            - "kannykka", "puhelin", "matkapuhelin" -> "cell phone"
+            - "lappari", "kannettava", "tietokone" -> "laptop"
+            - "pyora", "fillari" -> "bicycle"
+            - "telkkari", "televisio" -> "tv"
+            - "vessa", "pytty" -> "toilet"
+            - "poyta", "ruokapoyta" -> "dining table"
+            - "ruukkukasvi", "kasvi" -> "potted plant"
+            Apply the same reasoning to any other Finnish word, including partitive and plural forms.
+
+            Extract the intended object from the full sentence and map it to exactly one item from the allowed list.
+            Return ONLY a JSON object with these keys:
+            - action: "activate" if you can confidently match, "clarify" if truly ambiguous between multiple items, "unavailable" if the object genuinely is not on the list.
+            - item: the exact ENGLISH string from allowed_items, or null.
+            - message: a short TTS-friendly sentence IN FINNISH for the user (80 words maximum).
+            - confidence: a number between 0.0 and 1.0.
+            Never return an item that is not in the allowed list. Always write message in Finnish.
         """.trimIndent()
     }
 }

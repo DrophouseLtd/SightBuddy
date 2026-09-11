@@ -1,7 +1,9 @@
 package com.example.sightbuddy.features.vision
 
 import android.graphics.Color
+import androidx.annotation.StringRes
 import androidx.camera.core.ImageProxy
+import com.example.sightbuddy.R
 
 /**
  * Analyzes the centre region of a camera frame to determine the dominant colour.
@@ -13,7 +15,11 @@ import androidx.camera.core.ImageProxy
  */
 class ColorIdAnalyzer {
 
-    data class ColorResult(val name: String, val hex: String)
+    /**
+     * The name is a resource id, not text: the analyzer runs off the main thread
+     * and has no Context, so the caller resolves it in the app language.
+     */
+    data class ColorResult(@StringRes val nameRes: Int, val hex: String)
 
     fun analyze(imageProxy: ImageProxy): ColorResult {
         val width = imageProxy.width
@@ -66,7 +72,8 @@ class ColorIdAnalyzer {
         return values[values.size / 2]
     }
 
-    private fun mapToColorName(r: Int, g: Int, b: Int): String {
+    @StringRes
+    private fun mapToColorName(r: Int, g: Int, b: Int): Int {
         val hsv = FloatArray(3)
         Color.RGBToHSV(r, g, b, hsv)
         val hue = hsv[0]        // 0-360
@@ -74,27 +81,27 @@ class ColorIdAnalyzer {
         val value = hsv[2]      // 0-1
 
         // Achromatic first
-        if (value < 0.13f) return "Black"
-        if (value > 0.80f && sat < 0.18f) return "White"
-        if (sat < 0.15f) return "Gray"
+        if (value < 0.13f) return R.string.colour_black
+        if (value > 0.80f && sat < 0.18f) return R.string.colour_white
+        if (sat < 0.15f) return R.string.colour_gray
 
         // Low-value / low-saturation warm hues read as brown or beige,
         // not orange — the old table had no brown at all.
         if (hue in 10f..50f) {
-            if (value < 0.55f && sat > 0.2f) return "Brown"
-            if (sat < 0.35f && value > 0.6f) return "Beige"
+            if (value < 0.55f && sat > 0.2f) return R.string.colour_brown
+            if (sat < 0.35f && value > 0.6f) return R.string.colour_beige
         }
 
         return when {
-            hue < 15f -> "Red"
-            hue < 40f -> "Orange"
-            hue < 70f -> "Yellow"
-            hue < 160f -> "Green"
-            hue < 200f -> "Cyan"
-            hue < 260f -> "Blue"
-            hue < 290f -> "Purple"
-            hue < 340f -> "Pink"
-            else -> "Red"
+            hue < 15f -> R.string.colour_red
+            hue < 40f -> R.string.colour_orange
+            hue < 70f -> R.string.colour_yellow
+            hue < 160f -> R.string.colour_green
+            hue < 200f -> R.string.colour_cyan
+            hue < 260f -> R.string.colour_blue
+            hue < 290f -> R.string.colour_purple
+            hue < 340f -> R.string.colour_pink
+            else -> R.string.colour_red
         }
     }
 }

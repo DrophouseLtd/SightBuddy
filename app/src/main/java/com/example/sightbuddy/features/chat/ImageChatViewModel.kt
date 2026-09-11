@@ -3,6 +3,7 @@ package com.example.sightbuddy.features.chat
 import android.graphics.Bitmap
 import android.util.Base64
 import android.util.Log
+import com.example.sightbuddy.R
 import com.example.sightbuddy.core.OpenAiTransport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +25,7 @@ import java.util.concurrent.TimeUnit
  * visual context without re-capturing.
  */
 class ImageChatViewModel(
+    private val context: android.content.Context,
     private val transport: OpenAiTransport,
     /** Model id, read per request so a Settings change applies immediately. */
     private val modelProvider: () -> String = { "gpt-4o" },
@@ -62,12 +64,18 @@ class ImageChatViewModel(
         "something that is not in the image, do not just say it is absent — describe " +
         "what you DO see and its relevant details (such as colours), since the wording " +
         "was probably misheard. " +
+        // Follow-ups were being answered with another tour of the scene instead of
+        // the thing that was actually asked.
+        "When the user asks a question, answer that question first and directly. " +
+        "Do not re-describe the scene unless the question calls for it. " +
         OpenAiTransport.LLM_USER_SAFETY_INSTRUCTION + " " +
         // A camera snapshot must never be used as a mobility aid: the scene is
         // stale by the time the answer is spoken, and errors are dangerous.
         "Do not provide traffic, navigation, road-crossing, or mobility routing guidance. " +
         "If the user asks about those topics, politely decline and suggest dedicated mobility aids or a sighted companion. " +
-        OpenAiTransport.LLM_MAX_WORDS_INSTRUCTION
+        OpenAiTransport.LLM_MAX_WORDS_INSTRUCTION +
+        // The prompt is English whatever the app language; the answer must not be.
+        OpenAiTransport.replyLanguageInstruction()
 
     fun cancelActiveRequest() {
         activeCall?.cancel()
@@ -115,9 +123,12 @@ class ImageChatViewModel(
                     "Describe what you see in this image clearly and concisely for a visually impaired user. " +
                         "Start with the overall scene, then mention notable details. " +
                         "Keep it conversational — for example: 'You're looking at a park with a few people walking. " +
-                        "The sky looks overcast, it might rain soon.'"
+                        "The sky looks overcast, it might rain soon.'" +
+                        // This turn is English, example and all, so it has to carry
+                        // the language requirement or the answer follows it.
+                        OpenAiTransport.replyLanguageInstruction()
                 } else {
-                    userPrompt
+                    userPrompt + OpenAiTransport.replyLanguageInstruction()
                 }
 
                 val response = callOpenAIVision(userText = prompt, includeImage = true)
@@ -134,16 +145,16 @@ class ImageChatViewModel(
         } catch (e: Exception) {
             Log.e("ImageChatViewModel", "Processing error", e)
             _isProcessing.value = false
-            "An error occurred while processing the image. Please try again."
+            context.getString(R.string.spoken_image_processing_error)
         }
     }
 
     suspend fun askFollowUp(userPrompt: String): String {
         if (lastImageBase64.isBlank()) {
-            return "Please capture first."
+            return context.getString(R.string.spoken_capture_first)
         }
         if (userPrompt.isBlank()) {
-            return "Please ask a question about the image."
+            return context.getString(R.string.spoken_ask_about_image)
         }
 
         _isProcessing.value = true
@@ -167,7 +178,7 @@ class ImageChatViewModel(
         } catch (e: Exception) {
             Log.e("ImageChatViewModel", "Follow-up error", e)
             _isProcessing.value = false
-            "An error occurred. Please try again."
+            context.getString(R.string.spoken_generic_error)
         }
     }
 

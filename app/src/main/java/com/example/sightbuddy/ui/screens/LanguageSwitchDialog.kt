@@ -15,10 +15,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import com.example.sightbuddy.R
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -26,20 +25,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.sightbuddy.R
 import com.example.sightbuddy.ui.theme.actionButtonBackground
 import com.example.sightbuddy.ui.theme.actionButtonText
 
 /**
- * Asks permission for the one-time ~154 MB Whisper voice-model download.
- * "Later" re-asks on the next app launch; "Never" only via Settings.
+ * Confirms a language change. Switching restarts the activity, because every
+ * resource — strings and the spoken cues alike — is resolved at attach time.
  */
 @Composable
-fun SttDownloadDialog(
+fun LanguageSwitchDialog(
+    targetLanguageName: String,
     highContrast: Boolean,
     whiteMode: Boolean,
-    onDownload: () -> Unit,
-    onLater: () -> Unit,
-    onNever: () -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
     val cardBg = when {
         highContrast && whiteMode -> Color.White
@@ -52,10 +52,10 @@ fun SttDownloadDialog(
         else -> Color(0xFF1A1A1A)
     }
     val secondaryBg = if (highContrast && !whiteMode) Color(0xFF424242) else Color(0xFFE0E0E0)
-    val message = stringResource(R.string.stt_dialog_body)
+    val message = stringResource(R.string.language_switch_body, targetLanguageName)
 
     Dialog(
-        onDismissRequest = onLater,
+        onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Box(
@@ -74,7 +74,7 @@ fun SttDownloadDialog(
                     .semantics { contentDescription = message },
             ) {
                 Text(
-                    text = stringResource(R.string.stt_dialog_title),
+                    text = stringResource(R.string.language_switch_title),
                     style = MaterialTheme.typography.headlineSmall,
                     color = textColor,
                     fontWeight = FontWeight.Bold,
@@ -87,28 +87,23 @@ fun SttDownloadDialog(
                     lineHeight = 26.sp,
                 )
                 Spacer(modifier = Modifier.height(24.dp))
-                DialogButton(
-                    label = stringResource(R.string.stt_download_now),
+                LanguageDialogButton(
+                    label = stringResource(R.string.language_switch_confirm),
                     background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
                     textColor = actionButtonText(highContrast, whiteMode, Color.Black),
-                    contentDescription = stringResource(R.string.stt_download_now_cd),
-                    onClick = onDownload,
+                    contentDescription = stringResource(
+                        R.string.language_switch_confirm_cd,
+                        targetLanguageName,
+                    ),
+                    onClick = onConfirm,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                DialogButton(
-                    label = stringResource(R.string.stt_later),
+                LanguageDialogButton(
+                    label = stringResource(R.string.language_switch_cancel),
                     background = secondaryBg,
                     textColor = textColor,
-                    contentDescription = stringResource(R.string.stt_later_cd),
-                    onClick = onLater,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                DialogButton(
-                    label = stringResource(R.string.stt_never),
-                    background = secondaryBg,
-                    textColor = textColor,
-                    contentDescription = stringResource(R.string.stt_never_cd),
-                    onClick = onNever,
+                    contentDescription = stringResource(R.string.language_switch_cancel_cd),
+                    onClick = onDismiss,
                 )
             }
         }
@@ -116,7 +111,7 @@ fun SttDownloadDialog(
 }
 
 @Composable
-private fun DialogButton(
+private fun LanguageDialogButton(
     label: String,
     background: Color,
     textColor: Color,

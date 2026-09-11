@@ -8,7 +8,7 @@ import org.junit.Test
 
 class ObjectCommandResolverTest {
 
-    private val noopTransport = OpenAiTransport { "" }
+    private val noopTransport = OpenAiTransport(apiKeyProvider = { "" })
 
     @Test
     fun resolvesItemWordEmbeddedInLongerCommandLocally() = runBlocking {

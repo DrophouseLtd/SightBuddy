@@ -15,10 +15,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import com.example.sightbuddy.R
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -26,20 +25,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.sightbuddy.R
 import com.example.sightbuddy.ui.theme.actionButtonBackground
 import com.example.sightbuddy.ui.theme.actionButtonText
 
 /**
- * Asks permission for the one-time ~154 MB Whisper voice-model download.
- * "Later" re-asks on the next app launch; "Never" only via Settings.
+ * Shown once after the user declines a better speech option.
+ *
+ * Its job is to set an expectation rather than to sell anything: the platform
+ * recogniser will sometimes cut a sentence short, and someone who does not know
+ * that will read it as the app being broken. It also says where the offer lives
+ * afterwards, so declining is not a one-way door. One button, and no second ask.
  */
 @Composable
-fun SttDownloadDialog(
+fun ChoiceRespectedDialog(
     highContrast: Boolean,
     whiteMode: Boolean,
-    onDownload: () -> Unit,
-    onLater: () -> Unit,
-    onNever: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
     val cardBg = when {
         highContrast && whiteMode -> Color.White
@@ -51,11 +53,10 @@ fun SttDownloadDialog(
         highContrast -> Color.White
         else -> Color(0xFF1A1A1A)
     }
-    val secondaryBg = if (highContrast && !whiteMode) Color(0xFF424242) else Color(0xFFE0E0E0)
-    val message = stringResource(R.string.stt_dialog_body)
+    val message = stringResource(R.string.choice_respected_body)
 
     Dialog(
-        onDismissRequest = onLater,
+        onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Box(
@@ -74,7 +75,7 @@ fun SttDownloadDialog(
                     .semantics { contentDescription = message },
             ) {
                 Text(
-                    text = stringResource(R.string.stt_dialog_title),
+                    text = stringResource(R.string.choice_respected_title),
                     style = MaterialTheme.typography.headlineSmall,
                     color = textColor,
                     fontWeight = FontWeight.Bold,
@@ -87,57 +88,28 @@ fun SttDownloadDialog(
                     lineHeight = 26.sp,
                 )
                 Spacer(modifier = Modifier.height(24.dp))
-                DialogButton(
-                    label = stringResource(R.string.stt_download_now),
-                    background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
-                    textColor = actionButtonText(highContrast, whiteMode, Color.Black),
-                    contentDescription = stringResource(R.string.stt_download_now_cd),
-                    onClick = onDownload,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                DialogButton(
-                    label = stringResource(R.string.stt_later),
-                    background = secondaryBg,
-                    textColor = textColor,
-                    contentDescription = stringResource(R.string.stt_later_cd),
-                    onClick = onLater,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                DialogButton(
-                    label = stringResource(R.string.stt_never),
-                    background = secondaryBg,
-                    textColor = textColor,
-                    contentDescription = stringResource(R.string.stt_never_cd),
-                    onClick = onNever,
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA))
+                        )
+                        .clickable(onClick = onDismiss)
+                        .padding(vertical = 16.dp)
+                        .semantics {
+                            this.contentDescription = message
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(R.string.choice_respected_ok),
+                        color = actionButtonText(highContrast, whiteMode, Color.Black),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun DialogButton(
-    label: String,
-    background: Color,
-    textColor: Color,
-    contentDescription: String,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(background)
-            .clickable(onClick = onClick)
-            .padding(vertical = 16.dp)
-            .semantics { this.contentDescription = contentDescription },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            color = textColor,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-        )
     }
 }

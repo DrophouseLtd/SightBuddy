@@ -2,6 +2,8 @@ package com.example.sightbuddy.core
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.annotation.StringRes
+import com.example.sightbuddy.R
 import com.example.sightbuddy.features.vision.COCO_OBJECTS
 import com.example.sightbuddy.features.vision.defaultHiddenCocoObjects
 import com.example.sightbuddy.features.vision.filterVisibleCocoObjects
@@ -9,7 +11,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /** A selectable OpenAI model shown in Settings (bring-your-own-key). */
-data class LlmModelOption(val id: String, val label: String, val description: String)
+data class LlmModelOption(
+    val id: String,
+    @StringRes val labelRes: Int,
+    @StringRes val descriptionRes: Int,
+)
 
 /**
  * Centralised, observable app settings backed by SharedPreferences.
@@ -61,6 +67,21 @@ class SettingsManager(context: Context) {
 
     private val _useButtonNav = MutableStateFlow(prefs.getBoolean(KEY_BUTTON_NAV, true))
     val useButtonNav = _useButtonNav.asStateFlow()
+
+    /** Off by default: the ends of the carousel give a useful sense of place. */
+    private val _loopCarousel = MutableStateFlow(prefs.getBoolean(KEY_LOOP_CAROUSEL, false))
+    val loopCarousel = _loopCarousel.asStateFlow()
+
+    /** Off by default: it costs the user money, so it is always their choice. */
+    private val _cloudStt = MutableStateFlow(prefs.getBoolean(KEY_CLOUD_STT, false))
+    val cloudStt = _cloudStt.asStateFlow()
+
+    private val _cloudSttAsked = MutableStateFlow(prefs.getBoolean(KEY_CLOUD_STT_ASKED, false))
+    val cloudSttAsked = _cloudSttAsked.asStateFlow()
+
+    /** Off by default: testing found the spoken direction cues easier to act on. */
+    private val _pitchFeedback = MutableStateFlow(prefs.getBoolean(KEY_PITCH_FEEDBACK, false))
+    val pitchFeedback = _pitchFeedback.asStateFlow()
 
     // OFF (default) = tap to start / tap to stop recording; ON = hold while speaking.
     private val _holdToSpeak = MutableStateFlow(prefs.getBoolean(KEY_HOLD_TO_SPEAK, false))
@@ -172,6 +193,27 @@ class SettingsManager(context: Context) {
         prefs.edit().putBoolean(KEY_WHITE_MODE, enabled).apply()
     }
 
+    fun setCloudStt(enabled: Boolean) {
+        _cloudStt.value = enabled
+        prefs.edit().putBoolean(KEY_CLOUD_STT, enabled).apply()
+    }
+
+    /** Remembers that the offer was made, so it is not pushed a second time. */
+    fun markCloudSttAsked() {
+        _cloudSttAsked.value = true
+        prefs.edit().putBoolean(KEY_CLOUD_STT_ASKED, true).apply()
+    }
+
+    fun setPitchFeedback(enabled: Boolean) {
+        _pitchFeedback.value = enabled
+        prefs.edit().putBoolean(KEY_PITCH_FEEDBACK, enabled).apply()
+    }
+
+    fun setLoopCarousel(enabled: Boolean) {
+        _loopCarousel.value = enabled
+        prefs.edit().putBoolean(KEY_LOOP_CAROUSEL, enabled).apply()
+    }
+
     fun setButtonNav(enabled: Boolean) {
         _useButtonNav.value = enabled
         prefs.edit().putBoolean(KEY_BUTTON_NAV, enabled).apply()
@@ -267,17 +309,30 @@ class SettingsManager(context: Context) {
 
         /** Selectable models, cheapest first. Only one is active at a time. */
         val LLM_MODEL_OPTIONS = listOf(
-            LlmModelOption(MODEL_FAST, "Fast", "Quickest and cheapest. Fine for simple questions"),
-            LlmModelOption(MODEL_BALANCED, "Balanced", "Recommended. Strong vision at low cost"),
-            LlmModelOption(MODEL_SMART, "Most capable", "Best for complex questions. Slower and costs more"),
+            LlmModelOption(MODEL_FAST, R.string.model_fast_label, R.string.model_fast_desc),
+            LlmModelOption(MODEL_BALANCED, R.string.model_balanced_label, R.string.model_balanced_desc),
+            LlmModelOption(MODEL_SMART, R.string.model_smart_label, R.string.model_smart_desc),
         )
         private const val KEY_TTS_SPEECH_RATE = "tts_speech_rate"
+        private const val KEY_LOOP_CAROUSEL = "loop_carousel"
+        private const val KEY_PITCH_FEEDBACK = "pitch_feedback"
+        private const val KEY_CLOUD_STT = "cloud_stt"
+        private const val KEY_CLOUD_STT_ASKED = "cloud_stt_asked"
         private const val KEY_STT_CHOICE = "stt_download_choice"
 
         const val STT_CHOICE_LATER = "later"
         const val STT_CHOICE_NEVER = "never"
 
         val TTS_RATE_OPTIONS = listOf(1.0f, 1.5f, 2.0f, 3.0f)
+
+        /** Localised speech-rate name, for anything the user reads or hears. */
+        fun ttsRateLabel(context: Context, rate: Float): String = when (rate) {
+            1.0f -> context.getString(R.string.rate_normal)
+            1.5f -> context.getString(R.string.rate_fast)
+            2.0f -> context.getString(R.string.rate_very_fast)
+            3.0f -> context.getString(R.string.rate_ultra_fast)
+            else -> "${rate}x"
+        }
 
         fun ttsRateLabel(rate: Float): String = when (rate) {
             1.0f -> "Normal"

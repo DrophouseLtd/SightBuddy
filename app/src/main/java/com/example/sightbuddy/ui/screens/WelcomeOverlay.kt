@@ -111,7 +111,7 @@ fun WelcomeOverlay(
         )
 
         WelcomeCornerButton(
-            label = "Settings",
+            label = stringResource(R.string.btn_settings),
             fontSizeSp = 10,
             background = chipBg,
             textColor = chipText,
