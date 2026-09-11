@@ -1,8 +1,11 @@
 package com.example.sightbuddy.core
 
 import android.content.Context
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.util.Log
 import android.util.Size
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -48,6 +51,45 @@ class CameraXManager(private val context: Context) {
     private var preview: androidx.camera.core.Preview? = null
     private val minAnalysisResolution = Size(640, 640)
 
+    // Torch. Held in memory only — it must never survive the app being closed,
+    // so there is deliberately no persisted preference behind it.
+    private var camera: Camera? = null
+    private var torchRequested = false
+
+    /**
+     * True when the device has a flash unit at all. Queried from [CameraManager]
+     * rather than the bound camera, because the camera is deliberately unbound
+     * while Settings and other overlays are open — where the torch control lives.
+     */
+    fun deviceHasFlash(): Boolean = runCatching {
+        val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        manager.cameraIdList.any { id ->
+            manager.getCameraCharacteristics(id)
+                .get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+        }
+    }.getOrDefault(false)
+
+    /** Whether the user currently wants the torch on. */
+    fun isTorchRequested(): Boolean = torchRequested
+
+    /** Forget the torch entirely — used when the app leaves the foreground. */
+    fun clearTorchRequest() {
+        torchRequested = false
+    }
+
+    /**
+     * Turn the torch on or off. Remembered across a rebind (e.g. returning to the
+     * app) only for as long as the process lives; [stopCamera] clears it.
+     */
+    fun setTorch(enabled: Boolean) {
+        torchRequested = enabled
+        val cam = camera ?: return
+        if (cam.cameraInfo.hasFlashUnit()) {
+            runCatching { cam.cameraControl.enableTorch(enabled) }
+                .onFailure { Log.w("CameraXManager", "enableTorch($enabled) failed", it) }
+        }
+    }
+
     fun startCamera(lifecycleOwner: LifecycleOwner, surfaceProvider: androidx.camera.core.Preview.SurfaceProvider) {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
 
@@ -92,12 +134,14 @@ class CameraXManager(private val context: Context) {
 
             try {
                 cameraProvider?.unbindAll()
-                cameraProvider?.bindToLifecycle(
+                camera = cameraProvider?.bindToLifecycle(
                     lifecycleOwner,
                     cameraSelector,
                     preview,
                     imageAnalyzer
                 )
+                // Re-apply the requested torch state to the freshly bound camera.
+                setTorch(torchRequested)
                 Log.i("CameraXManager", "Camera bound successfully")
             } catch (exc: Exception) {
                 Log.e("CameraXManager", "Use case binding failed", exc)
@@ -106,11 +150,25 @@ class CameraXManager(private val context: Context) {
         }, ContextCompat.getMainExecutor(context))
     }
 
+    /**
+     * Unbinds the camera, extinguishing the torch with it. The user's request is
+     * deliberately kept: Settings and other overlays unbind the camera by design,
+     * and the light must come back when the camera does. Leaving the app clears
+     * the request separately via [clearTorchRequest], so the torch can never be
+     * left burning in the background.
+     */
     fun stopCamera() {
+        camera?.let { cam ->
+            if (cam.cameraInfo.hasFlashUnit()) {
+                runCatching { cam.cameraControl.enableTorch(false) }
+            }
+        }
+        camera = null
         cameraProvider?.unbindAll()
     }
 
     fun shutdown() {
+        stopCamera()
         frameChannel.close()
         cameraExecutor.shutdown()
     }

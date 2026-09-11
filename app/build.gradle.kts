@@ -87,7 +87,7 @@ android {
         applicationId = "com.drophouse.sightbuddy"
         minSdk = 30
         targetSdk = 36
-        versionCode = 12
+        versionCode = 13
         versionName = "2.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

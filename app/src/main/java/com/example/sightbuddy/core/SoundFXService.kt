@@ -24,17 +24,20 @@ class SoundFXService(context: Context) {
     private val sounds = mutableMapOf<SFX, Int>()
     private val loadedIds = mutableSetOf<Int>()
     private var activeStreamId: Int = 0
+    private var primed = false
     private var tutorialPlayer: MediaPlayer? = null
-    private var hintPlayer: MediaPlayer? = null
 
     init {
         val attrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_MEDIA)
+            // Accessibility, not media. Media is ducked to a fraction of its volume
+            // while the speech recogniser holds audio focus, which is exactly when
+            // these cues play, and it made them almost inaudible.
+            .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
 
         soundPool = SoundPool.Builder()
-            .setMaxStreams(2)
+            .setMaxStreams(4)
             .setAudioAttributes(attrs)
             .build()
 
@@ -42,6 +45,14 @@ class SoundFXService(context: Context) {
             if (status == 0) {
                 loadedIds.add(sampleId)
                 Log.d("SoundFXService", "Loaded sample $sampleId (${loadedIds.size}/${sounds.size} ready)")
+                // Play it once inaudibly. The first sound through a cold audio path
+                // comes out at a fraction of its volume while the output ramps up,
+                // which is why the cue right after launch was so quiet. Spending
+                // that first play on silence means the user never hears it.
+                if (!primed) {
+                    primed = true
+                    soundPool.play(sampleId, 0f, 0f, 0, 0, 1f)
+                }
             } else {
                 Log.e("SoundFXService", "Failed to load sample $sampleId, status=$status")
             }
@@ -55,6 +66,9 @@ class SoundFXService(context: Context) {
         sounds[SFX.DIRECTION_CENTRE] = soundPool.load(context, R.raw.sfx_direction_centre, 1)
         sounds[SFX.LISTENING]        = soundPool.load(context, R.raw.sfx_listening, 1)
         sounds[SFX.STOP_LISTENING]   = soundPool.load(context, R.raw.sfx_stop_listening, 1)
+        sounds[SFX.RECORDING_PERK]   = soundPool.load(context, R.raw.sfx_recording_perk, 1)
+        sounds[SFX.RECORDING_PERK_STOP] = soundPool.load(context, R.raw.sfx_recording_perk_stop, 1)
+        sounds[SFX.HINT]             = soundPool.load(context, R.raw.sfx_hint, 1)
     }
 
     /**
@@ -69,6 +83,26 @@ class SoundFXService(context: Context) {
             return
         }
         activeStreamId = soundPool.play(id, 1f, 1f, 1, loop, 1f)
+    }
+
+    /**
+     * Play without silencing whatever is already sounding.
+     *
+     * [play] cuts the current cue first, which is right when one cue replaces
+     * another. Two cues that describe different things are not replacements: the
+     * shutter and the end of a recording happen at the same instant in
+     * auto-capture, and cutting one to start the other lost the shutter entirely.
+     *
+     * The stream is deliberately not tracked, so [stop] still refers to the cue
+     * that can loop rather than to this one-shot.
+     */
+    fun playAlongside(sfx: SFX) {
+        val id = sounds[sfx] ?: return
+        if (id !in loadedIds) {
+            Log.w("SoundFXService", "$sfx (id=$id) not loaded yet, skipping")
+            return
+        }
+        soundPool.play(id, 1f, 1f, 1, 0, 1f)
     }
 
     fun stop() {
@@ -86,7 +120,13 @@ class SoundFXService(context: Context) {
     fun playTutorial(onComplete: (() -> Unit)? = null) {
         stop()
         stopTutorial()
-        val player = MediaPlayer.create(appContext, R.raw.sfx_tutorial)
+        // Spoken guidance, so it declares itself as speech rather than borrowing the
+        // cue pool's attributes. It is the one clip in the app with words in it.
+        val speechAttrs = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANT)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
+        val player = MediaPlayer.create(appContext, R.raw.sfx_tutorial, speechAttrs, 0)
         if (player == null) {
             Log.e("SoundFXService", "Failed to create tutorial MediaPlayer")
             onComplete?.invoke()
@@ -110,40 +150,23 @@ class SoundFXService(context: Context) {
 
     /** Short earcon for one-time automated hints only (not manual Help opens). */
     fun playHint() {
-        stop()
         stopTutorial()
-        stopHint()
-        startHintPlayer()
+        play(SFX.HINT)
     }
 
     /**
      * Hint earcon during welcome tutorial — does not stop [playTutorial] audio.
      */
     fun playHintOverlay() {
-        stop()
-        stopHint()
-        startHintPlayer()
+        play(SFX.HINT)
     }
 
-    private fun startHintPlayer() {
-        val player = MediaPlayer.create(appContext, R.raw.sfx_hint)
-        if (player == null) {
-            Log.e("SoundFXService", "Failed to create hint MediaPlayer")
-            return
-        }
-        hintPlayer = player
-        player.setOnCompletionListener {
-            stopHint()
-        }
-        player.start()
-    }
-
+    /**
+     * The hint chime is an ordinary cue now, so silencing it is silencing the pool.
+     * Kept as its own name because callers read better for it.
+     */
     fun stopHint() {
-        hintPlayer?.apply {
-            if (isPlaying) stop()
-            release()
-        }
-        hintPlayer = null
+        stop()
     }
 
     fun shutdown() {
@@ -160,6 +183,9 @@ class SoundFXService(context: Context) {
         DIRECTION_DOWN,
         DIRECTION_CENTRE,
         LISTENING,
-        STOP_LISTENING
+        STOP_LISTENING,
+        RECORDING_PERK,
+        RECORDING_PERK_STOP,
+        HINT
     }
 }

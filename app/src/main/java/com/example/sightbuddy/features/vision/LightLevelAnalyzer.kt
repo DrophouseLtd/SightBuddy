@@ -1,6 +1,8 @@
 package com.example.sightbuddy.features.vision
 
+import androidx.annotation.StringRes
 import androidx.camera.core.ImageProxy
+import com.example.sightbuddy.R
 
 /**
  * Analyzes camera frame luminance by reading the Y-plane directly.
@@ -8,7 +10,11 @@ import androidx.camera.core.ImageProxy
  */
 class LightLevelAnalyzer {
 
-    data class LightResult(val percentage: Int, val description: String)
+    /**
+     * The description is a resource id, not text: the analyzer runs off the main
+     * thread and has no Context, so the caller resolves it in the app language.
+     */
+    data class LightResult(val percentage: Int, @StringRes val descriptionRes: Int)
 
     /**
      * Analyze the Y (luminance) plane of a YUV_420_888 ImageProxy.
@@ -32,19 +38,19 @@ class LightLevelAnalyzer {
         // Reset buffer position
         buffer.rewind()
 
-        if (count == 0) return LightResult(0, "Unknown")
+        if (count == 0) return LightResult(0, R.string.light_unknown)
 
         val avgLuminance = totalLuminance / count // 0-255
         val percentage = ((avgLuminance / 255.0) * 100).toInt().coerceIn(0, 100)
 
         val description = when {
-            percentage < 10 -> "Very dark"
-            percentage < 25 -> "Dark"
-            percentage < 45 -> "Dim"
-            percentage < 60 -> "Moderate light"
-            percentage < 75 -> "Bright"
-            percentage < 90 -> "Very bright"
-            else -> "Extremely bright"
+            percentage < 10 -> R.string.light_very_dark
+            percentage < 25 -> R.string.light_dark
+            percentage < 45 -> R.string.light_dim
+            percentage < 60 -> R.string.light_moderate
+            percentage < 75 -> R.string.light_bright
+            percentage < 90 -> R.string.light_very_bright
+            else -> R.string.light_extremely_bright
         }
 
         return LightResult(percentage, description)

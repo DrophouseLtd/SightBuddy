@@ -15,10 +15,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import com.example.sightbuddy.R
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -26,20 +25,29 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.sightbuddy.R
 import com.example.sightbuddy.ui.theme.actionButtonBackground
 import com.example.sightbuddy.ui.theme.actionButtonText
 
 /**
- * Asks permission for the one-time ~154 MB Whisper voice-model download.
- * "Later" re-asks on the next app launch; "Never" only via Settings.
+ * Asks before any audio leaves the device.
+ *
+ * Turning this on changes where speech is processed and it costs the user money,
+ * so it is never enabled silently. The body names both plainly.
+ *
+ * It asks two different questions. Without the on-device model the question is
+ * whether to spend anything at all. With the model already installed the money
+ * buys nothing the phone cannot already do, so the question becomes why spend it,
+ * and both buttons say which of the two the user is choosing.
  */
 @Composable
-fun SttDownloadDialog(
+fun CloudSttDialog(
     highContrast: Boolean,
     whiteMode: Boolean,
-    onDownload: () -> Unit,
-    onLater: () -> Unit,
-    onNever: () -> Unit,
+    /** True when the free on-device model is already installed. */
+    localModelPresent: Boolean,
+    onEnable: () -> Unit,
+    onDecline: () -> Unit,
 ) {
     val cardBg = when {
         highContrast && whiteMode -> Color.White
@@ -52,10 +60,14 @@ fun SttDownloadDialog(
         else -> Color(0xFF1A1A1A)
     }
     val secondaryBg = if (highContrast && !whiteMode) Color(0xFF424242) else Color(0xFFE0E0E0)
-    val message = stringResource(R.string.stt_dialog_body)
+    // With the free model already on the phone, the question is no longer whether
+    // to spend anything, it is why spend it when you need not.
+    val message = stringResource(
+        if (localModelPresent) R.string.cloud_stt_local_body else R.string.cloud_stt_dialog_body
+    )
 
     Dialog(
-        onDismissRequest = onLater,
+        onDismissRequest = onDecline,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Box(
@@ -74,7 +86,10 @@ fun SttDownloadDialog(
                     .semantics { contentDescription = message },
             ) {
                 Text(
-                    text = stringResource(R.string.stt_dialog_title),
+                    text = stringResource(
+                        if (localModelPresent) R.string.cloud_stt_local_title
+                        else R.string.cloud_stt_dialog_title
+                    ),
                     style = MaterialTheme.typography.headlineSmall,
                     color = textColor,
                     fontWeight = FontWeight.Bold,
@@ -87,28 +102,32 @@ fun SttDownloadDialog(
                     lineHeight = 26.sp,
                 )
                 Spacer(modifier = Modifier.height(24.dp))
-                DialogButton(
-                    label = stringResource(R.string.stt_download_now),
+                CloudSttButton(
+                    label = stringResource(
+                        if (localModelPresent) R.string.cloud_stt_local_enable
+                        else R.string.cloud_stt_enable
+                    ),
                     background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
                     textColor = actionButtonText(highContrast, whiteMode, Color.Black),
-                    contentDescription = stringResource(R.string.stt_download_now_cd),
-                    onClick = onDownload,
+                    contentDescription = stringResource(
+                        if (localModelPresent) R.string.cloud_stt_local_enable_cd
+                        else R.string.cloud_stt_enable_cd
+                    ),
+                    onClick = onEnable,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                DialogButton(
-                    label = stringResource(R.string.stt_later),
+                CloudSttButton(
+                    label = stringResource(
+                        if (localModelPresent) R.string.cloud_stt_local_decline
+                        else R.string.cloud_stt_decline
+                    ),
                     background = secondaryBg,
                     textColor = textColor,
-                    contentDescription = stringResource(R.string.stt_later_cd),
-                    onClick = onLater,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                DialogButton(
-                    label = stringResource(R.string.stt_never),
-                    background = secondaryBg,
-                    textColor = textColor,
-                    contentDescription = stringResource(R.string.stt_never_cd),
-                    onClick = onNever,
+                    contentDescription = stringResource(
+                        if (localModelPresent) R.string.cloud_stt_local_decline_cd
+                        else R.string.cloud_stt_decline_cd
+                    ),
+                    onClick = onDecline,
                 )
             }
         }
@@ -116,7 +135,7 @@ fun SttDownloadDialog(
 }
 
 @Composable
-private fun DialogButton(
+private fun CloudSttButton(
     label: String,
     background: Color,
     textColor: Color,

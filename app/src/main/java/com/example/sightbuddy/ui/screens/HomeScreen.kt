@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.key
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,9 +32,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.sightbuddy.R
+import com.example.sightbuddy.core.ModeNames
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/** How many times the feature list repeats when looping; the user starts in the middle. */
+private const val LOOP_RANGE = 200
 
 private fun splitFeatureTitle(title: String): String =
     title.split(" ").joinToString("\n")
@@ -47,6 +52,10 @@ fun HomeScreen(
     highContrast: Boolean = false,
     whiteMode: Boolean = false,
     useButtonNav: Boolean = false,
+    loopCarousel: Boolean = false,
+    torchOn: Boolean = false,
+    torchAvailable: Boolean = false,
+    onToggleTorch: (Boolean) -> Unit = {},
     holdToSpeak: Boolean = false,
     isRecording: Boolean = false,
     onModeSelected: (String) -> Unit = {},
@@ -69,7 +78,18 @@ fun HomeScreen(
     onOpenSettings: () -> Unit = {},
     onOpenHelp: () -> Unit = {},
 ) {
-    val pagerState = rememberPagerState(pageCount = { pages.size })
+    // Looping is a long virtual range rather than a jump at the ends, so a swipe
+    // past the last feature carries straight on to the first instead of refusing
+    // to move. Without this the setting only worked for the buttons.
+    val looping = loopCarousel && pages.size > 1
+    val activeIndex = pages.indexOf(activeMode).coerceAtLeast(0)
+    val pagerState = key(looping) {
+        rememberPagerState(
+            initialPage = if (looping) pages.size * (LOOP_RANGE / 2) + activeIndex else activeIndex,
+            pageCount = { if (looping) pages.size * LOOP_RANGE else pages.size },
+        )
+    }
+    fun realPage(page: Int) = if (pages.isEmpty()) 0 else page % pages.size
     val scope = rememberCoroutineScope()
 
     val defaultTextColor = MaterialTheme.colorScheme.onSurface
@@ -94,9 +114,14 @@ fun HomeScreen(
         else -> Color.White
     }
     val helpButtonCd = stringResource(R.string.help_button_cd)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val captureLabel = stringResource(R.string.btn_capture)
+    val prevModeCd = stringResource(R.string.cd_previous_mode)
+    val nextModeCd = stringResource(R.string.cd_next_mode)
+    val openSettingsCd = stringResource(R.string.cd_open_settings)
 
     LaunchedEffect(pagerState.currentPage) {
-        onModeSelected(pages[pagerState.currentPage])
+        onModeSelected(pages[realPage(pagerState.currentPage)])
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -114,8 +139,11 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize(),
             userScrollEnabled = !useButtonNav
         ) { page ->
-            val pageTitle = pages[page]
+            val pageTitle = pages[realPage(page)]
             val isActive = activeMode == pageTitle
+            val pageTitleDisplay = ModeNames.display(context, pageTitle)
+            val activeModeCd = stringResource(R.string.cd_mode_active, pageTitleDisplay)
+            val inactiveModeCd = stringResource(R.string.cd_mode_inactive, pageTitleDisplay)
 
             Box(
                 modifier = Modifier
@@ -123,21 +151,34 @@ fun HomeScreen(
                     .padding(16.dp)
                     .background(color = maskColor, shape = MaterialTheme.shapes.large)
                     .semantics {
-                        contentDescription = if (isActive)
-                            "$pageTitle active. Swipe left or right to change modes."
-                        else
-                            "$pageTitle."
+                        contentDescription = if (isActive) {
+                            activeModeCd
+                        } else {
+                            inactiveModeCd
+                        }
                     }
             ) {
                 // Title at top center
+                // Kept clear of the corner buttons, and shrunk for languages whose
+                // feature names are single long compounds ("Tekstikeskustelu") rather
+                // than two short words ("Text chat"), which would otherwise run
+                // underneath the Help and Settings buttons.
+                val titleText = splitFeatureTitle(ModeNames.display(context, pageTitle))
+                val longestWord = titleText.split("\n").maxOf { it.length }
+                val baseTitleSize = MaterialTheme.typography.displayMedium.fontSize
                 Text(
-                    text = splitFeatureTitle(pageTitle),
+                    text = titleText,
                     style = MaterialTheme.typography.displayMedium,
+                    fontSize = when {
+                        longestWord >= 15 -> baseTitleSize * 0.60f
+                        longestWord >= 12 -> baseTitleSize * 0.75f
+                        else -> baseTitleSize
+                    },
                     color = textColor,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 16.dp),
+                        .padding(top = 16.dp, start = 88.dp, end = 88.dp),
                     textAlign = TextAlign.Center
                 )
 
@@ -157,13 +198,13 @@ fun HomeScreen(
 
                 // Mic button — fixed centre position, identical on every feature.
                 if (showMic) {
-                    val micCd = if (holdToSpeak) {
-                        "Ask. Hold and speak your question, then release"
-                    } else if (isRecording) {
-                        "Listening. Tap to send"
-                    } else {
-                        "Ask. Tap, speak your question, then tap to send"
-                    }
+                    val micCd = stringResource(
+                        when {
+                            holdToSpeak -> R.string.cd_ask_hold
+                            isRecording -> R.string.cd_ask_listening
+                            else -> R.string.cd_ask_tap
+                        }
+                    )
                     Box(
                         modifier = Modifier
                             .align(Alignment.Center)
@@ -191,7 +232,7 @@ fun HomeScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = if (!holdToSpeak && isRecording) "Send" else "Ask",
+                            text = stringResource(if (!holdToSpeak && isRecording) R.string.btn_send else R.string.btn_ask),
                             color = micPrimaryText,
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
@@ -211,10 +252,8 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.Center,
                     ) {
                         PlaybackTransportButton(
-                            label = "Back",
-                            contentDescription =
-                                "Backwards. Tap skips back twenty characters. " +
-                                    "Hold one second to read slower.",
+                            label = stringResource(R.string.btn_back),
+                            contentDescription = stringResource(R.string.cd_playback_back),
                             enabled = textPlaybackEnabled,
                             background = micPrimaryBg,
                             textColor = micPrimaryText,
@@ -234,14 +273,10 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         PlaybackTransportButton(
-                            label = if (playbackPlaying) "Pause" else "Play",
-                            contentDescription = if (playbackPlaying) {
-                                "Pause. Tap to pause reading. " +
-                                    "Hold one second to restart from the beginning."
-                            } else {
-                                "Play. Tap to start or resume reading. " +
-                                    "Hold one second to restart from the beginning."
-                            },
+                            label = stringResource(if (playbackPlaying) R.string.btn_pause else R.string.btn_play),
+                            contentDescription = stringResource(
+                                if (playbackPlaying) R.string.cd_playback_pause else R.string.cd_playback_play
+                            ),
                             enabled = textPlaybackEnabled,
                             background = micPrimaryBg,
                             textColor = micPrimaryText,
@@ -261,10 +296,8 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         PlaybackTransportButton(
-                            label = "Fwd",
-                            contentDescription =
-                                "Forward. Tap skips ahead twenty characters. " +
-                                    "Hold one second to read faster.",
+                            label = stringResource(R.string.btn_forward),
+                            contentDescription = stringResource(R.string.cd_playback_forward),
                             enabled = textPlaybackEnabled,
                             background = micPrimaryBg,
                             textColor = micPrimaryText,
@@ -289,6 +322,7 @@ fun HomeScreen(
                 // Two-tone border stays visible over any camera scene and in both
                 // high-contrast themes (where it hints aim over the solid mask).
                 if (isActive && pageTitle == "Scan Colour") {
+                    val focusFrameCd = stringResource(R.string.cd_colour_focus_frame)
                     val frameOuter = if (highContrast && whiteMode) Color.Black else Color.White
                     val frameInner = if (highContrast && whiteMode) Color.White else Color.Black
                     Box(
@@ -298,10 +332,7 @@ fun HomeScreen(
                             .border(4.dp, frameOuter, RoundedCornerShape(14.dp))
                             .padding(4.dp)
                             .border(2.dp, frameInner, RoundedCornerShape(10.dp))
-                            .semantics {
-                                contentDescription =
-                                    "Colour scanner focus frame. Point the centre of the screen at the colour."
-                            },
+                            .semantics { contentDescription = focusFrameCd },
                     )
                 }
 
@@ -320,11 +351,11 @@ fun HomeScreen(
                                 shape = CircleShape
                             )
                             .clickable { onTakePicture?.invoke() }
-                            .semantics { contentDescription = "Capture" },
+                            .semantics { contentDescription = captureLabel },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Capture",
+                            text = captureLabel,
                             color = if (highContrast && whiteMode) Color.White else Color.Black,
                             textAlign = TextAlign.Center,
                             fontWeight = FontWeight.Bold,
@@ -334,6 +365,7 @@ fun HomeScreen(
                 }
 
                 if (isActive && pageTitle == "Find objects") {
+                    val browseObjectsCd = stringResource(R.string.cd_browse_objects)
                     Box(
                         modifier = Modifier
                             .align(Alignment.Center)
@@ -349,14 +381,11 @@ fun HomeScreen(
                             )
                             .clickable { onBrowseObjects?.invoke() }
                             .padding(vertical = 18.dp)
-                            .semantics {
-                                contentDescription =
-                                    "Browse objects list. Tap to choose an object to find."
-                            },
+                            .semantics { contentDescription = browseObjectsCd },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Browse Objects",
+                            text = stringResource(R.string.btn_browse_objects),
                             color = micPrimaryText,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
@@ -367,6 +396,12 @@ fun HomeScreen(
 
                 // Nav buttons — inside the card at the bottom
                 if (useButtonNav) {
+                    // At an end of the carousel, the button that cannot go anywhere is
+                    // hidden rather than disabled, but its space is kept so the other
+                    // button never shifts under a finger. Looping keeps both.
+                    val current = realPage(pagerState.currentPage)
+                    val showPrev = looping || current > 0
+                    val showNext = looping || current < pages.size - 1
                     Row(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -379,61 +414,119 @@ fun HomeScreen(
                                 .weight(1f)
                                 .padding(end = 8.dp)
                                 .height(52.dp)
-                                .background(
-                                    when {
-                                        highContrast && whiteMode -> Color.Black
-                                        highContrast -> Color.White
-                                        else -> Color.White.copy(alpha = 0.2f)
-                                    },
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .clickable {
-                                    val prev =
-                                        (pagerState.currentPage - 1).coerceAtLeast(0)
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(prev)
-                                    }
-                                }
-                                .semantics { contentDescription = "Previous mode" },
-                            contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                "Previous",
-                                color = if (highContrast) micPrimaryText else textColor,
-                                fontWeight = FontWeight.Bold
-                            )
+                            if (showPrev) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            when {
+                                                highContrast && whiteMode -> Color.Black
+                                                highContrast -> Color.White
+                                                else -> Color.White.copy(alpha = 0.2f)
+                                            },
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable {
+                                            val prev = if (looping) pagerState.currentPage - 1
+                                            else (pagerState.currentPage - 1).coerceAtLeast(0)
+                                            scope.launch {
+                                                pagerState.animateScrollToPage(prev)
+                                            }
+                                        }
+                                        .semantics { contentDescription = prevModeCd },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        stringResource(R.string.btn_previous),
+                                        color = if (highContrast) micPrimaryText else textColor,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(start = 8.dp)
                                 .height(52.dp)
-                                .background(
-                                    when {
-                                        highContrast && whiteMode -> Color.Black
-                                        highContrast -> Color.White
-                                        else -> Color.White.copy(alpha = 0.2f)
-                                    },
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .clickable {
-                                    val next = (pagerState.currentPage + 1)
-                                        .coerceAtMost(pages.size - 1)
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(next)
-                                    }
-                                }
-                                .semantics { contentDescription = "Next mode" },
-                            contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                "Next",
-                                color = if (highContrast) micPrimaryText else textColor,
-                                fontWeight = FontWeight.Bold
-                            )
+                            if (showNext) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            when {
+                                                highContrast && whiteMode -> Color.Black
+                                                highContrast -> Color.White
+                                                else -> Color.White.copy(alpha = 0.2f)
+                                            },
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable {
+                                            val next = if (looping) pagerState.currentPage + 1
+                                            else (pagerState.currentPage + 1).coerceAtMost(pages.size - 1)
+                                            scope.launch {
+                                                pagerState.animateScrollToPage(next)
+                                            }
+                                        }
+                                        .semantics { contentDescription = nextModeCd },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        stringResource(R.string.btn_next),
+                                        color = if (highContrast) micPrimaryText else textColor,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
                     }
                 }
+            }
+        }
+
+        // Torch — directly under Help, on the camera frame where it is needed.
+        // It used to live in Settings, which meant leaving the view you wanted lit
+        // in order to light it. Runtime-only: never persisted, and cleared whenever
+        // the camera unbinds.
+        //
+        // Read outside the semantics lambda: stringResource cannot be called in one.
+        val torchLabel = stringResource(R.string.torch_short)
+        val torchOnCd = stringResource(R.string.torch_on_cd)
+        val torchOffCd = stringResource(R.string.torch_off_cd)
+        if (torchAvailable) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    // 24 top + 56 button + 12 gap: sits under Help, same left edge.
+                    .padding(top = 92.dp, start = 20.dp)
+                    .size(56.dp)
+                    .background(
+                        when {
+                            highContrast && whiteMode -> if (torchOn) Color.Black else Color.White.copy(alpha = 0.25f)
+                            highContrast -> if (torchOn) Color.White else Color.White.copy(alpha = 0.25f)
+                            torchOn -> Color(0xFF8EEFCA)
+                            else -> Color.White.copy(alpha = 0.25f)
+                        },
+                        shape = CircleShape,
+                    )
+                    .clickable { onToggleTorch(!torchOn) }
+                    .semantics { contentDescription = if (torchOn) torchOnCd else torchOffCd },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = torchLabel,
+                    color = when {
+                        highContrast && whiteMode -> if (torchOn) Color.White else Color.Black
+                        highContrast -> if (torchOn) Color.Black else Color.White
+                        torchOn -> Color.Black
+                        else -> textColor
+                    },
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
 
@@ -481,11 +574,11 @@ fun HomeScreen(
                     shape = CircleShape,
                 )
                 .clickable { onOpenSettings() }
-                .semantics { contentDescription = "Open settings" },
+                .semantics { contentDescription = openSettingsCd },
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "Settings",
+                text = stringResource(R.string.btn_settings),
                 color = if (highContrast && whiteMode) Color.White
                 else if (highContrast) Color.Black
                 else textColor,

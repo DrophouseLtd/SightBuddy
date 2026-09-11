@@ -15,6 +15,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.example.sightbuddy.R
+import com.example.sightbuddy.features.vision.CocoFinnish
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -48,9 +51,15 @@ fun CocoObjectsSettingsScreen(
         defaultTextColor
     }
 
+    val searchCd = stringResource(R.string.objects_search_cd)
+    val backCd = stringResource(R.string.objects_back_cd)
+
     val filteredObjects = remember(searchQuery) {
         if (searchQuery.isBlank()) COCO_OBJECTS
-        else COCO_OBJECTS.filter { it.contains(searchQuery.trim(), ignoreCase = true) }
+        else COCO_OBJECTS.filter {
+            it.contains(searchQuery.trim(), ignoreCase = true) ||
+                CocoFinnish.displayName(it).contains(searchQuery.trim(), ignoreCase = true)
+        }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -60,7 +69,7 @@ fun CocoObjectsSettingsScreen(
                 .padding(horizontal = 24.dp, vertical = 16.dp),
         ) {
             Text(
-                text = "Object list",
+                text = stringResource(R.string.settings_object_list),
                 style = MaterialTheme.typography.displaySmall,
                 color = textColor,
                 fontWeight = FontWeight.Bold,
@@ -68,7 +77,7 @@ fun CocoObjectsSettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                text = "Show or hide items in the Find objects picker. Detection is unchanged.",
+                text = stringResource(R.string.objects_list_body),
                 color = labelColor.copy(alpha = 0.7f),
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,
@@ -82,7 +91,7 @@ fun CocoObjectsSettingsScreen(
                 onValueChange = { searchQuery = it },
                 placeholder = {
                     Text(
-                        text = "Search objects…",
+                        text = stringResource(R.string.objects_search_hint),
                         color = labelColor.copy(alpha = 0.5f),
                     )
                 },
@@ -97,7 +106,7 @@ fun CocoObjectsSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
-                    .semantics { contentDescription = "Search objects to filter the list." },
+                    .semantics { contentDescription = searchCd },
             )
 
             LazyColumn(
@@ -107,7 +116,7 @@ fun CocoObjectsSettingsScreen(
                 items(filteredObjects, key = { it }) { obj ->
                     val visible = obj !in hiddenObjects
                     CocoObjectVisibilityRow(
-                        label = obj.replaceFirstChar { it.uppercase() },
+                        label = CocoFinnish.displayName(obj).replaceFirstChar { it.uppercase() },
                         visible = visible,
                         onVisibleChange = { settingsManager.setCocoObjectVisible(obj, it) },
                         labelColor = labelColor,
@@ -132,11 +141,11 @@ fun CocoObjectsSettingsScreen(
                     shape = CircleShape,
                 )
                 .clickable { onBack() }
-                .semantics { contentDescription = "Back to settings" },
+                .semantics { contentDescription = backCd },
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "Back",
+                text = stringResource(R.string.btn_back),
                 color = when {
                     highContrast && whiteMode -> Color.White
                     highContrast -> Color.Black
@@ -159,13 +168,14 @@ private fun CocoObjectVisibilityRow(
     highContrast: Boolean,
     whiteMode: Boolean,
 ) {
+    val shownCd = stringResource(R.string.objects_shown_in_picker)
+    val hiddenCd = stringResource(R.string.objects_hidden_from_picker)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
             .semantics {
-                contentDescription =
-                    "$label. ${if (visible) "Shown in picker" else "Hidden from picker"}."
+                contentDescription = "$label. ${if (visible) shownCd else hiddenCd}."
             },
         verticalAlignment = Alignment.CenterVertically,
     ) {

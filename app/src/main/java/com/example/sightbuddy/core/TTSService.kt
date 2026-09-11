@@ -45,6 +45,10 @@ class TTSService(context: Context) : TextToSpeech.OnInitListener {
     @Volatile
     private var speechRate: Float = 1.0f
 
+    /** Set while a recording owns the output; see [takeMicrophoneFloor]. */
+    @Volatile
+    private var micFloorUntilMs = 0L
+
     init {
         tts = TextToSpeech(context, this)
     }
@@ -63,7 +67,15 @@ class TTSService(context: Context) : TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            val result = tts?.setLanguage(Locale.US)
+            // Follow the app's chosen language (LanguageStore.wrap sets the default
+            // locale). If the device has no voice for it, fall back to English so
+            // the app still speaks rather than going silent.
+            val preferred = Locale.getDefault()
+            var result = tts?.setLanguage(preferred)
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.w("TTSService", "No voice for $preferred; falling back to English")
+                result = tts?.setLanguage(Locale.US)
+            }
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 Log.e("TTSService", "The Language specified is not supported!")
             } else {
@@ -104,6 +116,29 @@ class TTSService(context: Context) : TextToSpeech.OnInitListener {
     }
 
     /**
+     * The microphone outranks the voice.
+     *
+     * While a recording holds the floor, speech in flight is stopped and anything
+     * newly requested is dropped rather than queued. Queueing was the bug: a line
+     * asked for during a recording played once the recording ended, or worse
+     * played into the open mic and came back transcribed as the user.
+     *
+     * [maxHoldMs] bounds the hold, so a release that never arrives cannot leave
+     * the app permanently mute.
+     */
+    fun takeMicrophoneFloor(maxHoldMs: Long) {
+        micFloorUntilMs = System.currentTimeMillis() + maxHoldMs
+        tts?.stop()
+    }
+
+    fun releaseMicrophoneFloor() {
+        micFloorUntilMs = 0L
+    }
+
+    /** True while a recording owns the output. Cues are exempt; only speech is held. */
+    fun micHasFloor(): Boolean = System.currentTimeMillis() < micFloorUntilMs
+
+    /**
      * @return true if speech was queued (initialized and not suppressed).
      */
     /**
@@ -118,6 +153,7 @@ class TTSService(context: Context) : TextToSpeech.OnInitListener {
         force: Boolean = false,
         onDone: (() -> Unit)? = null,
     ): Boolean {
+        if (micHasFloor()) return false
         if ((_suppressAppSpeech.value && !force) || text.isBlank()) return false
         if (!_isInitialized.value) return false
         val queueMode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
@@ -129,7 +165,7 @@ class TTSService(context: Context) : TextToSpeech.OnInitListener {
     }
 
     fun speakWithCooldown(objectName: String) {
-        if (_suppressAppSpeech.value) return
+        if (micHasFloor() || _suppressAppSpeech.value) return
         val currentTime = System.currentTimeMillis()
         val lastAnnouncedTime = announcementCooldowns[objectName] ?: 0L
 
@@ -140,7 +176,7 @@ class TTSService(context: Context) : TextToSpeech.OnInitListener {
     }
 
     fun speakLatestWithCooldown(key: String, message: String) {
-        if (_suppressAppSpeech.value) return
+        if (micHasFloor() || _suppressAppSpeech.value) return
         val currentTime = System.currentTimeMillis()
         val lastAnnouncedTime = announcementCooldowns[key] ?: 0L
 

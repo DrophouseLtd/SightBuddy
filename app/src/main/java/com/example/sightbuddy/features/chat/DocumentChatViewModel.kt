@@ -1,7 +1,9 @@
 package com.example.sightbuddy.features.chat
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import com.example.sightbuddy.R
 import com.example.sightbuddy.core.OpenAiTransport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +23,7 @@ import java.util.concurrent.TimeUnit
  * 4. Returns the AI response for TTS playback
  */
 class DocumentChatViewModel(
+    private val context: Context,
     private val transport: OpenAiTransport,
     /** Model id, read per request so a Settings change applies immediately. */
     private val modelProvider: () -> String = { "gpt-4o" },
@@ -89,7 +92,7 @@ class DocumentChatViewModel(
 
                 if (extractedText.isBlank()) {
                     _isProcessing.value = false
-                    return@withContext "I couldn't detect any text in the image. Try pointing the camera at text and holding it steady."
+                    return@withContext context.getString(R.string.spoken_no_text_in_image)
                 }
 
                 val systemMsg = documentChatSystemMessage(
@@ -98,13 +101,16 @@ class DocumentChatViewModel(
 
                 val userMsg = if (userPrompt.isBlank()) {
                     "I just scanned a document with my camera. " +
-                        "Please read and summarize the following text clearly and concisely. " +
+                        "Please read and summarize the following text clearly and concisely." +
+                        // English prompt, so it carries the language requirement.
+                        OpenAiTransport.replyLanguageInstruction() + " " +
                         "For example, say 'Here's a bill from the gas company, would you like to know the payment details?':\n\n$extractedText"
                 } else {
                     "Here is text extracted from a document I scanned:\n\n" +
                         "\"$extractedText\"\n\n" +
                         "My question: $userPrompt\n\n" +
-                        "Please answer clearly and concisely."
+                        "Please answer clearly and concisely." +
+                        OpenAiTransport.replyLanguageInstruction()
                 }
 
                 val response = callOpenAI(systemMsg, userMsg)
@@ -122,7 +128,7 @@ class DocumentChatViewModel(
         } catch (e: Exception) {
             Log.e("DocumentChatViewModel", "Processing error", e)
             _isProcessing.value = false
-            "An error occurred while processing. Please try again."
+            context.getString(R.string.spoken_processing_error)
         }
     }
 
@@ -131,7 +137,7 @@ class DocumentChatViewModel(
      */
     suspend fun askFollowUp(userPrompt: String): String {
         if (lastExtractedText.isBlank()) {
-            return "Please scan a document first by pointing your camera at text."
+            return context.getString(R.string.spoken_scan_document_first)
         }
 
         _isProcessing.value = true
@@ -147,7 +153,8 @@ class DocumentChatViewModel(
                     "\"$lastExtractedText\"\n\n" +
                     "Previous conversation:\n$historyContext\n\n" +
                     "My new question: $userPrompt\n\n" +
-                    "Please answer clearly and concisely."
+                    "Please answer clearly and concisely." +
+                    OpenAiTransport.replyLanguageInstruction()
 
                 val response = callOpenAI(systemMsg, userMsg)
 
@@ -163,7 +170,7 @@ class DocumentChatViewModel(
         } catch (e: Exception) {
             Log.e("DocumentChatViewModel", "Follow-up error", e)
             _isProcessing.value = false
-            "An error occurred. Please try again."
+            context.getString(R.string.spoken_generic_error)
         }
     }
 
@@ -172,7 +179,9 @@ class DocumentChatViewModel(
             "Be clear, concise, and conversational. " +
             extra +
             OpenAiTransport.LLM_USER_SAFETY_INSTRUCTION + " " +
-            OpenAiTransport.LLM_MAX_WORDS_INSTRUCTION
+            OpenAiTransport.LLM_MAX_WORDS_INSTRUCTION +
+            // The prompt is English whatever the app language; the answer must not be.
+            OpenAiTransport.replyLanguageInstruction()
 
     private fun callOpenAI(systemMessage: String, userMessage: String): String {
         val messages = JSONArray().apply {

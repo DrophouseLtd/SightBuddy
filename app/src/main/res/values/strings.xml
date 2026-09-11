@@ -1,5 +1,27 @@
 <resources>
     <string name="app_name">Sight Buddy</string>
+
+    <!-- Mandatory language choice, shown with the terms during onboarding. -->
+    <string name="language_title">Choose your language</string>
+    <string name="language_english">English</string>
+    <string name="language_finnish">Suomi</string>
+    <string name="language_english_cd">English. Use the app in English</string>
+    <string name="language_finnish_cd">Suomi. Use the app in Finnish</string>
+
+    <!-- Torch -->
+    <!-- Short form for the round button face; the full word is used when spoken. -->
+    <string name="torch_short">Torch</string>
+    <string name="torch_on_cd">Torch, on. Double tap to turn the light off.</string>
+    <string name="torch_off_cd">Torch, off. Double tap to turn the light on.</string>
+    <string name="torch_on_spoken">Torch on</string>
+    <string name="torch_off_spoken">Torch off</string>
+
+    <!--
+      Spoken cues. English ships pre-recorded audio for these, so the strings are
+      only used where a recording does not exist for the active language.
+    -->
+    <string name="tutorial_spoken">Hello, and thank you for downloading Sight Buddy. If you need help, press the button in the top left corner. To open settings, press the button in the top right corner. Your feedback is always welcome, and you can leave it with the Leave feedback button in settings.</string>
+
     <string name="welcome_image_cd">Sight Buddy</string>
     <string name="welcome_skip">Skip welcome</string>
     <string name="welcome_skip_cd">Skip welcome message and open the app</string>
@@ -59,4 +81,220 @@
 
     <string name="help_title_text_playback_controls">Text playback controls</string>
     <string name="help_body_text_playback_controls">Tap the middle Play button to pause or resume the reader. Hold Play to start again from the beginning. A short tap on Back or Forward skips about twenty characters. Hold Forward to read faster, or hold Back to read slower — the new speed is announced and reading continues. You can open this help any time with the Help button.</string>
+    <!-- Feedback (last item in Settings) -->
+    <string name="settings_feedback_section">Feedback</string>
+    <string name="settings_feedback_button">Leave feedback</string>
+    <string name="settings_feedback_button_cd">Leave feedback. Opens your email app to write to contact@drophouse.uk</string>
+    <string name="settings_feedback_fallback">contact@drophouse.uk</string>
+    <!-- Spoken announcements. %1$s is a feature or object name. -->
+    <string name="spoken_mode_activated">%1$s activated</string>
+    <string name="spoken_looking_for">Looking for %1$s</string>
+    <string name="spoken_repeat">Sorry, could you please repeat?</string>
+    <string name="spoken_nothing_heard">I did not hear anything. Please try again.</string>
+    <string name="spoken_llm_off">AI chat is turned off in settings.</string>
+    <string name="spoken_capture_first">Please capture first.</string>
+    <string name="spoken_capture_text_first">Please capture the text first.</string>
+    <string name="spoken_no_text_detected">No text was detected in the image.</string>
+    <string name="spoken_scan_text_first">Please scan text first</string>
+    <string name="spoken_api_key_saved">API key saved. AI chat features are now enabled.</string>
+    <string name="spoken_api_key_removed">API key removed. AI chat features are disabled.</string>
+    <string name="spoken_speech_rate">Speech rate %1$s</string>
+    <string name="spoken_models_downloading">Downloading voice models. This may take a few minutes.</string>
+    <string name="spoken_models_installed">Voice models installed. Speech recognition upgraded.</string>
+
+    <!-- Spoken by the find-objects resolver when it cannot match a command itself. -->
+    <string name="resolver_did_not_catch">I did not catch that. Please say an object name.</string>
+    <string name="resolver_could_not_match">I could not safely match that. Please try again or open Browse Objects.</string>
+    <string name="resolver_say_another_way">Can you say that in another way?</string>
+    <string name="resolver_not_supported">That object is not supported.</string>
+    <string name="resolver_not_on_list">Sorry, I could not find %1$s on the item list.</string>
+    <!-- Main screen controls -->
+    <string name="btn_ask">Ask</string>
+    <string name="btn_send">Send</string>
+    <string name="btn_capture">Capture</string>
+    <string name="btn_back">Back</string>
+    <string name="btn_play">Play</string>
+    <string name="btn_pause">Pause</string>
+    <string name="btn_forward">Fwd</string>
+    <string name="btn_previous">Previous</string>
+    <string name="btn_next">Next</string>
+    <string name="btn_browse_objects">Browse Objects</string>
+    <string name="btn_settings">Settings</string>
+    <string name="cd_previous_mode">Previous mode</string>
+    <string name="cd_next_mode">Next mode</string>
+    <string name="cd_open_settings">Open settings</string>
+    <string name="cd_close_settings">Close settings</string>
+    <string name="settings_title">Settings</string>
+    <string name="cd_mode_active">%1$s active. Swipe left or right to change modes.</string>
+    <string name="cd_mode_inactive">%1$s.</string>
+    <string name="cd_ask_hold">Ask. Hold and speak your question, then release</string>
+    <string name="cd_ask_listening">Listening. Tap to send</string>
+    <string name="cd_ask_tap">Ask. Tap, speak your question, then tap to send</string>
+    <!-- Settings -->
+    <string name="settings_section_cloud_ai">Cloud AI — bring your own key</string>
+    <string name="settings_section_voice">Voice recognition</string>
+    <string name="settings_section_features">Features — show in carousel</string>
+    <string name="settings_section_prefs">User preferences</string>
+    <string name="settings_section_privacy">Privacy</string>
+    <string name="settings_api_key">OpenAI API key</string>
+    <string name="settings_api_key_desc_set">Key saved. AI chat features enabled. Tap to change or remove</string>
+    <string name="settings_api_key_desc_unset">Add your own OpenAI API key to enable Image chat and AI questions</string>
+    <string name="settings_api_key_cd_set">OpenAI API key. A key is saved and AI features are enabled. Double tap to change or remove it.</string>
+    <string name="settings_api_key_cd_unset">OpenAI API key. Not set. Double tap to add your own key and enable AI features.</string>
+    <string name="settings_stt_models">Voice recognition models</string>
+    <string name="settings_stt_downloaded">Downloaded. Speech is recognised on this device</string>
+    <string name="settings_stt_downloading">Downloading… %1$d%%</string>
+    <string name="settings_stt_not_downloaded">Not downloaded. Tap to download (154 MB)</string>
+    <string name="settings_show_in_carousel">Show %1$s in the carousel</string>
+    <string name="settings_auto_capture">Automatic capture</string>
+    <string name="settings_auto_capture_desc">Press Ask with no picture to snap one automatically. When off, press Capture first</string>
+    <string name="settings_text_preview">Auto text summarization</string>
+    <string name="settings_text_preview_desc">Send captured text straight to the AI instead of reading the raw text first</string>
+    <string name="settings_high_contrast">High contrast mode</string>
+    <string name="settings_high_contrast_desc">Solid background instead of camera preview</string>
+    <string name="settings_white_mode">White mode</string>
+    <string name="settings_white_mode_desc">Switch between dark and white contrast themes</string>
+    <string name="settings_button_nav">Button navigation</string>
+    <string name="settings_button_nav_desc">Replace carousel swipe with left / right buttons</string>
+    <string name="settings_hold_to_speak">Hold to speak</string>
+    <string name="settings_hold_to_speak_desc">Hold the Ask button while talking. When off, tap once to start and tap again to send</string>
+    <string name="settings_speech_rate">Speech rate</string>
+    <string name="settings_speech_rate_desc">Current: %1$s. Tap to change</string>
+    <string name="settings_speech_rate_cd">Speech rate. Currently %1$s. Double tap to switch to the next speed.</string>
+    <string name="settings_feature_announcements">Feature activation announcements</string>
+    <string name="settings_feature_announcements_desc">Turn off to bypass feature activation announcements</string>
+    <string name="settings_object_list">Object list</string>
+    <string name="settings_object_list_desc">Show or hide items in the Find objects picker</string>
+    <string name="settings_crash_reports">Send crash reports</string>
+    <string name="settings_crash_reports_desc">Share anonymous crash diagnostics so faults can be fixed. No personal data, no tracking</string>
+    <string name="settings_api_dialog_body">Your key is stored encrypted on this device and sent only to OpenAI. Usage is billed to your own OpenAI account.</string>
+    <string name="settings_api_input_cd">API key input field. Paste your OpenAI API key.</string>
+    <string name="settings_save_key">Save key</string>
+    <string name="settings_save_key_cd">Save the entered API key</string>
+    <string name="settings_remove_key">Remove saved key</string>
+    <string name="settings_remove_key_cd">Remove the saved API key and disable AI features</string>
+    <string name="settings_cancel">Cancel</string>
+    <string name="settings_cancel_cd">Cancel without changing the key</string>
+    <string name="settings_show">Show</string>
+    <string name="settings_hide">Hide</string>
+    <string name="settings_show_cd">Show the API key</string>
+    <string name="settings_hide_cd">Hide the API key</string>
+    <string name="cd_row">%1$s. %2$s. </string>
+    <string name="cd_selected">Selected.</string>
+    <string name="cd_not_selected">Not selected. Double tap to select.</string>
+    <string name="cd_currently_on">Currently on.</string>
+    <string name="cd_currently_off">Currently off.</string>
+    <string name="rate_normal">Normal</string>
+    <string name="rate_fast">Fast</string>
+    <string name="rate_very_fast">Very fast</string>
+    <string name="rate_ultra_fast">Ultra fast</string>
+    <!-- Object list / pickers / STT dialog -->
+    <string name="objects_list_body">Show or hide items in the Find objects picker. Detection is unchanged.</string>
+    <string name="objects_search_hint">Search objects…</string>
+    <string name="objects_search_cd">Search objects to filter the list.</string>
+    <string name="objects_back_cd">Back to settings</string>
+    <string name="picker_title">Select Object to Find</string>
+    <string name="picker_title_cd">Select an object to find. Type to filter or scroll the list below.</string>
+    <string name="picker_filter_hint">Type to filter…</string>
+    <string name="picker_search_cd">Search objects. Type an object name to filter the list.</string>
+    <string name="picker_cancel_cd">Cancel and go back</string>
+    <string name="stt_dialog_title">Better voice recognition?</string>
+    <string name="stt_download_now">Download now</string>
+    <string name="stt_download_now_cd">Download voice models now. About 154 megabytes.</string>
+    <string name="stt_later">Later</string>
+    <string name="stt_later_cd">Later. Ask again next time the app opens.</string>
+    <string name="stt_never">Never</string>
+    <string name="stt_never_cd">Never. Do not ask again. You can still download from settings.</string>
+    <string name="stt_dialog_body">Download voice models to improve speech recognition? Speech is then recognised fully on your device, even offline. One-time download of about 154 megabytes — Wi-Fi recommended.</string>
+    <string name="objects_shown_in_picker">Shown in picker</string>
+    <string name="objects_hidden_from_picker">Hidden from picker</string>
+    <string name="waiting_camera_permission">Waiting for camera permission…</string>
+    <!-- Spoken descriptions for the on-screen controls. -->
+    <string name="cd_playback_back">Backwards. Tap skips back twenty characters. Hold one second to read slower.</string>
+    <string name="cd_playback_pause">Pause. Tap to pause reading. Hold one second to restart from the beginning.</string>
+    <string name="cd_playback_play">Play. Tap to start or resume reading. Hold one second to restart from the beginning.</string>
+    <string name="cd_playback_forward">Forward. Tap skips ahead twenty characters. Hold one second to read faster.</string>
+    <string name="cd_colour_focus_frame">Colour scanner focus frame. Point the centre of the screen at the colour.</string>
+    <string name="cd_browse_objects">Browse objects list. Tap to choose an object to find.</string>
+    <!-- Spoken results of the light and colour scanners. -->
+    <string name="light_unknown">Unknown</string>
+    <string name="light_very_dark">Very dark</string>
+    <string name="light_dark">Dark</string>
+    <string name="light_dim">Dim</string>
+    <string name="light_moderate">Moderate light</string>
+    <string name="light_bright">Bright</string>
+    <string name="light_very_bright">Very bright</string>
+    <string name="light_extremely_bright">Extremely bright</string>
+    <string name="colour_black">Black</string>
+    <string name="colour_white">White</string>
+    <string name="colour_gray">Gray</string>
+    <string name="colour_brown">Brown</string>
+    <string name="colour_beige">Beige</string>
+    <string name="colour_red">Red</string>
+    <string name="colour_orange">Orange</string>
+    <string name="colour_yellow">Yellow</string>
+    <string name="colour_green">Green</string>
+    <string name="colour_cyan">Cyan</string>
+    <string name="colour_blue">Blue</string>
+    <string name="colour_purple">Purple</string>
+    <string name="colour_pink">Pink</string>
+    <!-- Spoken errors and model names. -->
+    <string name="spoken_no_text_in_image">I could not detect any text in the image. Try pointing the camera at text and holding it steady.</string>
+    <string name="spoken_processing_error">An error occurred while processing. Please try again.</string>
+    <string name="spoken_generic_error">An error occurred. Please try again.</string>
+    <string name="spoken_scan_document_first">Please scan a document first by pointing your camera at text.</string>
+    <string name="error_no_network">Could not reach OpenAI. Check your internet connection.</string>
+    <string name="model_fast_label">Fast</string>
+    <string name="model_fast_desc">Quickest and cheapest. Fine for simple questions</string>
+    <string name="model_balanced_label">Balanced</string>
+    <string name="model_balanced_desc">Recommended. Strong vision at low cost</string>
+    <string name="model_smart_label">Most capable</string>
+    <string name="model_smart_desc">Best for complex questions. Slower and costs more</string>
+    <!-- OpenAI transport errors, spoken to the user. -->
+    <string name="error_no_api_key">No API key set. Add your OpenAI API key in settings to use AI features.</string>
+    <string name="error_key_rejected">Your OpenAI API key was rejected. Please check it in settings.</string>
+    <string name="error_rate_limited">OpenAI rate limit or spending cap reached. Please try again later.</string>
+    <string name="error_service">AI service error (%1$d). Please try again.</string>
+    <string name="spoken_image_processing_error">An error occurred while processing the image. Please try again.</string>
+    <string name="spoken_ask_about_image">Please ask a question about the image.</string>
+    <string name="spoken_session_expired">Session expired for optimal performance. Please scan again.</string>
+    <string name="spoken_capture_failed">The picture could not be taken. Please try again.</string>
+    <string name="spoken_offline">Your device seems to be offline. Chat features need internet.</string>
+    <!-- Language row in Settings. -->
+    <string name="settings_section_language">Language</string>
+    <string name="settings_language">App language</string>
+    <string name="settings_language_desc">Currently %1$s. Tap to change</string>
+    <string name="settings_language_cd">App language, currently %1$s. Double tap to switch to %2$s</string>
+    <string name="language_switch_title">Switch language?</string>
+    <string name="language_switch_body">Sight Buddy will restart in %1$s.</string>
+    <string name="language_switch_confirm">Restart now</string>
+    <string name="language_switch_confirm_cd">Restart now in %1$s</string>
+    <string name="language_switch_cancel">Cancel</string>
+    <string name="language_switch_cancel_cd">Cancel and keep the current language</string>
+    <!-- Carousel navigation. -->
+    <string name="settings_loop_carousel">Looping feature carousel</string>
+    <string name="settings_loop_carousel_desc">Keep both arrows on every feature. Past the last one, start again at the first</string>
+    <!-- Find objects feedback style. -->
+    <string name="settings_pitch_feedback">Find objects: Pitch feedback</string>
+    <string name="settings_pitch_feedback_desc">A held note that rises as the object nears the middle of the frame, instead of spoken direction cues</string>
+    <!-- OpenAI speech recognition. -->
+    <string name="settings_cloud_stt">OpenAI speech recognition</string>
+    <string name="settings_cloud_stt_desc">Send recordings to OpenAI instead of using the system engine. Small cost on your own key</string>
+    <string name="cloud_stt_dialog_title">Use OpenAI speech recognition?</string>
+    <string name="cloud_stt_dialog_body">Do you want to use OpenAI speech recognition for the best user experience? This will enhance the user experience, but will add a minor API cost, about a fraction of a penny per minute of recording time. If enabled, the recorded audio is sent to OpenAI for processing instead of being processed by the system engine. Recommended for users who do not have the voice enhancement models downloaded.</string>
+    <string name="cloud_stt_enable">Turn it on</string>
+    <string name="cloud_stt_enable_cd">Turn on OpenAI speech recognition</string>
+    <string name="cloud_stt_decline">Not now</string>
+    <string name="cloud_stt_decline_cd">Keep using the system speech recognition</string>
+    <!-- Shown once after a better speech option is declined. -->
+    <string name="choice_respected_title">Understood</string>
+    <string name="choice_respected_body">We respect your choice and aim to provide the best solution for your device and needs. Native speech recognition might cut messages off early on some occasions. If you ever want to reconsider, the option is available in settings.</string>
+    <string name="choice_respected_ok">Continue</string>
+    <!-- Enabling the paid API while the free model is present. -->
+    <string name="cloud_stt_local_title">The free model is already here</string>
+    <string name="cloud_stt_local_body">The phone already has the local enhanced voice model, which provides free and offline speech recognition. Are you sure you want to use the paid speech recognition API instead?</string>
+    <string name="cloud_stt_local_enable">Use the paid API</string>
+    <string name="cloud_stt_local_enable_cd">Use the paid OpenAI speech recognition instead of the free on-device model</string>
+    <string name="cloud_stt_local_decline">Keep the free model</string>
+    <string name="cloud_stt_local_decline_cd">Keep using the free on-device speech recognition</string>
 </resources>

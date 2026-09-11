@@ -4,7 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,6 +39,9 @@ fun TermsAcceptanceOverlay(
     onPrivacyPolicy: () -> Unit,
     onAccept: () -> Unit,
     modifier: Modifier = Modifier,
+    languageChosen: Boolean = true,
+    currentLanguage: String = "en",
+    onSelectLanguage: (String) -> Unit = {},
 ) {
     val bg = if (darkTheme) Color(0xFF121212) else Color.White
     val textColor = if (darkTheme) Color.White else Color(0xFF1A1A1A)
@@ -64,6 +69,47 @@ fun TermsAcceptanceOverlay(
                 .padding(horizontal = 28.dp, vertical = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // Mandatory language choice — the app cannot be entered until one is
+            // picked, and picking one re-renders this screen in that language.
+            Text(
+                text = stringResource(R.string.language_title),
+                style = MaterialTheme.typography.headlineSmall,
+                color = textColor,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                LanguageChoiceButton(
+                    label = stringResource(R.string.language_english),
+                    contentDescription = stringResource(R.string.language_english_cd),
+                    selected = languageChosen && currentLanguage == "en",
+                    highContrast = highContrast,
+                    whiteMode = whiteMode,
+                    fallbackBg = secondaryBg,
+                    fallbackText = textColor,
+                    onClick = { onSelectLanguage("en") },
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                LanguageChoiceButton(
+                    label = stringResource(R.string.language_finnish),
+                    contentDescription = stringResource(R.string.language_finnish_cd),
+                    selected = languageChosen && currentLanguage == "fi",
+                    highContrast = highContrast,
+                    whiteMode = whiteMode,
+                    fallbackBg = secondaryBg,
+                    fallbackText = textColor,
+                    onClick = { onSelectLanguage("fi") },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            Spacer(modifier = Modifier.height(36.dp))
+
             Text(
                 text = prompt,
                 style = MaterialTheme.typography.headlineSmall,
@@ -96,14 +142,57 @@ fun TermsAcceptanceOverlay(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Dimmed and inert until a language has been chosen.
             TermsActionButton(
                 label = acceptLabel,
-                background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
+                background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA))
+                    .let { if (languageChosen) it else it.copy(alpha = 0.4f) },
                 textColor = actionButtonText(highContrast, whiteMode, Color.Black),
                 contentDescription = acceptCd,
-                onClick = onAccept,
+                onClick = { if (languageChosen) onAccept() },
             )
         }
+    }
+}
+
+@Composable
+private fun LanguageChoiceButton(
+    label: String,
+    contentDescription: String,
+    selected: Boolean,
+    highContrast: Boolean,
+    whiteMode: Boolean,
+    fallbackBg: Color,
+    fallbackText: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (selected) {
+                    actionButtonBackground(highContrast, whiteMode, Color(0xFF3DBAD0))
+                } else {
+                    fallbackBg
+                }
+            )
+            .clickable(onClick = onClick)
+            .padding(vertical = 18.dp)
+            .semantics { this.contentDescription = contentDescription },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = if (selected) {
+                actionButtonText(highContrast, whiteMode, Color.White)
+            } else {
+                fallbackText
+            },
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

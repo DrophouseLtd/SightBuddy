@@ -10,6 +10,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.example.sightbuddy.R
+import com.example.sightbuddy.features.vision.CocoFinnish
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -27,10 +30,19 @@ fun ObjectPickerDialog(
     onDismiss: () -> Unit,
 ) {
     var searchQuery by remember { mutableStateOf("") }
+    val titleCd = stringResource(R.string.picker_title_cd)
+    val searchCd = stringResource(R.string.picker_search_cd)
+    val cancelCd = stringResource(R.string.picker_cancel_cd)
 
+    // Filter on what the user actually sees: the Finnish name in Finnish,
+    // the English label otherwise.
     val filteredObjects = remember(searchQuery, visibleObjects) {
         if (searchQuery.isBlank()) visibleObjects
-        else visibleObjects.filter { it.contains(searchQuery.trim(), ignoreCase = true) }
+        else visibleObjects.filter {
+            val shown = CocoFinnish.displayName(it)
+            it.contains(searchQuery.trim(), ignoreCase = true) ||
+                shown.contains(searchQuery.trim(), ignoreCase = true)
+        }
     }
 
     Dialog(
@@ -44,7 +56,7 @@ fun ObjectPickerDialog(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Select Object to Find",
+                text = stringResource(R.string.picker_title),
                 style = MaterialTheme.typography.headlineMedium,
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
@@ -52,13 +64,13 @@ fun ObjectPickerDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
-                    .semantics { contentDescription = "Select an object to find. Type to filter or scroll the list below." }
+                    .semantics { contentDescription = titleCd }
             )
 
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Type to filter...", color = Color.Gray) },
+                placeholder = { Text(stringResource(R.string.picker_filter_hint), color = Color.Gray) },
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
@@ -70,7 +82,7 @@ fun ObjectPickerDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
-                    .semantics { contentDescription = "Search objects. Type an object name to filter the list." }
+                    .semantics { contentDescription = searchCd }
             )
 
             LazyColumn(
@@ -84,11 +96,11 @@ fun ObjectPickerDialog(
                             .background(Color(0xFF1E1E1E), shape = RoundedCornerShape(12.dp))
                             .clickable { onObjectSelected(obj) }
                             .padding(horizontal = 20.dp, vertical = 18.dp)
-                            .semantics { contentDescription = obj },
+                            .semantics { contentDescription = CocoFinnish.displayName(obj) },
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Text(
-                            text = obj.replaceFirstChar { it.uppercase() },
+                            text = CocoFinnish.displayName(obj).replaceFirstChar { it.uppercase() },
                             color = Color.White,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Medium
@@ -108,11 +120,11 @@ fun ObjectPickerDialog(
                     )
                     .clickable { onDismiss() }
                     .padding(vertical = 18.dp)
-                    .semantics { contentDescription = "Cancel and go back" },
+                    .semantics { contentDescription = cancelCd },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Cancel",
+                    text = stringResource(R.string.settings_cancel),
                     color = if (highContrast) Color.Black else Color.White,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
