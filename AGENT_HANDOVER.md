@@ -35,7 +35,7 @@ Each carousel feature can be hidden in Settings, with a guard that keeps at leas
 
 ### Bring-your-own-key
 
-- [`ApiKeyStore`](app/src/main/java/com/example/sightbuddy/core/ApiKeyStore.kt) — the user's OpenAI key, encrypted with AES-256-GCM using a non-exportable Android Keystore key.
+- [`ApiKeyStore`](app/src/main/java/com/example/sightbuddy/core/ApiKeyStore.kt) — the user's OpenAI key, encrypted with AES-GCM using a non-exportable Android Keystore key.
 - [`OpenAiTransport`](app/src/main/java/com/example/sightbuddy/core/OpenAiTransport.kt) — POSTs directly to `api.openai.com/v1/chat/completions`. Distinct spoken errors for 401 (bad key) and 429 (rate limit). The key is never logged.
 - **Key presence is the feature flag**: with a key saved, Image chat appears and Text chat gains AI Q&A; remove it and the app is fully local.
 - Model is read **per request** from `SettingsManager`, so the Settings picker (Fast / Balanced / Most capable) applies with no restart.
