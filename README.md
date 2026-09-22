@@ -1,5 +1,7 @@
 # Sight Buddy
 
+[![Build](https://github.com/DrophouseLtd/SightBuddy/actions/workflows/ci.yml/badge.svg)](https://github.com/DrophouseLtd/SightBuddy/actions/workflows/ci.yml)
+
 **A free, open-source, bring-your-own-key assistive vision app for blind and low-vision users.**
 
 Point your phone's camera to hear your surroundings described, read printed text aloud, find objects, and identify colours and lighting. Most of it runs **entirely on your device**. The optional AI features run on **your own OpenAI API key** — so there's no subscription, no ads, no accounts, and no server of ours in the middle.
@@ -96,7 +98,7 @@ If you're reading this as a portfolio piece, or mining the repo for parts, these
 - **A disciplined CameraX pipeline** — YUV→RGB without a lossy JPEG round-trip, rotation-aware TFLite input, and a capacity-1 frame `Channel` with explicit ownership accounting to prevent backpressure stalls.
 - **Environment isolation without a DI framework** — dev/prod flavors swap real vs. mock behaviour through plain factory functions. Boring, explicit, testable.
 
-Architecture notes: [AGENT_HANDOVER.md](AGENT_HANDOVER.md).
+Architecture notes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Building from source
 
@@ -127,7 +129,7 @@ Questions or feedback: **contact@drophouse.uk**.
 
 ## Licence
 
-Code is [MIT](LICENSE) © 2026 Drophouse Ltd.
+Code is [MIT](LICENSE) © 2026 Drophouse Ltd. Third-party components keep their own licenses: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Third-party components keep their own licences: OpenAI Whisper models (MIT; ONNX export via sherpa-onnx, Apache-2.0), Silero VAD (MIT), sherpa-onnx runtime (Apache-2.0), and EfficientDet-Lite0 (Apache-2.0, see [legal/](legal/)).
 
