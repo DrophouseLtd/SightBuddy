@@ -5,28 +5,24 @@
     <string name="language_title">Valitse kieli</string>
     <string name="language_english">English</string>
     <string name="language_finnish">Suomi</string>
+    <string name="language_name_english">englanti</string>
+    <string name="language_name_finnish">suomi</string>
     <string name="language_english_cd">English. Käytä sovellusta englanniksi</string>
     <string name="language_finnish_cd">Suomi. Käytä sovellusta suomeksi</string>
 
     <!-- Taskulamppu -->
     <!-- Short form for the round button face; the full word is used when spoken. -->
     <string name="torch_short">Lamppu</string>
-    <string name="torch_on_cd">Taskulamppu, päällä. Kaksoisnapauta sammuttaaksesi valon.</string>
-    <string name="torch_off_cd">Taskulamppu, pois. Kaksoisnapauta sytyttääksesi valon.</string>
     <string name="torch_on_spoken">Taskulamppu päällä</string>
     <string name="torch_off_spoken">Taskulamppu pois</string>
 
     <!-- Puhutut vihjeet. Suomeksi nämä puhutaan laitteen puhesynteesillä. -->
-    <string name="tutorial_spoken">Hei, kiitos että latasit Sight Buddyn. Jos tarvitset apua, paina nappia vasemmassa yläkulmassa. Jos haluat avata asetukset, paina nappia oikeassa yläkulmassa. Otamme palautetta mielellämme vastaan, ja voit jättää sen asetuksista Anna palautetta -painikkeella.</string>
 
-    <string name="welcome_image_cd">Sight Buddy</string>
-    <string name="welcome_skip">Ohita esittely</string>
-    <string name="welcome_skip_cd">Ohita tervetuloviesti ja avaa sovellus</string>
-    <string name="welcome_help_tap_cd">Ohje. Esittelyn aikana soittaa vain vahvistusäänen</string>
-    <string name="welcome_settings_tap_cd">Asetukset. Esittelyn aikana soittaa vain vahvistusäänen</string>
+    <string name="spoken_select_language_first">Valitse ensin kieli.</string>
+    <string name="spoken_permission_camera">Sight Buddy tarvitsee tähän kameraa. Voit sallia sen puhelimen asetuksissa kohdassa Sovellukset, Sight Buddy, Käyttöoikeudet.</string>
+    <string name="spoken_permission_mic">Sight Buddy tarvitsee mikrofonin kuullakseen kysymyksesi. Voit sallia sen puhelimen asetuksissa kohdassa Sovellukset, Sight Buddy, Käyttöoikeudet.</string>
 
     <string name="terms_prompt">Hyväksy ennen käyttöä tietosuojaseloste ja käyttöehdot.</string>
-    <string name="terms_prompt_cd">Hyväksy ennen käyttöä tietosuojaseloste ja käyttöehdot</string>
     <string name="terms_of_use">Käyttöehdot</string>
     <string name="terms_of_use_cd">Käyttöehdot. Avaa käyttöehdot selaimessa</string>
     <string name="terms_privacy_policy">Tietosuojaseloste</string>
@@ -34,8 +30,11 @@
     <string name="terms_accept">Hyväksy</string>
     <string name="terms_accept_cd">Hyväksy tietosuojaseloste ja käyttöehdot</string>
 
-    <string name="help_button_cd">Avaa tämän toiminnon ohje</string>
     <string name="help_close">Sulje ohje</string>
+    <string name="help_heading_how">Näin se toimii</string>
+    <string name="help_heading_buttons">Painikkeet</string>
+    <string name="help_heading_top">Näytön yläreuna</string>
+    <string name="help_heading_moving">Toiminnon vaihtaminen</string>
     <string name="help_close_cd">Sulje ohje ja palaa sovellukseen</string>
     <string name="help_leave_feedback">Anna palautetta</string>
     <string name="help_leave_feedback_cd">Anna nimetöntä palautetta tästä toiminnosta</string>
@@ -49,14 +48,6 @@
     <string name="feedback_thanks_body">Palautteesi vastaanotettiin.</string>
     <string name="feedback_submit_failed">Palautteen lähetys epäonnistui. Tarkista yhteys ja yritä uudelleen.</string>
 
-    <string name="settings_delete_data">Poista tiedot</string>
-    <string name="settings_delete_data_description">Poista pilvikiintiösi ja palautteesi palvelimiltamme</string>
-    <string name="settings_delete_data_cd">Poista tiedot. Kaksoisnapauta avataksesi vahvistuksen.</string>
-    <string name="delete_data_confirm_message">Oletko varma? Jos poistat tietosi, et voi käyttää tekoälykeskustelua kahteen päivään.</string>
-    <string name="delete_data_confirm_yes">Kyllä</string>
-    <string name="delete_data_confirm_yes_cd">Kyllä, poista tietoni</string>
-    <string name="delete_data_confirm_no">Ei</string>
-    <string name="delete_data_confirm_no_cd">Ei, säilytä tietoni</string>
 
     <string name="help_title_image_chat">Kuva chat</string>
     <string name="help_body_image_chat">Suuntaa kamera kohteeseen, josta haluat tietää, ja esitä kysymys Kysy-painikkeella — esimerkiksi \"minkä värinen tämä on?\" Sight Buddy ottaa kuvan, kun lopetat puhumisen, ja vastaa. Jos et kysy mitään, kuulet kuvauksen näkymästä. Kysy sen jälkeen lisää samasta kuvasta Kysy-painikkeella tai napauta Kuvaa saadaksesi uuden kuvauksen. Selaa toimintoja pyyhkäisemällä tai käytä Edellinen- ja Seuraava-painikkeita, kun painikenavigointi on käytössä.</string>
@@ -68,7 +59,7 @@
     <string name="help_body_discover_objects">Liikuta kameraa hitaasti. Sight Buddy nimeää varmimman näkemänsä esineen ja pitää lyhyen tauon ilmoitusten välillä, jotta puhe pysyy selkeänä.</string>
 
     <string name="help_title_find_objects">Löydä esineitä</string>
-    <string name="help_body_find_objects">Käytä Kysy-painiketta ja sano, mitä etsitään, esimerkiksi \"avaimet\" tai \"kuppi\". Suuntaäänet ohjaavat vasemmalle, oikealle, ylös, alas tai keskelle. Napauta Selaa esineitä valitaksesi listalta.</string>
+    <string name="help_body_find_objects">Käytä Kysy-painiketta ja sano, mitä etsitään, esimerkiksi \"avaimet\" tai \"kuppi\". Ääni ohjaa sinua: vasemmalle, oikealle, ylös, alas tai keskellä. Napauta Selaa esineitä valitaksesi listalta.</string>
 
     <string name="help_title_scan_light">Valon tunnistus</string>
     <string name="help_body_scan_light">Suuntaa kamera näkymään. Sight Buddy kertoo kamerakuvan perusteella, onko valaistus kirkas, hämärä vai pimeä.</string>
@@ -76,15 +67,13 @@
     <string name="help_title_scan_colour">Värin tunnistus</string>
     <string name="help_body_scan_colour">Suuntaa kamera niin, että väri täyttää näytön keskellä olevan pienen kehyksen. Sight Buddy sanoo värin nimen. Toimii parhaiten hyvässä ja tasaisessa valaistuksessa — hämärä tai lämmin sisävalo voi muuttaa värejä.</string>
 
-    <string name="help_title_text_playback_controls">Tekstin toiston säätimet</string>
-    <string name="help_body_text_playback_controls">Napauta keskimmäistä Toista-painiketta keskeyttääksesi tai jatkaaksesi lukemista. Pidä Toista pohjassa aloittaaksesi alusta. Lyhyt napautus Taakse- tai Eteen-painikkeella hyppää noin kaksikymmentä merkkiä. Pidä Eteen pohjassa lukeaksesi nopeammin tai Taakse hitaammin — uusi nopeus ilmoitetaan ja lukeminen jatkuu. Voit avata tämän ohjeen milloin tahansa Ohje-painikkeella.</string>
     <!-- Palaute (viimeinen kohta asetuksissa) -->
     <string name="settings_feedback_section">Palaute</string>
     <string name="settings_feedback_button">Anna palautetta</string>
     <string name="settings_feedback_button_cd">Anna palautetta. Avaa sähköpostisovelluksen osoitteeseen contact@drophouse.uk</string>
     <string name="settings_feedback_fallback">contact@drophouse.uk</string>
+    <string name="settings_version">Versio %1$s (%2$d)</string>
     <!-- Puhutut ilmoitukset. %1$s on toiminnon tai esineen nimi. -->
-    <string name="spoken_mode_activated">%1$s käytössä</string>
     <string name="spoken_looking_for">Etsitään: %1$s</string>
     <string name="spoken_repeat">Anteeksi, voisitko toistaa?</string>
     <string name="spoken_nothing_heard">En kuullut mitään. Yritä uudelleen.</string>
@@ -98,6 +87,8 @@
     <string name="spoken_speech_rate">Puhenopeus %1$s</string>
     <string name="spoken_models_downloading">Ladataan puhemalleja. Tämä voi kestää muutaman minuutin.</string>
     <string name="spoken_models_installed">Puhemallit asennettu. Puheentunnistus päivitetty.</string>
+    <string name="spoken_models_deleted">Puhemallit poistettu.</string>
+    <string name="spoken_models_delete_failed">Puhemalleja ei voitu poistaa juuri nyt. Yritä uudelleen.</string>
 
     <!-- Spoken by the find-objects resolver when it cannot match a command itself. -->
     <string name="resolver_did_not_catch">En kuullut tuota. Sano esineen nimi.</string>
@@ -113,59 +104,150 @@
     <string name="btn_play">Toista</string>
     <string name="btn_pause">Tauko</string>
     <string name="btn_forward">Eteen</string>
-    <string name="btn_previous">Edellinen</string>
-    <string name="btn_next">Seuraava</string>
-    <string name="btn_browse_objects">Selaa esineitä</string>
+    <string name="spoken_previous_unavailable">Edellinen toiminto ei saatavilla</string>
+    <string name="spoken_next_unavailable">Seuraava toiminto ei saatavilla</string>
     <string name="btn_settings">Asetukset</string>
-    <string name="cd_previous_mode">Edellinen toiminto</string>
-    <string name="cd_next_mode">Seuraava toiminto</string>
-    <string name="cd_open_settings">Avaa asetukset</string>
-    <string name="cd_close_settings">Sulje asetukset</string>
-    <string name="settings_title">Asetukset</string>
-    <string name="cd_mode_active">%1$s käytössä. Pyyhkäise vasemmalle tai oikealle vaihtaaksesi toimintoa.</string>
-    <string name="cd_mode_inactive">%1$s.</string>
-    <string name="cd_ask_hold">Kysy. Pidä pohjassa ja puhu kysymyksesi, päästä sitten irti</string>
-    <string name="cd_ask_listening">Kuuntelee. Napauta lähettääksesi</string>
-    <string name="cd_ask_tap">Kysy. Napauta, puhu kysymyksesi ja napauta uudelleen lähettääksesi</string>
+    <string name="btn_help">Ohje</string>
+    <string name="btn_preview">Esikatselu</string>
+    <string name="btn_mute">Mykistä</string>
+    <string name="btn_unmute">Poista mykistys</string>
+    <string name="btn_objects">Esineet</string>
+    <string name="chat_empty_find">Kysy tai kirjoita, mitä etsit, tai valitse Esineet-listasta. Tekoäly voi tehdä virheitä.</string>
+    <string name="chat_input_find_hint">Kirjoita etsittävä esine</string>
+    <string name="chat_empty_ai">Täällä ei ole vielä mitään. Ota kuva tai esitä kysymys. Tekoäly voi tehdä virheitä.</string>
+    <string name="live_text_area">Live-teksti</string>
+    <string name="chat_empty_text">Täällä ei ole vielä mitään. Ota kuva lukeaksesi tekstiä. Tekoäly voi tehdä virheitä.</string>
+    <string name="chat_empty_text_live_off">Täällä ei ole vielä mitään. Ota kuva tekstistä tai ota live-teksti käyttöön. Tekoäly voi tehdä virheitä.</string>
+    <string name="chat_working">Työstetään…</string>
+    <string name="chat_input_hint">Kirjoita kysymys</string>
+    <string name="transcript_scanned_text">Skannattu teksti</string>
+    <string name="transcript_question">Kysyit</string>
+    <string name="transcript_system">Sight Buddy</string>
+    <string name="transcript_answer">Vastaus</string>
+    <string name="settings_row_position">%1$d / %2$d</string>
+    <plurals name="settings_section_count">
+        <item quantity="one">%1$s, %2$d asetus</item>
+        <item quantity="other">%1$s, %2$d asetusta</item>
+    </plurals>
+    <string name="settings_section_advanced">Lisäasetukset</string>
+    <string name="settings_advanced">Lisäasetukset</string>
+    <string name="state_expanded">Laajennettu</string>
+    <string name="state_collapsed">Tiivistetty</string>
+    <string name="feature_position">%1$s, %2$d / %3$d</string>
     <!-- Asetukset -->
     <string name="settings_section_cloud_ai">Pilvitekoäly — oma API-avain</string>
-    <string name="settings_section_voice">Puheentunnistus</string>
+    <string name="settings_section_models">Mallikirjasto</string>
     <string name="settings_section_features">Toiminnot — näytä karusellissa</string>
     <string name="settings_section_prefs">Käyttäjäasetukset</string>
     <string name="settings_section_privacy">Yksityisyys</string>
     <string name="settings_api_key">OpenAI API-avain</string>
+    <string name="settings_use_api">Käytä API:a</string>
+    <string name="settings_use_api_desc">Käytä OpenAI:n APIa (etusijalla paikalliseen tekoälyyn nähden, jos molemmat tekoälykytkimet ovat päällä). Kun pois päältä, OpenAI:lle ei lähetetä mitään</string>
     <string name="settings_api_key_desc_set">Avain tallennettu. Tekoälytoiminnot ovat käytössä. Napauta vaihtaaksesi tai poistaaksesi</string>
     <string name="settings_api_key_desc_unset">Lisää oma OpenAI API-avain ottaaksesi käyttöön kuva chatin ja tekoälykysymykset</string>
-    <string name="settings_api_key_cd_set">OpenAI API-avain. Avain on tallennettu ja tekoälytoiminnot ovat käytössä. Kaksoisnapauta vaihtaaksesi tai poistaaksesi sen.</string>
-    <string name="settings_api_key_cd_unset">OpenAI API-avain. Ei asetettu. Kaksoisnapauta lisätäksesi oman avaimesi ja ottaaksesi tekoälytoiminnot käyttöön.</string>
-    <string name="settings_stt_models">Puheentunnistusmallit</string>
+    <string name="settings_api_key_cd_set">OpenAI API-avain. Avain on tallennettu ja tekoälytoiminnot ovat käytössä</string>
+    <string name="settings_api_key_cd_unset">OpenAI API-avain. Ei asetettu. Oma avain ottaa tekoälytoiminnot käyttöön</string>
+    <string name="settings_api_key_action_set">vaihda tai poista avain</string>
+    <string name="settings_api_key_action_unset">lisää avain</string>
+    <string name="settings_stt_models">Whisper-puheentunnistus</string>
+    <string name="settings_gemma_model">Gemma, laitteen oma tekoäly</string>
+    <string name="settings_gemma_downloaded">Ladattu. Puheentunnistus ja keskustelu tällä laitteella</string>
+    <string name="settings_gemma_paused">Lataus keskeytyi kohdassa %1$d %%</string>
+    <string name="settings_gemma_not_recommended">Ei suositeltu tälle puhelimelle. 2,6 Gt</string>
+    <string name="settings_section_downloads">Lataa malleja</string>
+    <string name="btn_memories">Muistot</string>
+    <string name="btn_more">Lisää</string>
+    <string name="bar_save_chat">Tallenna</string>
+    <string name="bar_auto_capture">Automaattikuva</string>
+    <string name="bar_guidance">Ohjaus</string>
+    <string name="bar_summarize">Tiivistys</string>
+    <string name="bar_live_text">Live-teksti</string>
+    <string name="bar_pitch">Äänenkorkeus</string>
+    <string name="memories_title">Muistot</string>
+    <string name="memories_empty">Ei tallennettuja keskusteluja. Avaa keskustelussa Lisää ja valitse Tallenna.</string>
+    <string name="memories_rename">Nimeä uudelleen</string>
+    <string name="memories_delete">Poista</string>
+    <string name="memories_save">Tallenna</string>
+    <string name="memories_cancel">Peruuta</string>
+    <string name="memories_delete_confirm">Poistetaanko %1$s?</string>
+    <string name="memories_options_cd">Valinnat: %1$s</string>
+    <string name="memories_kind_question">Sinä</string>
+    <string name="memories_kind_answer">Vastaus</string>
+    <string name="memories_kind_text">Teksti</string>
+    <string name="memories_kind_note">Huomio</string>
+    <string name="memories_saved">Keskustelu tallennettu nimellä %1$s.</string>
+    <string name="memories_nothing">Ei vielä tallennettavaa.</string>
+    <string name="settings_setup">Asenna mallit tälle puhelimelle</string>
+    <string name="settings_setup_desc">Suositus: %1$s. Lataus %2$s, vapaata tilaa %3$s</string>
+    <string name="setup_title">Käyttöönotto</string>
+    <string name="setup_body">Haluamme tarjota puhelimellesi parhaan mahdollisen asetuksen. Haluatko ladata laitteellesi parhaat mallit, jotta saat kaikki ominaisuudet käyttöön?\n\nSuositus: %1$s.\nLatauksen koko: %2$s.\nVapaata tilaa puhelimessa: %3$s.</string>
+    <string name="setup_models_full">Whisper-puheentunnistus ja Gemma, laitteen oma tekoäly</string>
+    <string name="setup_models_whisper">Whisper-puheentunnistus</string>
+    <string name="setup_yes">Kyllä</string>
+    <string name="setup_yes_cd">Kyllä, lataa suositellut mallit nyt</string>
+    <string name="spoken_setup_downloading">Ladataan %1$s. Tämä voi kestää hetken.</string>
+    <string name="spoken_setup_done">Mallit asennettu. Kaikki ominaisuudet ovat valmiina.</string>
+    <string name="spoken_setup_failed">Lataus ei valmistunut. Voit yrittää uudelleen asetuksista.</string>
+    <string name="spoken_no_space">Tälle lataukselle ei ole tarpeeksi vapaata tilaa.</string>
+    <string name="settings_gemma_not_downloaded">Kuvailee kuvia ja vastaa kysymyksiin puhelimessa, myös ilman verkkoa. Ei ladattu. 2,6 Gt</string>
+    <string name="settings_stt_engine">Puheentunnistus</string>
+    <string name="settings_stt_engine_desc">Nyt: %1$s. Napauta vaihtaaksesi</string>
+    <string name="settings_stt_engine_cd">Puheentunnistus. Nyt %1$s</string>
+    <string name="settings_cycle_action">vaihda seuraavaan</string>
+    <string name="settings_action_download">lataa</string>
+    <string name="settings_action_continue_download">jatka latausta</string>
+    <string name="stt_choice_whisper">Whisper (suositeltu)</string>
+    <string name="stt_choice_gemma">Gemma</string>
+    <string name="stt_choice_android">Android</string>
+    <string name="spoken_stt_choice">Puheentunnistus: %1$s</string>
+    <string name="gemma_download_title">Ladataanko Gemma?</string>
+    <string name="gemma_download_body">Gemma kuvailee kuvia ja vastaa kysymyksiin puhelimessa, myös ilman verkkoa. Lataus on 2,6 Gt, joten Wi-Fi on suositeltava.</string>
+    <string name="download_channel">Mallien lataukset</string>
+    <string name="download_notification_title">Ladataan: %1$s</string>
+    <string name="gemma_download_now">Lataa</string>
+    <string name="gemma_download_now_cd">Lataa laitteen tekoälymalli nyt. Noin 2,6 gigatavua.</string>
+    <string name="gemma_download_cancel">Ei nyt</string>
+    <string name="spoken_gemma_downloading">Ladataan laitteen tekoälymallia. Tämä voi kestää hetken.</string>
+    <string name="spoken_gemma_installed">Laitteen tekoälymalli asennettu.</string>
+    <string name="spoken_gemma_download_failed">Laitteen tekoälymallia ei voitu ladata. Yritä uudelleen.</string>
+    <string name="settings_use_local_chat">Käytä laitteen omaa keskustelutekoälyä</string>
+    <string name="settings_use_local_chat_desc">Käytä ladattuja paikallisia tekoälymalleja</string>
+    <string name="gemma_model_body">Laitteen oma tekoälymalli vie %1$s. Se tunnistaa puheen ja vastaa kysymyksiin puhelimessa, myös ilman verkkoyhteyttä.</string>
+    <string name="gemma_model_delete_confirm">Poistetaanko laitteen tekoälymalli ja vapautetaan %1$s?</string>
+    <string name="spoken_gemma_deleted">Laitteen tekoälymalli poistettu.</string>
     <string name="settings_stt_downloaded">Ladattu. Puhe tunnistetaan tällä laitteella</string>
     <string name="settings_stt_downloading">Ladataan… %1$d %%</string>
-    <string name="settings_stt_not_downloaded">Ei ladattu. Napauta ladataksesi (154 Mt)</string>
+    <string name="settings_stt_not_downloaded">Ei ladattu. 154 Mt</string>
     <string name="settings_show_in_carousel">Näytä %1$s karusellissa</string>
     <string name="settings_auto_capture">Automaattinen kuvaus</string>
     <string name="settings_auto_capture_desc">Paina Kysy ilman kuvaa, niin kuva otetaan automaattisesti. Kun pois, paina ensin Kuvaa</string>
     <string name="settings_text_preview">Tekstin automaattinen tiivistys</string>
-    <string name="settings_text_preview_desc">Lähetä luettu teksti suoraan tekoälylle sen sijaan, että raakateksti luetaan ensin</string>
+    <string name="settings_text_preview_desc">Tiivistä tekoälyllä kuvaamisen jälkeen sen sijaan, että raakateksti luetaan ensin</string>
     <string name="settings_high_contrast">Suurkontrastitila</string>
     <string name="settings_high_contrast_desc">Yhtenäinen tausta kameran esikatselun sijaan</string>
     <string name="settings_white_mode">Vaalea tila</string>
     <string name="settings_white_mode_desc">Vaihda tumman ja vaalean kontrastiteeman välillä</string>
-    <string name="settings_button_nav">Painikenavigointi</string>
-    <string name="settings_button_nav_desc">Korvaa karusellin pyyhkäisy vasen- ja oikea-painikkeilla</string>
     <string name="settings_hold_to_speak">Pidä pohjassa puhuaksesi</string>
     <string name="settings_hold_to_speak_desc">Pidä Kysy-painiketta pohjassa puhuessasi. Kun pois, napauta kerran aloittaaksesi ja uudelleen lähettääksesi</string>
     <string name="settings_speech_rate">Puhenopeus</string>
     <string name="settings_speech_rate_desc">Nykyinen: %1$s. Napauta vaihtaaksesi</string>
-    <string name="settings_speech_rate_cd">Puhenopeus. Nykyinen %1$s. Kaksoisnapauta vaihtaaksesi seuraavaan nopeuteen.</string>
-    <string name="settings_feature_announcements">Toimintojen aktivointi-ilmoitukset</string>
-    <string name="settings_feature_announcements_desc">Ota pois käytöstä ohittaaksesi toimintojen aktivointi-ilmoitukset</string>
+    <string name="settings_speech_rate_cd">Puhenopeus. Nykyinen %1$s</string>
     <string name="settings_object_list">Esineluettelo</string>
     <string name="settings_object_list_desc">Näytä tai piilota kohteita Löydä esineitä -valitsimessa</string>
     <string name="settings_crash_reports">Lähetä kaatumisraportit</string>
     <string name="settings_crash_reports_desc">Jaa nimettömiä kaatumistietoja, jotta viat voidaan korjata. Ei henkilötietoja, ei seurantaa</string>
+    <string name="settings_licences">Avoimen lähdekoodin lisenssit</string>
+    <string name="settings_licences_desc">Ohjelmistot ja mallit, joiden varaan Sight Buddy on rakennettu</string>
     <string name="settings_api_dialog_body">Avaimesi tallennetaan salattuna tähän laitteeseen ja lähetetään vain OpenAI:lle. Käyttö laskutetaan omalta OpenAI-tililtäsi.</string>
     <string name="settings_api_input_cd">API-avaimen syöttökenttä. Liitä OpenAI API-avaimesi.</string>
+    <string name="settings_api_input_replace_cd">Uuden API-avaimen syöttökenttä. Liitä avain korvataksesi tallennetun.</string>
+    <string name="settings_api_placeholder">Liitä avaimesi: sk-…</string>
+    <string name="settings_api_placeholder_replace">Liitä uusi avain korvataksesi nykyisen</string>
+    <string name="settings_saved_key">Tallennettu avain</string>
+    <string name="settings_saved_key_cd">Tallennettu avain: %1$s</string>
+    <string name="settings_copy_saved_key">Kopioi</string>
+    <string name="settings_copy_saved_key_cd">Kopioi tallennetun avaimen alku ja loppu</string>
+    <string name="settings_copied">Kopioitu</string>
     <string name="settings_save_key">Tallenna avain</string>
     <string name="settings_save_key_cd">Tallenna syötetty API-avain</string>
     <string name="settings_remove_key">Poista tallennettu avain</string>
@@ -174,13 +256,8 @@
     <string name="settings_cancel_cd">Peruuta muuttamatta avainta</string>
     <string name="settings_show">Näytä</string>
     <string name="settings_hide">Piilota</string>
-    <string name="settings_show_cd">Näytä API-avain</string>
-    <string name="settings_hide_cd">Piilota API-avain</string>
-    <string name="cd_row">%1$s. %2$s. </string>
-    <string name="cd_selected">Valittu.</string>
-    <string name="cd_not_selected">Ei valittu. Kaksoisnapauta valitaksesi.</string>
-    <string name="cd_currently_on">Tällä hetkellä päällä.</string>
-    <string name="cd_currently_off">Tällä hetkellä pois.</string>
+    <string name="settings_show_cd">Näytä syötetty avain kokonaan</string>
+    <string name="settings_hide_cd">Lyhennä syötetty avain</string>
     <string name="rate_normal">Normaali</string>
     <string name="rate_fast">Nopea</string>
     <string name="rate_very_fast">Erittäin nopea</string>
@@ -195,24 +272,26 @@
     <string name="picker_filter_hint">Kirjoita suodattaaksesi…</string>
     <string name="picker_search_cd">Hae esineitä. Kirjoita esineen nimi suodattaaksesi luetteloa.</string>
     <string name="picker_cancel_cd">Peruuta ja palaa takaisin</string>
-    <string name="stt_dialog_title">Parempi puheentunnistus?</string>
-    <string name="stt_download_now">Lataa nyt</string>
-    <string name="stt_download_now_cd">Lataa puhemallit nyt. Noin 154 megatavua.</string>
+    <string name="stt_models_body">Puhemallit ovat tällä laitteella ja vievät %1$s. Puhe tunnistetaan puhelimessa, myös ilman verkkoyhteyttä.</string>
+    <string name="stt_models_delete_confirm">Poistetaanko puhemallit ja vapautetaan %1$s? Puheentunnistus palaa puhelimen omaan moottoriin, kunnes lataat mallit uudelleen asetuksista.</string>
+    <string name="stt_models_delete">Poista mallit</string>
+    <string name="stt_models_delete_cd">Poista puhemallit. Pyytää ensin vahvistuksen.</string>
+    <string name="stt_models_delete_yes">Kyllä, poista</string>
+    <string name="stt_models_delete_yes_cd">Kyllä, poista puhemallit</string>
+    <string name="stt_models_keep">Säilytä</string>
+    <string name="stt_models_keep_cd">Säilytä puhemallit ja sulje</string>
+    <string name="stt_models_close_cd">Sulje ja palaa asetuksiin</string>
     <string name="stt_later">Myöhemmin</string>
     <string name="stt_later_cd">Myöhemmin. Kysytään uudelleen, kun sovellus avataan seuraavan kerran.</string>
     <string name="stt_never">Ei koskaan</string>
     <string name="stt_never_cd">Ei koskaan. Älä kysy uudelleen. Voit silti ladata mallit asetuksista.</string>
-    <string name="stt_dialog_body">Ladataanko puhemallit puheentunnistuksen parantamiseksi? Puhe tunnistetaan tämän jälkeen kokonaan laitteellasi, myös verkkoyhteydettä. Kertalataus, noin 154 megatavua — Wi-Fi-yhteyttä suositellaan.</string>
     <string name="objects_shown_in_picker">Näkyy valitsimessa</string>
     <string name="objects_hidden_from_picker">Piilotettu valitsimesta</string>
-    <string name="waiting_camera_permission">Odotetaan kameran käyttöoikeutta…</string>
     <!-- Spoken descriptions for the on-screen controls. -->
     <string name="cd_playback_back">Taaksepäin. Napautus siirtyy kaksikymmentä merkkiä taaksepäin. Pidä pohjassa sekunnin ajan lukeaksesi hitaammin.</string>
     <string name="cd_playback_pause">Tauko. Napauta keskeyttääksesi lukemisen. Pidä pohjassa sekunnin ajan aloittaaksesi alusta.</string>
     <string name="cd_playback_play">Toista. Napauta aloittaaksesi tai jatkaaksesi lukemista. Pidä pohjassa sekunnin ajan aloittaaksesi alusta.</string>
     <string name="cd_playback_forward">Eteenpäin. Napautus siirtyy kaksikymmentä merkkiä eteenpäin. Pidä pohjassa sekunnin ajan lukeaksesi nopeammin.</string>
-    <string name="cd_colour_focus_frame">Värin tunnistuksen tähtäyskehys. Suuntaa näytön keskikohta väriin.</string>
-    <string name="cd_browse_objects">Selaa esinelistaa. Napauta valitaksesi etsittävän esineen.</string>
     <!-- Spoken results of the light and colour scanners. -->
     <string name="light_unknown">Tuntematon</string>
     <string name="light_very_dark">Hyvin pimeä</string>
@@ -248,6 +327,10 @@
     <string name="model_smart_label">Tehokkain</string>
     <string name="model_smart_desc">Paras monimutkaisiin kysymyksiin. Hitaampi ja kalliimpi</string>
     <!-- OpenAI transport errors, spoken to the user. -->
+    <string name="error_api_off">Tekoälyvastaukset ovat pois päältä. Ota Käytä API:a käyttöön asetuksissa tai asenna laitteen oma malli.</string>
+    <string name="error_too_long">Anteeksi, viestisi oli liian pitkä. Voisitko tiivistää sen?</string>
+    <string name="error_chat_full">Tämä keskustelu on saavuttanut enimmäispituutensa. Voit tallentaa sen kohdasta Lisää, Tallenna. Ota uusi kuva aloittaaksesi uuden keskustelun.</string>
+    <string name="error_local_failed">Laitteen oma malli ei pystynyt vastaamaan. Yritä uudelleen.</string>
     <string name="error_no_api_key">API-avainta ei ole asetettu. Lisää OpenAI API-avaimesi asetuksissa käyttääksesi tekoälytoimintoja.</string>
     <string name="error_key_rejected">OpenAI API-avaimesi hylättiin. Tarkista se asetuksista.</string>
     <string name="error_rate_limited">OpenAI-käyttöraja tai kulukatto on saavutettu. Yritä myöhemmin uudelleen.</string>
@@ -255,13 +338,25 @@
     <string name="spoken_image_processing_error">Kuvan käsittelyssä tapahtui virhe. Yritä uudelleen.</string>
     <string name="spoken_ask_about_image">Esitä kysymys kuvasta.</string>
     <string name="spoken_session_expired">Istunto vanheni suorituskyvyn vuoksi. Skannaa uudelleen.</string>
+    <string name="spoken_taking_picture">Otan kuvan.</string>
+    <string name="spoken_no_text_visible">Tekstiä ei näy.</string>
+    <string name="spoken_looking_for_text">Etsitään tekstiä.</string>
+    <string name="cue_left">Vasemmalle</string>
+    <string name="cue_right">Oikealle</string>
+    <string name="cue_up">Ylös</string>
+    <string name="cue_down">Alas</string>
+    <string name="cue_closer">Lähemmäs</string>
+    <string name="cue_further">Kauemmas</string>
+    <string name="cue_centre">Keskellä</string>
+    <string name="cue_hold_steady">Pidä paikallaan</string>
     <string name="spoken_capture_failed">Kuvan ottaminen epäonnistui. Yritä uudelleen.</string>
     <string name="spoken_offline">Laitteesi näyttää olevan offline-tilassa. Tekoälytoiminnot tarvitsevat verkkoyhteyden.</string>
     <!-- Language row in Settings. -->
     <string name="settings_section_language">Kieli</string>
     <string name="settings_language">Sovelluksen kieli</string>
     <string name="settings_language_desc">Nyt %1$s. Napauta vaihtaaksesi</string>
-    <string name="settings_language_cd">Sovelluksen kieli, nyt %1$s. Kaksoisnapauta vaihtaaksesi kieleen %2$s</string>
+    <string name="settings_language_cd">Sovelluksen kieli, nyt %1$s</string>
+    <string name="settings_language_action">vaihda kieleen %1$s</string>
     <string name="language_switch_title">Vaihdetaanko kieli?</string>
     <string name="language_switch_body">Sight Buddy käynnistyy uudelleen kielellä %1$s.</string>
     <string name="language_switch_confirm">Käynnistä uudelleen</string>
@@ -273,6 +368,16 @@
     <string name="settings_loop_carousel_desc">Näytä molemmat nuolet joka toiminnossa. Viimeisen jälkeen palataan ensimmäiseen</string>
     <!-- Find objects feedback style. -->
     <string name="settings_pitch_feedback">Löydä esineitä: äänenkorkeuspalaute</string>
+    <string name="settings_text_scan_guidance">Tekstin skannausopastus</string>
+    <string name="settings_text_scan_guidance_desc">Tekstikeskustelussa Ota kuva -painike ohjaa kameran tekstin kohdalle ennen kuvan ottamista. Pois päältä kuva otetaan heti</string>
+    <string name="settings_live_text">Live-teksti</string>
+    <string name="settings_live_text_desc">Tekstikeskustelussa näkyvä teksti näytetään kameran päällä ja luetaan ääneen, kunnes keskustelu alkaa. Vaatii esikatselun</string>
+    <string name="settings_start_features_muted">Aloita toiminnot mykistettyinä</string>
+    <string name="settings_start_features_muted_desc">Mykistä-painikkeelliset toiminnot alkavat mykistettyinä; paina Mykistä kuullaksesi ne</string>
+    <string name="settings_camera_preview">Kameran esikatselu</string>
+    <string name="settings_camera_preview_desc">Näytä kamera jokaisen toiminnon taustalla. Esikatselu-painike tekee saman</string>
+    <string name="settings_haptic_feedback">Värinäpalaute</string>
+    <string name="settings_haptic_feedback_desc">Suosi värinää ääniefektien sijaan</string>
     <string name="settings_pitch_feedback_desc">Yhtäjaksoinen ääni, joka nousee kun esine lähestyy kuvan keskustaa, suuntaäänien sijaan</string>
     <!-- OpenAI speech recognition. -->
     <string name="settings_cloud_stt">OpenAI-puheentunnistus</string>

@@ -20,35 +20,39 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.sightbuddy.R
-import com.example.sightbuddy.ui.theme.actionButtonBackground
-import com.example.sightbuddy.ui.theme.actionButtonText
+import com.example.sightbuddy.ui.buttonSemantics
+import com.example.sightbuddy.ui.theme.Brand
 
 @Composable
 fun TermsAcceptanceOverlay(
     darkTheme: Boolean,
-    highContrast: Boolean,
-    whiteMode: Boolean,
     onTermsOfUse: () -> Unit,
     onPrivacyPolicy: () -> Unit,
     onAccept: () -> Unit,
+    /** Accept pressed before a language was chosen: the caller says so. */
+    onAcceptWithoutLanguage: () -> Unit = {},
     modifier: Modifier = Modifier,
     languageChosen: Boolean = true,
     currentLanguage: String = "en",
     onSelectLanguage: (String) -> Unit = {},
 ) {
-    val bg = if (darkTheme) Color(0xFF121212) else Color.White
-    val textColor = if (darkTheme) Color.White else Color(0xFF1A1A1A)
-    val secondaryBg = if (darkTheme) Color(0xFF424242) else Color(0xFFE0E0E0)
+    val brand = com.example.sightbuddy.ui.theme.brandPalette(darkTheme)
+    // Shown once, on a fresh install, before any setting can be changed, so high
+    // contrast is never on here: brand colours only.
+    val bg = brand.wall
+    val textColor = brand.ink
+    val secondaryBg = brand.surface
 
     val prompt = stringResource(R.string.terms_prompt)
-    val promptCd = stringResource(R.string.terms_prompt_cd)
     val termsOfUseLabel = stringResource(R.string.terms_of_use)
     val termsOfUseCd = stringResource(R.string.terms_of_use_cd)
     val privacyPolicyLabel = stringResource(R.string.terms_privacy_policy)
@@ -59,8 +63,8 @@ fun TermsAcceptanceOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(bg)
-            .semantics { contentDescription = promptCd },
+            // The background says nothing: the prompt is read where it is shown.
+            .background(bg),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -77,18 +81,20 @@ fun TermsAcceptanceOverlay(
                 color = textColor,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
+                // TalkBack hears this as the window's title as the screen opens,
+                // so here it is silent, and focus goes to the languages first.
+                modifier = Modifier.fillMaxWidth().clearAndSetSemantics { },
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Row(modifier = Modifier.fillMaxWidth()) {
+            // A pair of radio buttons: TalkBack says which is selected, and
+            // "Selected" as soon as one is tapped.
+            Row(modifier = Modifier.fillMaxWidth().selectableGroup()) {
                 LanguageChoiceButton(
                     label = stringResource(R.string.language_english),
                     contentDescription = stringResource(R.string.language_english_cd),
                     selected = languageChosen && currentLanguage == "en",
-                    highContrast = highContrast,
-                    whiteMode = whiteMode,
                     fallbackBg = secondaryBg,
                     fallbackText = textColor,
                     onClick = { onSelectLanguage("en") },
@@ -99,8 +105,6 @@ fun TermsAcceptanceOverlay(
                     label = stringResource(R.string.language_finnish),
                     contentDescription = stringResource(R.string.language_finnish_cd),
                     selected = languageChosen && currentLanguage == "fi",
-                    highContrast = highContrast,
-                    whiteMode = whiteMode,
                     fallbackBg = secondaryBg,
                     fallbackText = textColor,
                     onClick = { onSelectLanguage("fi") },
@@ -145,11 +149,11 @@ fun TermsAcceptanceOverlay(
             // Dimmed and inert until a language has been chosen.
             TermsActionButton(
                 label = acceptLabel,
-                background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA))
+                background = Brand.Mint
                     .let { if (languageChosen) it else it.copy(alpha = 0.4f) },
-                textColor = actionButtonText(highContrast, whiteMode, Color.Black),
+                textColor = Color.Black,
                 contentDescription = acceptCd,
-                onClick = { if (languageChosen) onAccept() },
+                onClick = { if (languageChosen) onAccept() else onAcceptWithoutLanguage() },
             )
         }
     }
@@ -160,8 +164,6 @@ private fun LanguageChoiceButton(
     label: String,
     contentDescription: String,
     selected: Boolean,
-    highContrast: Boolean,
-    whiteMode: Boolean,
     fallbackBg: Color,
     fallbackText: Color,
     onClick: () -> Unit,
@@ -172,20 +174,19 @@ private fun LanguageChoiceButton(
             .clip(RoundedCornerShape(12.dp))
             .background(
                 if (selected) {
-                    actionButtonBackground(highContrast, whiteMode, Color(0xFF3DBAD0))
+                    Brand.Sky
                 } else {
                     fallbackBg
                 }
             )
-            .clickable(onClick = onClick)
-            .padding(vertical = 18.dp)
-            .semantics { this.contentDescription = contentDescription },
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .padding(vertical = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
             color = if (selected) {
-                actionButtonText(highContrast, whiteMode, Color.White)
+                Color.Black
             } else {
                 fallbackText
             },
@@ -211,7 +212,7 @@ private fun TermsActionButton(
             .background(background)
             .clickable(onClick = onClick)
             .padding(horizontal = 24.dp, vertical = 20.dp)
-            .semantics { this.contentDescription = contentDescription },
+            .buttonSemantics(label),
         contentAlignment = Alignment.Center,
     ) {
         Text(

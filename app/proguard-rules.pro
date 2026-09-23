@@ -33,8 +33,26 @@
 -keep class com.k2fsa.sherpa.onnx.** { *; }
 -dontwarn com.k2fsa.sherpa.onnx.**
 
+# ── LiteRT-LM (on-device Gemma) ──────────────────────────────────────────────
+# The AAR ships no consumer rules, and its JNI code reads these classes by name
+# (SamplerConfig.getTopK/getTemperature, InputData$Text.getText, the message
+# callbacks). R8 otherwise strips the getters Kotlin never calls, and the first
+# on-device answer fails in release builds only.
+-keep class com.google.ai.edge.litertlm.** { *; }
+-dontwarn com.google.ai.edge.litertlm.**
+
 # ── JSON parsing (org.json is platform API, but keep safety) ─────────────────
 -keep class org.json.** { *; }
 
 # ── App transport class (direct OpenAI HTTP client; keep for release parity) ───
 -keep class com.example.sightbuddy.core.OpenAiTransport { *; }
+
+# ── Logging ─────────────────────────────────────────────────────────────────
+# Release builds keep warnings and errors only. Anything carrying user content
+# goes through PrivateLog (debug builds only); this is the backstop for a stray
+# Log.i that slips through.
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}

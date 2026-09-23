@@ -1,9 +1,12 @@
 package com.example.sightbuddy.ui.screens
 
+import com.example.sightbuddy.ui.theme.currentBrand
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -25,6 +28,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -33,10 +48,30 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.sightbuddy.R
+import com.example.sightbuddy.ui.DialogWindowTitle
+import com.example.sightbuddy.ui.buttonSemantics
 import com.example.sightbuddy.core.SettingsManager
 import com.example.sightbuddy.ui.theme.actionButtonBackground
 import com.example.sightbuddy.ui.theme.actionButtonText
 import kotlinx.coroutines.launch
+import androidx.compose.ui.semantics.traversalIndex
+import androidx.compose.ui.semantics.isTraversalGroup
+import android.content.ClipData
+import android.view.View
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
+import com.example.sightbuddy.core.ApiKeyStore
 
 @Composable
 fun SettingsScreen(
@@ -45,13 +80,14 @@ fun SettingsScreen(
     whiteMode: Boolean,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
-    onDeleteData: suspend () -> Boolean = { false },
     apiKeyPresent: Boolean = false,
+    savedKeyPreview: String = "",
     onSaveApiKey: (String) -> Unit = {},
     onSpeechRateCycle: () -> Unit = {},
     sttModelsReady: Boolean = false,
     sttDownloadPercent: Int? = null,
     onRequestSttDownload: () -> Unit = {},
+    onManageSttModels: () -> Unit = {},
     cloudSttOffered: Boolean = false,
     onRequestCloudStt: () -> Unit = {},
     currentLanguageName: String = "",
@@ -60,6 +96,19 @@ fun SettingsScreen(
     onFeatureHideBlocked: () -> Unit = {},
     onCrashReportingChange: (Boolean) -> Unit = {},
     whisperSupported: Boolean = true,
+    gemmaInstalled: Boolean = false,
+    gemmaDownloadPercent: Int? = null,
+    onManageGemma: () -> Unit = {},
+    onRequestGemmaDownload: () -> Unit = {},
+    sttChoiceLabel: String = "",
+    setupOffered: Boolean = false,
+    setupDescription: String = "",
+    onRequestSetup: () -> Unit = {},
+    gemmaDownloadable: Boolean = true,
+    gemmaRecommended: Boolean = true,
+    whisperRecommended: Boolean = true,
+    gemmaPartialPercent: Int = 0,
+    onSttChoiceCycle: () -> Unit = {},
     onLeaveFeedback: () -> Unit = {},
 ) {
     val textPreview by settingsManager.textPreviewEnabled.collectAsState()
@@ -70,44 +119,52 @@ fun SettingsScreen(
     val discover by settingsManager.discoverEnabled.collectAsState()
     val find by settingsManager.findEnabled.collectAsState()
     val highContrastMode by settingsManager.highContrastEnabled.collectAsState()
-    val buttonNav by settingsManager.useButtonNav.collectAsState()
     val holdToSpeak by settingsManager.holdToSpeak.collectAsState()
     val autoCapture by settingsManager.autoCaptureEnabled.collectAsState()
+    val textScanGuidance by settingsManager.textScanGuidance.collectAsState()
+    val liveText by settingsManager.liveText.collectAsState()
     val llmModel by settingsManager.llmModel.collectAsState()
     val crashReporting by settingsManager.crashReportingEnabled.collectAsState()
     val ttsRate by settingsManager.ttsSpeechRate.collectAsState()
     val loopCarousel by settingsManager.loopCarousel.collectAsState()
     val pitchFeedback by settingsManager.pitchFeedback.collectAsState()
+    val hapticFeedback by settingsManager.hapticFeedback.collectAsState()
+    val cameraPreview by settingsManager.cameraPreview.collectAsState()
+    val startFeaturesMuted by settingsManager.startFeaturesMuted.collectAsState()
     val cloudStt by settingsManager.cloudStt.collectAsState()
-    val featureActivationAnnouncements by settingsManager.featureActivationAnnouncementsEnabled.collectAsState()
+    val useApi by settingsManager.useApi.collectAsState()
+    val useLocalChat by settingsManager.useLocalChat.collectAsState()
     var showCocoObjectSettings by remember { mutableStateOf(false) }
+    var showLicences by remember { mutableStateOf(false) }
+    // Advanced settings, folded away until asked for.
+    var advancedOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var showApiKeyDialog by remember { mutableStateOf(false) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    var isDeleting by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val closeSettingsCd = stringResource(R.string.cd_close_settings)
-    val deleteDataLabel = stringResource(R.string.settings_delete_data)
-    val deleteDataDescription = stringResource(R.string.settings_delete_data_description)
-    val deleteDataCd = stringResource(R.string.settings_delete_data_cd)
+    val context = LocalContext.current
+    val backLabel = stringResource(R.string.btn_back)
 
-    val defaultTextColor = MaterialTheme.colorScheme.onSurface
+    val brand = currentBrand()
     val textColor = if (highContrast) {
         if (whiteMode) Color.Black else Color.White
     } else {
-        defaultTextColor
+        brand.ink
     }
     val labelColor = if (highContrast) {
         if (whiteMode) Color.Black else Color.White.copy(alpha = 0.85f)
     } else {
-        defaultTextColor
+        brand.ink
     }
+    // Section headings in the owl's blue.
+    val headerColor = if (highContrast) textColor else brand.accent
 
     // System back closes the current settings view instead of exiting the app:
     // the object sub-list returns to the settings list; the settings list closes.
-    androidx.activity.compose.BackHandler {
-        if (showCocoObjectSettings) showCocoObjectSettings = false else onBack()
+    BackHandler {
+        when {
+            showCocoObjectSettings -> showCocoObjectSettings = false
+            showLicences -> showLicences = false
+            else -> onBack()
+        }
     }
 
     if (showCocoObjectSettings) {
@@ -117,6 +174,19 @@ fun SettingsScreen(
             whiteMode = whiteMode,
             modifier = modifier,
             onBack = { showCocoObjectSettings = false },
+        )
+        return
+    }
+
+    if (showLicences) {
+        LicencesScreen(
+            textColor = textColor,
+            labelColor = labelColor,
+            headerColor = headerColor,
+            highContrast = highContrast,
+            whiteMode = whiteMode,
+            onBack = { showLicences = false },
+            modifier = modifier,
         )
         return
     }
@@ -131,354 +201,535 @@ fun SettingsScreen(
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = stringResource(R.string.settings_title),
-                style = MaterialTheme.typography.displayMedium,
-                color = textColor,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
+            // No page title: TalkBack already announces Settings as it opens, so a
+            // heading here was the same word twice. The space keeps the first row
+            // clear of the Back button.
+            Spacer(modifier = Modifier.height(72.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
+            // Every section says how many settings it holds, and every row its
+            // place in the section ("2 of 5"): TalkBack users cannot see where a
+            // list ends. Rows are listed first so the count is known.
 
-            // First row: the language everything else is presented in.
-            SectionHeader(stringResource(R.string.settings_section_language), textColor)
-
-            SettingsNavRow(
-                label = stringResource(R.string.settings_language),
-                description = stringResource(R.string.settings_language_desc, currentLanguageName),
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode,
-                onClick = onSwitchLanguage,
-                contentDescription = stringResource(
-                    R.string.settings_language_cd,
-                    currentLanguageName,
-                    otherLanguageName,
-                ),
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            SectionHeader(stringResource(R.string.settings_section_cloud_ai), textColor)
-
-            SettingsNavRow(
-                label = stringResource(R.string.settings_api_key),
-                description = stringResource(
-                    if (apiKeyPresent) R.string.settings_api_key_desc_set
-                    else R.string.settings_api_key_desc_unset
-                ),
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode,
-                onClick = { showApiKeyDialog = true },
-                contentDescription = stringResource(
-                    if (apiKeyPresent) R.string.settings_api_key_cd_set
-                    else R.string.settings_api_key_cd_unset
-                ),
-            )
-
-            // Model picker — one selected at a time. Costs go to the user's own key.
-            if (apiKeyPresent) {
-                SettingsManager.LLM_MODEL_OPTIONS.forEach { option ->
-                    SettingsChoiceRow(
-                        label = stringResource(option.labelRes),
-                        description = stringResource(option.descriptionRes),
-                        selected = llmModel == option.id,
-                        labelColor = labelColor,
-                        highContrast = highContrast,
-                        whiteMode = whiteMode,
-                        onClick = { settingsManager.setLlmModel(option.id) },
-                    )
-                }
-            }
-
-            // Directly under the model picker: it is the same decision, about which
-            // OpenAI service the user's key pays for.
-            if (apiKeyPresent && cloudSttOffered) {
-                SettingsToggle(
-                    label = stringResource(R.string.settings_cloud_stt),
-                    description = stringResource(R.string.settings_cloud_stt_desc),
-                    checked = cloudStt,
-                    onCheckedChange = { wanted ->
-                        // Turning it on always goes through the dialog; turning it off
-                        // is immediate, because nothing needs consenting to.
-                        if (wanted) onRequestCloudStt() else settingsManager.setCloudStt(false)
-                    },
-                    labelColor = labelColor,
-                    highContrast = highContrast,
-                    whiteMode = whiteMode
-                )
-            }
-
-            // Hidden entirely in languages the on-device model cannot serve: the
-            // bundled Whisper build is base.en, so non-English users stay on the
-            // system recogniser and are never offered a 154 MB download.
-            if (whisperSupported) {
-                Spacer(modifier = Modifier.height(24.dp))
-
-                SectionHeader(stringResource(R.string.settings_section_voice), textColor)
-
+            // First: the language everything else is presented in.
+            SettingsSection(stringResource(R.string.settings_section_language), headerColor, rowsOf {
                 SettingsNavRow(
-                    label = stringResource(R.string.settings_stt_models),
-                    description = when {
-                        sttModelsReady -> stringResource(R.string.settings_stt_downloaded)
-                        sttDownloadPercent != null ->
-                            stringResource(R.string.settings_stt_downloading, sttDownloadPercent)
-                        else -> stringResource(R.string.settings_stt_not_downloaded)
-                    },
+                    label = stringResource(R.string.settings_language),
+                    description = stringResource(R.string.settings_language_desc, currentLanguageName),
                     labelColor = labelColor,
                     highContrast = highContrast,
                     whiteMode = whiteMode,
-                    onClick = {
-                        if (!sttModelsReady && sttDownloadPercent == null) onRequestSttDownload()
-                    },
+                    onClick = onSwitchLanguage,
+                    contentDescription = stringResource(R.string.settings_language_cd, currentLanguageName),
+                    action = stringResource(R.string.settings_language_action, otherLanguageName),
                 )
+            })
+
+            // Model library: the setup offer until a model is installed, then the
+            // installed models and how they are used. Downloads of single models are
+            // under Advanced.
+            val libraryRows = buildList<SettingRow> {
+                if (setupOffered) add {
+                    SettingsNavRow(
+                        label = stringResource(R.string.settings_setup),
+                        description = setupDescription,
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode,
+                        onClick = onRequestSetup,
+                    )
+                }
+                // The models recommended for this phone, downloaded or not, and any
+                // other model once it is on the device.
+                if (sttModelsReady || sttDownloadPercent != null || (whisperSupported && whisperRecommended)) add {
+                    SettingsNavRow(
+                        label = stringResource(R.string.settings_stt_models),
+                        description = when {
+                            sttModelsReady -> stringResource(R.string.settings_stt_downloaded)
+                            sttDownloadPercent != null ->
+                                stringResource(R.string.settings_stt_downloading, sttDownloadPercent)
+                            else -> stringResource(R.string.settings_stt_not_downloaded)
+                        },
+                        action = if (!sttModelsReady && sttDownloadPercent == null) {
+                            stringResource(R.string.settings_action_download)
+                        } else null,
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode,
+                        onClick = {
+                            when {
+                                sttModelsReady -> onManageSttModels()
+                                sttDownloadPercent == null -> onRequestSttDownload()
+                            }
+                        },
+                    )
+                }
+                if (gemmaInstalled || gemmaDownloadPercent != null || (gemmaDownloadable && gemmaRecommended)) add {
+                    SettingsNavRow(
+                        label = stringResource(R.string.settings_gemma_model),
+                        description = when {
+                            gemmaInstalled -> stringResource(R.string.settings_gemma_downloaded)
+                            gemmaDownloadPercent != null ->
+                                stringResource(R.string.settings_stt_downloading, gemmaDownloadPercent)
+                            gemmaPartialPercent > 0 ->
+                                stringResource(R.string.settings_gemma_paused, gemmaPartialPercent)
+                            else -> stringResource(R.string.settings_gemma_not_downloaded)
+                        },
+                        action = when {
+                            gemmaInstalled || gemmaDownloadPercent != null -> null
+                            gemmaPartialPercent > 0 -> stringResource(R.string.settings_action_continue_download)
+                            else -> stringResource(R.string.settings_action_download)
+                        },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode,
+                        onClick = {
+                            when {
+                                gemmaInstalled -> onManageGemma()
+                                gemmaDownloadPercent == null -> onRequestGemmaDownload()
+                            }
+                        },
+                    )
+                }
+                // Which recogniser runs, cycled like the speech rate. Only a choice
+                // once a speech model is on the device.
+                if (whisperSupported && (sttModelsReady || gemmaInstalled)) add {
+                    SettingsNavRow(
+                        label = stringResource(R.string.settings_stt_engine),
+                        description = stringResource(R.string.settings_stt_engine_desc, sttChoiceLabel),
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode,
+                        onClick = onSttChoiceCycle,
+                        contentDescription = stringResource(R.string.settings_stt_engine_cd, sttChoiceLabel),
+                        action = stringResource(R.string.settings_cycle_action),
+                    )
+                }
+                if (gemmaInstalled && gemmaDownloadable) add {
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_use_local_chat),
+                        description = stringResource(R.string.settings_use_local_chat_desc),
+                        checked = useLocalChat,
+                        onCheckedChange = { settingsManager.setUseLocalChat(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+            }
+            if (libraryRows.isNotEmpty()) {
+                SettingsSection(stringResource(R.string.settings_section_models), headerColor, libraryRows)
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            SettingsSection(stringResource(R.string.settings_section_features), headerColor, buildList<SettingRow> {
+                if (apiKeyPresent) add {
+                    SettingsToggle(
+                        label = stringResource(R.string.help_title_image_chat),
+                        description = stringResource(
+                            R.string.settings_show_in_carousel,
+                            stringResource(R.string.help_title_image_chat),
+                        ),
+                        checked = imageChat,
+                        onCheckedChange = { settingsManager.setImageChat(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.help_title_text_chat),
+                        description = stringResource(
+                            R.string.settings_show_in_carousel,
+                            stringResource(R.string.help_title_text_chat),
+                        ),
+                        checked = textChat,
+                        onCheckedChange = { if (!settingsManager.setTextChat(it)) onFeatureHideBlocked() },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.help_title_discover_objects),
+                        description = stringResource(
+                            R.string.settings_show_in_carousel,
+                            stringResource(R.string.help_title_discover_objects),
+                        ),
+                        checked = discover,
+                        onCheckedChange = { if (!settingsManager.setDiscover(it)) onFeatureHideBlocked() },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.help_title_find_objects),
+                        description = stringResource(
+                            R.string.settings_show_in_carousel,
+                            stringResource(R.string.help_title_find_objects),
+                        ),
+                        checked = find,
+                        onCheckedChange = { if (!settingsManager.setFind(it)) onFeatureHideBlocked() },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.help_title_scan_light),
+                        description = stringResource(
+                            R.string.settings_show_in_carousel,
+                            stringResource(R.string.help_title_scan_light),
+                        ),
+                        checked = scanLight,
+                        onCheckedChange = { if (!settingsManager.setScanLight(it)) onFeatureHideBlocked() },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.help_title_scan_colour),
+                        description = stringResource(
+                            R.string.settings_show_in_carousel,
+                            stringResource(R.string.help_title_scan_colour),
+                        ),
+                        checked = scanColour,
+                        onCheckedChange = { if (!settingsManager.setScanColour(it)) onFeatureHideBlocked() },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+            })
 
-            SectionHeader(stringResource(R.string.settings_section_features), textColor)
+            SettingsSection(stringResource(R.string.settings_section_prefs), headerColor, buildList<SettingRow> {
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_text_scan_guidance),
+                        description = stringResource(R.string.settings_text_scan_guidance_desc),
+                        checked = textScanGuidance,
+                        onCheckedChange = { settingsManager.setTextScanGuidance(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_live_text),
+                        description = stringResource(R.string.settings_live_text_desc),
+                        checked = liveText,
+                        onCheckedChange = { settingsManager.setLiveText(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                if (apiKeyPresent) {
+                    add {
+                        SettingsToggle(
+                            label = stringResource(R.string.settings_auto_capture),
+                            description = stringResource(R.string.settings_auto_capture_desc),
+                            checked = autoCapture,
+                            onCheckedChange = { settingsManager.setAutoCapture(it) },
+                            labelColor = labelColor,
+                            highContrast = highContrast,
+                            whiteMode = whiteMode
+                        )
+                    }
+                    add {
+                        SettingsToggle(
+                            label = stringResource(R.string.settings_text_preview),
+                            description = stringResource(R.string.settings_text_preview_desc),
+                            // The stored setting is the opposite, "read the raw text
+                            // first", so the switch shows summarization as on only
+                            // when it really is. Off by default.
+                            checked = !textPreview,
+                            onCheckedChange = { settingsManager.setTextPreview(!it) },
+                            labelColor = labelColor,
+                            highContrast = highContrast,
+                            whiteMode = whiteMode
+                        )
+                    }
+                }
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_camera_preview),
+                        description = stringResource(R.string.settings_camera_preview_desc),
+                        checked = cameraPreview,
+                        onCheckedChange = { settingsManager.setCameraPreview(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_high_contrast),
+                        description = stringResource(R.string.settings_high_contrast_desc),
+                        checked = highContrastMode,
+                        onCheckedChange = { settingsManager.setHighContrast(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                if (highContrast) add {
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_white_mode),
+                        description = stringResource(R.string.settings_white_mode_desc),
+                        checked = whiteMode,
+                        onCheckedChange = { settingsManager.setWhiteMode(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_pitch_feedback),
+                        description = stringResource(R.string.settings_pitch_feedback_desc),
+                        checked = pitchFeedback,
+                        onCheckedChange = { settingsManager.setPitchFeedback(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_haptic_feedback),
+                        description = stringResource(R.string.settings_haptic_feedback_desc),
+                        checked = hapticFeedback,
+                        onCheckedChange = { settingsManager.setHapticFeedback(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_start_features_muted),
+                        description = stringResource(R.string.settings_start_features_muted_desc),
+                        checked = startFeaturesMuted,
+                        onCheckedChange = { settingsManager.setStartFeaturesMuted(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_loop_carousel),
+                        description = stringResource(R.string.settings_loop_carousel_desc),
+                        checked = loopCarousel,
+                        onCheckedChange = { settingsManager.setLoopCarousel(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                // Withdrawn; see HOLD_TO_SPEAK_ENABLED in MainActivity.
+                if (false) add {
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_hold_to_speak),
+                        description = stringResource(R.string.settings_hold_to_speak_desc),
+                        checked = holdToSpeak,
+                        // Nothing to do with the voice models: this only changes how the
+                        // Ask button behaves, so it never offers a download.
+                        onCheckedChange = { settingsManager.setHoldToSpeak(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    SettingsNavRow(
+                        label = stringResource(R.string.settings_speech_rate),
+                        description = stringResource(
+                            R.string.settings_speech_rate_desc,
+                            SettingsManager.ttsRateLabel(context, ttsRate),
+                        ),
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode,
+                        onClick = { onSpeechRateCycle() },
+                        contentDescription = stringResource(
+                            R.string.settings_speech_rate_cd,
+                            SettingsManager.ttsRateLabel(context, ttsRate),
+                        ),
+                        action = stringResource(R.string.settings_cycle_action),
+                    )
+                }
+                add {
+                    SettingsNavRow(
+                        label = stringResource(R.string.settings_object_list),
+                        description = stringResource(R.string.settings_object_list_desc),
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode,
+                        onClick = { showCocoObjectSettings = true },
+                    )
+                }
+            })
 
-            if (apiKeyPresent) {
-                SettingsToggle(
-                    label = stringResource(R.string.help_title_image_chat),
-                    description = stringResource(
-                        R.string.settings_show_in_carousel,
-                        stringResource(R.string.help_title_image_chat),
-                    ),
-                    checked = imageChat,
-                    onCheckedChange = { settingsManager.setImageChat(it) },
+            SettingsSection(stringResource(R.string.settings_section_privacy), headerColor, buildList<SettingRow> {
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_crash_reports),
+                        description = stringResource(R.string.settings_crash_reports_desc),
+                        checked = crashReporting,
+                        onCheckedChange = {
+                            settingsManager.setCrashReporting(it)
+                            onCrashReportingChange(it)
+                        },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    SettingsNavRow(
+                        label = stringResource(R.string.settings_licences),
+                        description = stringResource(R.string.settings_licences_desc),
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode,
+                        onClick = { showLicences = true },
+                    )
+                }
+            })
+
+            // Advanced: one row that folds the rest out, in place. Inside for now:
+            // OpenAI, which most people never need to open.
+            SettingsSection(stringResource(R.string.settings_section_advanced), headerColor, rowsOf {
+                SettingsExpandRow(
+                    label = stringResource(R.string.settings_advanced),
+                    expanded = advancedOpen,
                     labelColor = labelColor,
-                    highContrast = highContrast,
-                    whiteMode = whiteMode
+                    onToggle = { advancedOpen = !advancedOpen },
                 )
+            })
+
+            if (advancedOpen) {
+                // Any model on any phone, for those who want to try; the setup offer
+                // above is the recommendation.
+                val downloadRows = buildList<SettingRow> {
+                    // Only what the library above does not already offer.
+                    if (whisperSupported && !whisperRecommended && !sttModelsReady && sttDownloadPercent == null) add {
+                        SettingsNavRow(
+                            label = stringResource(R.string.settings_stt_models),
+                            description = stringResource(R.string.settings_stt_not_downloaded),
+                            action = stringResource(R.string.settings_action_download),
+                            labelColor = labelColor,
+                            highContrast = highContrast,
+                            whiteMode = whiteMode,
+                            onClick = onRequestSttDownload,
+                        )
+                    }
+                    if (gemmaDownloadable && !gemmaRecommended && !gemmaInstalled && gemmaDownloadPercent == null) add {
+                        SettingsNavRow(
+                            label = stringResource(R.string.settings_gemma_model),
+                            description = stringResource(
+                                if (gemmaRecommended) R.string.settings_gemma_not_downloaded
+                                else R.string.settings_gemma_not_recommended
+                            ),
+                            action = stringResource(R.string.settings_action_download),
+                            labelColor = labelColor,
+                            highContrast = highContrast,
+                            whiteMode = whiteMode,
+                            onClick = onRequestGemmaDownload,
+                        )
+                    }
+                }
+                if (downloadRows.isNotEmpty()) {
+                    SettingsSection(stringResource(R.string.settings_section_downloads), headerColor, downloadRows)
+                }
+                SettingsSection(stringResource(R.string.settings_section_cloud_ai), headerColor, buildList<SettingRow> {
+                    add {
+                        SettingsNavRow(
+                            label = stringResource(R.string.settings_api_key),
+                            description = stringResource(
+                                if (apiKeyPresent) R.string.settings_api_key_desc_set
+                                else R.string.settings_api_key_desc_unset
+                            ),
+                            labelColor = labelColor,
+                            highContrast = highContrast,
+                            whiteMode = whiteMode,
+                            onClick = { showApiKeyDialog = true },
+                            contentDescription = stringResource(
+                                if (apiKeyPresent) R.string.settings_api_key_cd_set
+                                else R.string.settings_api_key_cd_unset
+                            ),
+                            action = stringResource(
+                                if (apiKeyPresent) R.string.settings_api_key_action_set
+                                else R.string.settings_api_key_action_unset
+                            ),
+                        )
+                    }
+                    // Hidden until there is a key to use. Off means nothing goes to OpenAI.
+                    if (apiKeyPresent) add {
+                        SettingsToggle(
+                            label = stringResource(R.string.settings_use_api),
+                            description = stringResource(R.string.settings_use_api_desc),
+                            checked = useApi,
+                            onCheckedChange = { settingsManager.setUseApi(it) },
+                            labelColor = labelColor,
+                            highContrast = highContrast,
+                            whiteMode = whiteMode
+                        )
+                    }
+                    // Model picker — one selected at a time. Costs go to the user's own key.
+                    if (apiKeyPresent && useApi) {
+                        SettingsManager.LLM_MODEL_OPTIONS.forEach { option ->
+                            add {
+                                SettingsChoiceRow(
+                                    label = stringResource(option.labelRes),
+                                    description = stringResource(option.descriptionRes),
+                                    selected = llmModel == option.id,
+                                    labelColor = labelColor,
+                                    highContrast = highContrast,
+                                    whiteMode = whiteMode,
+                                    onClick = { settingsManager.setLlmModel(option.id) },
+                                )
+                            }
+                        }
+                    }
+                    // Directly under the model picker: it is the same decision, about
+                    // which OpenAI service the user's key pays for.
+                    if (apiKeyPresent && useApi && cloudSttOffered) add {
+                        SettingsToggle(
+                            label = stringResource(R.string.settings_cloud_stt),
+                            description = stringResource(R.string.settings_cloud_stt_desc),
+                            checked = cloudStt,
+                            onCheckedChange = { wanted ->
+                                // Turning it on always goes through the dialog; turning it
+                                // off is immediate, because nothing needs consenting to.
+                                if (wanted) onRequestCloudStt() else settingsManager.setCloudStt(false)
+                            },
+                            labelColor = labelColor,
+                            highContrast = highContrast,
+                            whiteMode = whiteMode
+                        )
+                    }
+                })
             }
 
-            SettingsToggle(
-                label = stringResource(R.string.help_title_text_chat),
-                description = stringResource(
-                        R.string.settings_show_in_carousel,
-                        stringResource(R.string.help_title_text_chat),
-                    ),
-                checked = textChat,
-                onCheckedChange = { if (!settingsManager.setTextChat(it)) onFeatureHideBlocked() },
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode
-            )
-
-            SettingsToggle(
-                label = stringResource(R.string.help_title_discover_objects),
-                description = stringResource(
-                        R.string.settings_show_in_carousel,
-                        stringResource(R.string.help_title_discover_objects),
-                    ),
-                checked = discover,
-                onCheckedChange = { if (!settingsManager.setDiscover(it)) onFeatureHideBlocked() },
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode
-            )
-
-            SettingsToggle(
-                label = stringResource(R.string.help_title_find_objects),
-                description = stringResource(
-                        R.string.settings_show_in_carousel,
-                        stringResource(R.string.help_title_find_objects),
-                    ),
-                checked = find,
-                onCheckedChange = { if (!settingsManager.setFind(it)) onFeatureHideBlocked() },
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode
-            )
-
-            SettingsToggle(
-                label = stringResource(R.string.help_title_scan_light),
-                description = stringResource(
-                        R.string.settings_show_in_carousel,
-                        stringResource(R.string.help_title_scan_light),
-                    ),
-                checked = scanLight,
-                onCheckedChange = { if (!settingsManager.setScanLight(it)) onFeatureHideBlocked() },
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode
-            )
-
-            SettingsToggle(
-                label = stringResource(R.string.help_title_scan_colour),
-                description = stringResource(
-                        R.string.settings_show_in_carousel,
-                        stringResource(R.string.help_title_scan_colour),
-                    ),
-                checked = scanColour,
-                onCheckedChange = { if (!settingsManager.setScanColour(it)) onFeatureHideBlocked() },
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            SectionHeader(stringResource(R.string.settings_section_prefs), textColor)
-
-            if (apiKeyPresent) {
-                SettingsToggle(
-                    label = stringResource(R.string.settings_auto_capture),
-                    description = stringResource(R.string.settings_auto_capture_desc),
-                    checked = autoCapture,
-                    onCheckedChange = { settingsManager.setAutoCapture(it) },
-                    labelColor = labelColor,
-                    highContrast = highContrast,
-                    whiteMode = whiteMode
+            SettingsSection(stringResource(R.string.settings_feedback_section), headerColor, rowsOf {
+                ConfirmDialogButton(
+                    label = stringResource(R.string.settings_feedback_button),
+                    background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
+                    textColor = actionButtonText(highContrast, whiteMode, Color.Black),
+                    contentDescription = stringResource(R.string.settings_feedback_button_cd),
+                    enabled = true,
+                    onClick = onLeaveFeedback,
                 )
-
-                SettingsToggle(
-                    label = stringResource(R.string.settings_text_preview),
-                    description = stringResource(R.string.settings_text_preview_desc),
-                    checked = textPreview,
-                    onCheckedChange = { settingsManager.setTextPreview(it) },
-                    labelColor = labelColor,
-                    highContrast = highContrast,
-                    whiteMode = whiteMode
-                )
-            }
-
-            SettingsToggle(
-                label = stringResource(R.string.settings_high_contrast),
-                description = stringResource(R.string.settings_high_contrast_desc),
-                checked = highContrastMode,
-                onCheckedChange = { settingsManager.setHighContrast(it) },
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode
-            )
-
-            if (highContrast) {
-                SettingsToggle(
-                    label = stringResource(R.string.settings_white_mode),
-                    description = stringResource(R.string.settings_white_mode_desc),
-                    checked = whiteMode,
-                    onCheckedChange = { settingsManager.setWhiteMode(it) },
-                    labelColor = labelColor,
-                    highContrast = highContrast,
-                    whiteMode = whiteMode
-                )
-            }
-
-            SettingsToggle(
-                label = stringResource(R.string.settings_button_nav),
-                description = stringResource(R.string.settings_button_nav_desc),
-                checked = buttonNav,
-                onCheckedChange = { settingsManager.setButtonNav(it) },
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode
-            )
-
-            SettingsToggle(
-                label = stringResource(R.string.settings_pitch_feedback),
-                description = stringResource(R.string.settings_pitch_feedback_desc),
-                checked = pitchFeedback,
-                onCheckedChange = { settingsManager.setPitchFeedback(it) },
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode
-            )
-
-            SettingsToggle(
-                label = stringResource(R.string.settings_loop_carousel),
-                description = stringResource(R.string.settings_loop_carousel_desc),
-                checked = loopCarousel,
-                onCheckedChange = { settingsManager.setLoopCarousel(it) },
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode
-            )
-
-            // Withdrawn; see HOLD_TO_SPEAK_ENABLED in MainActivity.
-            if (false) {
-                SettingsToggle(
-                    label = stringResource(R.string.settings_hold_to_speak),
-                    description = stringResource(R.string.settings_hold_to_speak_desc),
-                    checked = holdToSpeak,
-                    // Nothing to do with the voice models: this only changes how the
-                    // Ask button behaves, so it never offers a download.
-                    onCheckedChange = { settingsManager.setHoldToSpeak(it) },
-                    labelColor = labelColor,
-                    highContrast = highContrast,
-                    whiteMode = whiteMode
-                )
-            }
-
-            SettingsNavRow(
-                label = stringResource(R.string.settings_speech_rate),
-                description = stringResource(
-                    R.string.settings_speech_rate_desc,
-                    SettingsManager.ttsRateLabel(context, ttsRate),
-                ),
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode,
-                onClick = { onSpeechRateCycle() },
-                contentDescription = stringResource(
-                    R.string.settings_speech_rate_cd,
-                    SettingsManager.ttsRateLabel(context, ttsRate),
-                ),
-            )
-
-            SettingsToggle(
-                label = stringResource(R.string.settings_feature_announcements),
-                description = stringResource(R.string.settings_feature_announcements_desc),
-                checked = featureActivationAnnouncements,
-                onCheckedChange = { settingsManager.setFeatureActivationAnnouncements(it) },
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode
-            )
-
-            SettingsNavRow(
-                label = stringResource(R.string.settings_object_list),
-                description = stringResource(R.string.settings_object_list_desc),
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode,
-                onClick = { showCocoObjectSettings = true },
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            SectionHeader(stringResource(R.string.settings_section_privacy), textColor)
-
-            SettingsToggle(
-                label = stringResource(R.string.settings_crash_reports),
-                description = stringResource(R.string.settings_crash_reports_desc),
-                checked = crashReporting,
-                onCheckedChange = {
-                    settingsManager.setCrashReporting(it)
-                    onCrashReportingChange(it)
-                },
-                labelColor = labelColor,
-                highContrast = highContrast,
-                whiteMode = whiteMode
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            SectionHeader(stringResource(R.string.settings_feedback_section), textColor)
-
-            ConfirmDialogButton(
-                label = stringResource(R.string.settings_feedback_button),
-                background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
-                textColor = actionButtonText(highContrast, whiteMode, Color.Black),
-                contentDescription = stringResource(R.string.settings_feedback_button_cd),
-                enabled = true,
-                onClick = onLeaveFeedback,
-            )
+            }, spaceAfter = false)
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -495,6 +746,20 @@ fun SettingsScreen(
                 )
             }
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Last on the page, so feedback and support can ask for it.
+            Text(
+                text = stringResource(
+                    R.string.settings_version,
+                    com.example.sightbuddy.BuildConfig.VERSION_NAME,
+                    com.example.sightbuddy.BuildConfig.VERSION_CODE,
+                ),
+                color = labelColor.copy(alpha = 0.7f),
+                fontSize = 14.sp,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             Spacer(modifier = Modifier.height(32.dp))
         }
 
@@ -503,6 +768,7 @@ fun SettingsScreen(
                 highContrast = highContrast,
                 whiteMode = whiteMode,
                 keyPresent = apiKeyPresent,
+                savedKeyPreview = savedKeyPreview,
                 onSave = { key ->
                     onSaveApiKey(key)
                     showApiKeyDialog = false
@@ -515,58 +781,52 @@ fun SettingsScreen(
             )
         }
 
-        if (showDeleteConfirm) {
-            DeleteDataConfirmDialog(
-                highContrast = highContrast,
-                whiteMode = whiteMode,
-                isDeleting = isDeleting,
-                onConfirm = {
-                    scope.launch {
-                        isDeleting = true
-                        val ok = onDeleteData()
-                        isDeleting = false
-                        showDeleteConfirm = false
-                        if (!ok) {
-                            // Caller handles user feedback (e.g. TTS) on failure.
-                        }
-                    }
-                },
-                onDismiss = {
-                    if (!isDeleting) showDeleteConfirm = false
-                },
-            )
-        }
 
 
-        // Back button — top-right corner
-        Box(
+        // Back: styled and placed like the feature top bar's buttons (four equal
+        // columns), in the column Settings was opened from.
+        Row(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 16.dp, end = 16.dp)
-                .size(64.dp)
-                .background(
-                    when {
-                        highContrast && whiteMode -> Color.Black
-                        highContrast -> Color.White
-                        else -> Color.White.copy(alpha = 0.15f)
-                    },
-                    shape = CircleShape
-                )
-                .clickable { onBack() }
-                .semantics { contentDescription = closeSettingsCd },
-            contentAlignment = Alignment.Center
+                .align(Alignment.TopCenter)
+                // First in TalkBack's order, as it is on screen: drawn after the
+                // list, it came last, so focus left on it (where the button that
+                // opened this screen was) made a swipe right find nothing and a
+                // swipe left walk the list backwards.
+                .semantics { isTraversalGroup = true; traversalIndex = -1f }
+                .fillMaxWidth()
+                .padding(top = 24.dp, start = 16.dp, end = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = stringResource(R.string.btn_back),
-                color = when {
-                    highContrast && whiteMode -> Color.White
-                    highContrast -> Color.Black
-                    else -> textColor
-                },
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
+            repeat(3) { Spacer(modifier = Modifier.weight(1f)) }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(
+                        when {
+                            highContrast && whiteMode -> Color.Black
+                            highContrast -> Color.White
+                            else -> Color.White.copy(alpha = 0.25f)
+                        }
+                    )
+                    .clickable { onBack() }
+                    .buttonSemantics(backLabel),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stringResource(R.string.btn_back),
+                    color = when {
+                        highContrast && whiteMode -> Color.White
+                        highContrast -> Color.Black
+                        else -> textColor
+                    },
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -576,42 +836,66 @@ private fun ApiKeyDialog(
     highContrast: Boolean,
     whiteMode: Boolean,
     keyPresent: Boolean,
+    savedKeyPreview: String,
     onSave: (String) -> Unit,
     onRemove: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val apiInputCd = stringResource(R.string.settings_api_input_cd)
+    val apiInputCd = stringResource(
+        if (keyPresent) R.string.settings_api_input_replace_cd else R.string.settings_api_input_cd
+    )
+    val savedKeyCd = stringResource(R.string.settings_saved_key_cd, savedKeyPreview)
+    val copyLabel = stringResource(R.string.settings_copy_saved_key)
+    val copiedLabel = stringResource(R.string.settings_copied)
+    val copyCd = stringResource(R.string.settings_copy_saved_key_cd)
+    val clipboard = LocalClipboard.current
+    val clipScope = rememberCoroutineScope()
+    var copied by remember { mutableStateOf(false) }
     val showCd = stringResource(R.string.settings_show_cd)
     val hideCd = stringResource(R.string.settings_hide_cd)
     val cardBg = when {
         highContrast && whiteMode -> Color.White
         highContrast -> Color.Black
-        else -> Color.White
+        else -> currentBrand().surface
     }
     val textColor = when {
         highContrast && whiteMode -> Color.Black
         highContrast -> Color.White
-        else -> Color(0xFF1A1A1A)
+        else -> currentBrand().ink
     }
     var keyInput by remember { mutableStateOf("") }
     var keyVisible by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        // Draws under the keyboard so imePadding below can make room for it.
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
+        DialogWindowTitle(stringResource(R.string.settings_api_key))
+        // A key is not a password: keep password managers such as LastPass from
+        // offering to fill or save it.
+        val dialogView = LocalView.current
+        DisposableEffect(dialogView) {
+            dialogView.importantForAutofill =
+                View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+            onDispose { }
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.72f))
+                .systemBarsPadding()
+                .imePadding()
                 .padding(24.dp),
             contentAlignment = Alignment.Center,
         ) {
+            // Scrolls, so the buttons stay reachable while the keyboard is open.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
                     .background(cardBg)
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp, vertical = 28.dp),
             ) {
                 Text(
@@ -627,34 +911,96 @@ private fun ApiKeyDialog(
                     color = textColor.copy(alpha = 0.8f),
                     lineHeight = 20.sp,
                 )
+                // The saved key, shortened, so the user can tell which key it is.
+                // Selectable and copyable; the full key never leaves the store.
+                if (keyPresent && savedKeyPreview.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .semantics(mergeDescendants = true) { contentDescription = savedKeyCd },
+                        ) {
+                            Text(
+                                text = stringResource(R.string.settings_saved_key),
+                                color = textColor.copy(alpha = 0.8f),
+                                fontSize = 14.sp,
+                            )
+                            SelectionContainer {
+                                Text(
+                                    text = savedKeyPreview,
+                                    color = textColor,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                        }
+                        Text(
+                            text = if (copied) copiedLabel else copyLabel,
+                            color = if (highContrast) textColor else currentBrand().accent,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clickable {
+                                    clipScope.launch {
+                                        clipboard.setClipEntry(
+                                            ClipEntry(
+                                                ClipData.newPlainText("key", savedKeyPreview)
+                                            )
+                                        )
+                                    }
+                                    copied = true
+                                }
+                                .padding(12.dp)
+                                .buttonSemantics(if (copied) copiedLabel else copyLabel),
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(16.dp))
-                androidx.compose.material3.OutlinedTextField(
+                OutlinedTextField(
                     value = keyInput,
                     onValueChange = { keyInput = it },
                     modifier = Modifier
                         .fillMaxWidth()
                         .semantics { contentDescription = apiInputCd },
-                    placeholder = { Text("sk-…", color = textColor.copy(alpha = 0.5f)) },
-                    singleLine = true,
-                    visualTransformation = if (keyVisible) {
-                        androidx.compose.ui.text.input.VisualTransformation.None
-                    } else {
-                        androidx.compose.ui.text.input.PasswordVisualTransformation()
-                    },
-                    trailingIcon = {
+                    placeholder = {
                         Text(
-                            text = stringResource(if (keyVisible) R.string.settings_hide else R.string.settings_show),
-                            color = if (highContrast) textColor else Color(0xFF3DBAD0),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .clickable { keyVisible = !keyVisible }
-                                .padding(horizontal = 12.dp)
-                                .semantics {
-                                    contentDescription =
-                                        if (keyVisible) hideCd else showCd
-                                },
+                            stringResource(
+                                if (keyPresent) R.string.settings_api_placeholder_replace
+                                else R.string.settings_api_placeholder
+                            ),
+                            color = textColor.copy(alpha = 0.5f),
                         )
+                    },
+                    singleLine = true,
+                    // Plain text, not a password field: TalkBack said "password", and
+                    // password managers offered to fill and save it.
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Ascii,
+                        autoCorrectEnabled = false,
+                    ),
+                    visualTransformation = if (keyVisible) {
+                        VisualTransformation.None
+                    } else {
+                        KeyPreviewTransformation
+                    },
+                    // Only acts on what is typed here, so it only appears once
+                    // there is something to show; the saved key is shown above.
+                    trailingIcon = if (keyInput.isEmpty()) null else {
+                        {
+                            Text(
+                                text = stringResource(if (keyVisible) R.string.settings_hide else R.string.settings_show),
+                                color = if (highContrast) textColor else currentBrand().accent,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .clickable { keyVisible = !keyVisible }
+                                    .padding(horizontal = 12.dp)
+                                    .buttonSemantics(
+                                        stringResource(if (keyVisible) R.string.settings_hide else R.string.settings_show)
+                                    ),
+                            )
+                        }
                     },
                 )
                 Spacer(modifier = Modifier.height(20.dp))
@@ -691,79 +1037,39 @@ private fun ApiKeyDialog(
     }
 }
 
-@Composable
-private fun DeleteDataConfirmDialog(
-    highContrast: Boolean,
-    whiteMode: Boolean,
-    isDeleting: Boolean,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val scrim = Color.Black.copy(alpha = 0.72f)
-    val cardBg = when {
-        highContrast && whiteMode -> Color.White
-        highContrast -> Color.Black
-        else -> Color.White
-    }
-    val textColor = when {
-        highContrast && whiteMode -> Color.Black
-        highContrast -> Color.White
-        else -> Color(0xFF1A1A1A)
-    }
-    val message = stringResource(R.string.delete_data_confirm_message)
-    val yesLabel = stringResource(R.string.delete_data_confirm_yes)
-    val noLabel = stringResource(R.string.delete_data_confirm_no)
-    val yesCd = stringResource(R.string.delete_data_confirm_yes_cd)
-    val noCd = stringResource(R.string.delete_data_confirm_no_cd)
+/**
+ * Shows an entered key the way the saved one is shown: its start, an ellipsis,
+ * and its last four. Hides most of it without being a password field, and reads
+ * aloud as something short rather than a hundred and sixty bullets.
+ */
+private object KeyPreviewTransformation : VisualTransformation {
+    private const val HEAD = ApiKeyStore.PREVIEW_HEAD
+    private const val TAIL = ApiKeyStore.PREVIEW_TAIL
 
-    Dialog(
-        onDismissRequest = { if (!isDeleting) onDismiss() },
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(scrim)
-                .padding(24.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(cardBg)
-                    .padding(horizontal = 24.dp, vertical = 28.dp),
-            ) {
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = textColor,
-                    lineHeight = 26.sp,
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-                ConfirmDialogButton(
-                    label = yesLabel,
-                    background = actionButtonBackground(highContrast, whiteMode, Color(0xFFC62828)),
-                    textColor = actionButtonText(highContrast, whiteMode, Color.White),
-                    contentDescription = yesCd,
-                    enabled = !isDeleting,
-                    onClick = onConfirm,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                ConfirmDialogButton(
-                    label = noLabel,
-                    background = if (highContrast) {
-                        if (whiteMode) Color(0xFFE0E0E0) else Color(0xFF424242)
-                    } else {
-                        Color(0xFFE0E0E0)
-                    },
-                    textColor = textColor,
-                    contentDescription = noCd,
-                    enabled = !isDeleting,
-                    onClick = onDismiss,
-                )
+    override fun filter(text: AnnotatedString): TransformedText {
+        val raw = text.text
+        if (raw.length <= HEAD + TAIL) {
+            return TransformedText(
+                text, OffsetMapping.Identity
+            )
+        }
+        val shown = ApiKeyStore.preview(raw)
+        val tailStart = raw.length - TAIL
+        val mapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int = when {
+                offset <= HEAD -> offset
+                offset >= tailStart -> HEAD + 1 + (offset - tailStart)
+                else -> HEAD
+            }
+
+            override fun transformedToOriginal(offset: Int): Int = when {
+                offset <= HEAD -> offset
+                else -> tailStart + (offset - HEAD - 1)
             }
         }
+        return TransformedText(
+            AnnotatedString(shown), mapping
+        )
     }
 }
 
@@ -783,7 +1089,7 @@ private fun ConfirmDialogButton(
             .background(if (enabled) background else background.copy(alpha = 0.5f))
             .clickable(enabled = enabled) { onClick() }
             .padding(vertical = 14.dp)
-            .semantics { this.contentDescription = contentDescription },
+            .buttonSemantics(spokenRow(label, LocalRowPosition.current)),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -795,6 +1101,18 @@ private fun ConfirmDialogButton(
     }
 }
 
+/**
+ * What a settings row says, in parts: "Title. Description. 2 of 6". A part's own
+ * full stop is dropped so none is said twice, and blank parts are skipped.
+ */
+private fun spokenRow(vararg parts: String): String =
+    parts.map { it.trim().trimEnd('.') }.filter { it.isNotEmpty() }.joinToString(". ")
+
+/**
+ * A row that opens something or steps a value along. [action] is what a double
+ * tap does, said by TalkBack as its own hint ("Double-tap to switch to Finnish"),
+ * so the row itself says only what it is.
+ */
 @Composable
 private fun SettingsNavRow(
     label: String,
@@ -804,15 +1122,18 @@ private fun SettingsNavRow(
     whiteMode: Boolean,
     onClick: () -> Unit,
     contentDescription: String? = null,
+    action: String? = null,
 ) {
+    val spoken = spokenRow(contentDescription ?: spokenRow(label, description), LocalRowPosition.current)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 10.dp)
-            .clickable { onClick() }
-            .semantics {
-                this.contentDescription = contentDescription
-                    ?: "$label. $description. Double tap to open."
+            .clickable(onClickLabel = action) { onClick() }
+            .clearAndSetSemantics {
+                this.contentDescription = spoken
+                role = Role.Button
+                onClick(label = action) { onClick(); true }
             },
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -859,18 +1180,21 @@ private fun SettingsChoiceRow(
     val markColor = if (highContrast) {
         if (whiteMode) Color.Black else Color.White
     } else {
-        Color(0xFF3DBAD0)
+        currentBrand().accent
     }
-    val rowPrefix = stringResource(R.string.cd_row, label, description)
-    val selectedCd = stringResource(R.string.cd_selected)
-    val notSelectedCd = stringResource(R.string.cd_not_selected)
+    // A radio button: TalkBack says "Selected" or "Not selected" itself, where
+    // the user's TalkBack settings put the state.
+    val spoken = spokenRow(label, description, LocalRowPosition.current)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 10.dp)
-            .clickable { onClick() }
-            .semantics {
-                contentDescription = rowPrefix + (if (selected) selectedCd else notSelectedCd)
+            .selectable(selected = selected, role = Role.RadioButton) { onClick() }
+            .clearAndSetSemantics {
+                contentDescription = spoken
+                role = Role.RadioButton
+                this.selected = selected
+                onClick { onClick(); true }
             },
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -897,8 +1221,38 @@ private fun SettingsChoiceRow(
     }
 }
 
+/** One row of a settings section. */
+private typealias SettingRow = @Composable () -> Unit
+
+private fun rowsOf(row: SettingRow): List<SettingRow> = listOf(row)
+
+/** A row's place in its section, "2 of 5", for TalkBack. Empty outside a section. */
+private val LocalRowPosition = compositionLocalOf { "" }
+
+/**
+ * A header that says how many settings follow ("Features, 5 settings") and the
+ * rows, each told its place so it can say "2 of 5".
+ */
 @Composable
-private fun SectionHeader(title: String, color: Color) {
+private fun SettingsSection(
+    title: String,
+    color: Color,
+    rows: List<SettingRow>,
+    spaceAfter: Boolean = true,
+) {
+    if (rows.isEmpty()) return
+    SectionHeader(title, color, rows.size)
+    rows.forEachIndexed { index, row ->
+        // A lone row has no place to tell: "1 of 1" said nothing.
+        val position = if (rows.size > 1) stringResource(R.string.settings_row_position, index + 1, rows.size) else ""
+        CompositionLocalProvider(LocalRowPosition provides position) { row() }
+    }
+    if (spaceAfter) Spacer(modifier = Modifier.height(24.dp))
+}
+
+@Composable
+private fun SectionHeader(title: String, color: Color, count: Int) {
+    val spoken = pluralStringResource(R.plurals.settings_section_count, count, title, count)
     Text(
         text = title,
         style = MaterialTheme.typography.titleLarge,
@@ -907,7 +1261,48 @@ private fun SectionHeader(title: String, color: Color) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 8.dp)
+            .clearAndSetSemantics {
+                contentDescription = spoken
+                heading()
+            }
     )
+}
+
+/** Folds a group of settings out below it, or away again. No pop-up. */
+@Composable
+private fun SettingsExpandRow(
+    label: String,
+    expanded: Boolean,
+    labelColor: Color,
+    onToggle: () -> Unit,
+) {
+    val position = LocalRowPosition.current
+    val state = stringResource(if (expanded) R.string.state_expanded else R.string.state_collapsed)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle() }
+            .padding(vertical = 10.dp)
+            .clearAndSetSemantics {
+                contentDescription = spokenRow(label, position)
+                stateDescription = state
+                role = Role.Button
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            color = labelColor,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = if (expanded) "▾" else "▸",
+            color = labelColor.copy(alpha = 0.8f),
+            fontSize = 24.sp,
+        )
+    }
 }
 
 @Composable
@@ -920,15 +1315,23 @@ private fun SettingsToggle(
     highContrast: Boolean,
     whiteMode: Boolean
 ) {
-    val rowPrefix = stringResource(R.string.cd_row, label, description)
-    val onCd = stringResource(R.string.cd_currently_on)
-    val offCd = stringResource(R.string.cd_currently_off)
+    // The whole row is the switch: one focus stop, and a double tap anywhere on
+    // it toggles. A real switch, as in Android's own settings: TalkBack says
+    // "On" or "Off" where the user's TalkBack settings put the state, then the
+    // title, description and place ("Off. Haptic feedback. … 3 of 6. Switch"),
+    // and after a toggle only the new state. The description stays fixed, so a
+    // toggle is not read out in full again.
+    val spoken = spokenRow(label, description, LocalRowPosition.current)
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
             .padding(vertical = 10.dp)
-            .semantics {
-                contentDescription = rowPrefix + (if (checked) onCd else offCd)
+            .clearAndSetSemantics {
+                contentDescription = spoken
+                role = Role.Switch
+                toggleableState = ToggleableState(checked)
+                onClick { onCheckedChange(!checked); true }
             },
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -947,12 +1350,16 @@ private fun SettingsToggle(
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = null,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = if (highContrast && whiteMode) Color.White else Color.Black,
+                checkedThumbColor = when {
+                    highContrast && whiteMode -> Color.White
+                    highContrast -> Color.Black
+                    else -> currentBrand().onAccent
+                },
                 checkedTrackColor = if (highContrast) {
                     if (whiteMode) Color.Black else Color.White
-                } else Color(0xFF3DBAD0),
+                } else currentBrand().accent,
                 // White high-contrast: OFF must read clearly lighter than ON (black track).
                 uncheckedThumbColor = if (highContrast && whiteMode) {
                     Color(0xFF757575)

@@ -1,5 +1,41 @@
 package com.example.sightbuddy.core.stt
 
+import com.example.sightbuddy.R
+
+/**
+ * The user's speech recognition choice in Settings. Whisper and Gemma can both be
+ * installed; Whisper is the default because it is faster at the same quality.
+ */
+enum class SttChoice(val key: String, val labelRes: Int) {
+    WHISPER("whisper", R.string.stt_choice_whisper),
+    GEMMA("gemma", R.string.stt_choice_gemma),
+    ANDROID("android", R.string.stt_choice_android);
+
+    companion object {
+        fun fromKey(key: String): SttChoice = entries.firstOrNull { it.key == key } ?: WHISPER
+
+        /**
+         * What actually runs: the choice when its model is here, otherwise the other
+         * model, otherwise the platform. Both models are English only.
+         */
+        fun effective(chosen: SttChoice, whisperReady: Boolean, gemmaInstalled: Boolean, english: Boolean): SttChoice {
+            if (!english) return ANDROID
+            val order = when (chosen) {
+                WHISPER -> listOf(WHISPER, GEMMA, ANDROID)
+                GEMMA -> listOf(GEMMA, WHISPER, ANDROID)
+                ANDROID -> listOf(ANDROID)
+            }
+            return order.first {
+                it == ANDROID || (it == WHISPER && whisperReady) || (it == GEMMA && gemmaInstalled)
+            }
+        }
+
+        /** The options Settings cycles through: installed models, then the platform. */
+        fun available(whisperReady: Boolean, gemmaInstalled: Boolean): List<SttChoice> =
+            listOfNotNull(WHISPER.takeIf { whisperReady }, GEMMA.takeIf { gemmaInstalled }, ANDROID)
+    }
+}
+
 /** Which recogniser handles a recording. */
 enum class SpeechEngine {
     /** On-device Whisper: ours end to end, silent until we cue it. */
@@ -30,12 +66,14 @@ class SpeechAvailability(
     val modelServesLanguage: Boolean,
     val modelDownloaded: Boolean,
     val cloudEnabled: Boolean = false,
+    /** The user's "Use downloaded model" switch. */
+    val localEnabled: Boolean = true,
 ) {
     /** Which recogniser this device will use, assuming the model loads. */
     val engine: SpeechEngine = when {
         // Chosen deliberately and paid for, so it outranks the free options.
         cloudEnabled -> SpeechEngine.CLOUD
-        modelServesLanguage && modelDownloaded -> SpeechEngine.WHISPER
+        modelServesLanguage && modelDownloaded && localEnabled -> SpeechEngine.WHISPER
         else -> SpeechEngine.PLATFORM
     }
 

@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import androidx.camera.core.Preview
 
 class CameraXManager(private val context: Context) {
 
@@ -48,8 +49,23 @@ class CameraXManager(private val context: Context) {
     private var lastFrameTime = 0L
     var throttleIntervalMs: Long = 0L // 0 means no throttling
 
-    private var preview: androidx.camera.core.Preview? = null
-    private val minAnalysisResolution = Size(640, 640)
+    private var preview: Preview? = null
+    private var analysisResolution = DEFAULT_ANALYSIS_SIZE
+    private var boundOwner: LifecycleOwner? = null
+    private var boundSurfaceProvider: Preview.SurfaceProvider? = null
+
+    /**
+     * The size analysis frames are asked for. Text needs far more pixels than
+     * the object detector: at 640 a page's body text is under 16 px a line and
+     * comes and goes from frame to frame. A change rebinds a running camera.
+     */
+    fun setAnalysisResolution(size: Size) {
+        if (size == analysisResolution) return
+        analysisResolution = size
+        val owner = boundOwner ?: return
+        val surface = boundSurfaceProvider ?: return
+        if (camera != null) startCamera(owner, surface)
+    }
 
     // Torch. Held in memory only — it must never survive the app being closed,
     // so there is deliberately no persisted preference behind it.
@@ -90,13 +106,15 @@ class CameraXManager(private val context: Context) {
         }
     }
 
-    fun startCamera(lifecycleOwner: LifecycleOwner, surfaceProvider: androidx.camera.core.Preview.SurfaceProvider) {
+    fun startCamera(lifecycleOwner: LifecycleOwner, surfaceProvider: Preview.SurfaceProvider) {
+        boundOwner = lifecycleOwner
+        boundSurfaceProvider = surfaceProvider
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
 
         cameraProviderFuture.addListener({
             cameraProvider = cameraProviderFuture.get()
 
-            preview = androidx.camera.core.Preview.Builder()
+            preview = Preview.Builder()
                 .build()
                 .also {
                     it.setSurfaceProvider(surfaceProvider)
@@ -104,7 +122,7 @@ class CameraXManager(private val context: Context) {
 
             imageAnalyzer = ImageAnalysis.Builder()
                 // Keep model input quality high enough to avoid under-resolving detections.
-                .setTargetResolution(minAnalysisResolution)
+                .setTargetResolution(analysisResolution)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
                 .also { analysis ->
@@ -157,6 +175,19 @@ class CameraXManager(private val context: Context) {
      * the request separately via [clearTorchRequest], so the torch can never be
      * left burning in the background.
      */
+    /**
+     * Binds again to the view the preview last used, after [stopCamera]. The
+     * preview is started from the composable that holds the view, which does not
+     * run again on its own: without this, the camera stayed dark after any
+     * pop-up (a model download, Settings) until something rebuilt that view.
+     */
+    fun restartPreview() {
+        if (camera != null) return
+        val owner = boundOwner ?: return
+        val surface = boundSurfaceProvider ?: return
+        startCamera(owner, surface)
+    }
+
     fun stopCamera() {
         camera?.let { cam ->
             if (cam.cameraInfo.hasFlashUnit()) {
@@ -188,5 +219,11 @@ class CameraXManager(private val context: Context) {
             "CameraXManager",
             "Frame stats emitted=${emittedFrames.get()} consumed=${consumedFrames.get()} dropped=${droppedFrames.get()} closed=${closedFrames.get()} throttleMs=$throttleIntervalMs"
         )
+    }
+
+    companion object {
+        /** Portrait width x height; the camera picks the nearest size it has. */
+        val DEFAULT_ANALYSIS_SIZE = Size(640, 640)
+        val TEXT_ANALYSIS_SIZE = Size(1080, 1440)
     }
 }

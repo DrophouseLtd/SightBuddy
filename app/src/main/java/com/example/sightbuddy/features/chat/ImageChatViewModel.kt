@@ -15,6 +15,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
+import android.content.Context
 
 /**
  * Manages the Image Chat feature using OpenAI's vision-capable Chat Completions API.
@@ -25,7 +26,7 @@ import java.util.concurrent.TimeUnit
  * visual context without re-capturing.
  */
 class ImageChatViewModel(
-    private val context: android.content.Context,
+    private val context: Context,
     private val transport: OpenAiTransport,
     /** Model id, read per request so a Settings change applies immediately. */
     private val modelProvider: () -> String = { "gpt-4o" },
@@ -80,6 +81,7 @@ class ImageChatViewModel(
     fun cancelActiveRequest() {
         activeCall?.cancel()
         activeCall = null
+        transport.cancelLocal()
         _isProcessing.value = false
     }
 
@@ -155,6 +157,10 @@ class ImageChatViewModel(
         }
         if (userPrompt.isBlank()) {
             return context.getString(R.string.spoken_ask_about_image)
+        }
+        // At the length limit the chat stays as it is, so it can be saved.
+        if (totalHistoryWordCount() > OpenAiTransport.CHAT_WORD_LIMIT) {
+            return transport.errors.chatFull
         }
 
         _isProcessing.value = true

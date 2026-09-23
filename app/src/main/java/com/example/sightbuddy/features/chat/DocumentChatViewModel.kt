@@ -57,6 +57,7 @@ class DocumentChatViewModel(
     fun cancelActiveRequest() {
         activeCall?.cancel()
         activeCall = null
+        transport.cancelLocal()
         _isProcessing.value = false
     }
 
@@ -138,6 +139,10 @@ class DocumentChatViewModel(
     suspend fun askFollowUp(userPrompt: String): String {
         if (lastExtractedText.isBlank()) {
             return context.getString(R.string.spoken_scan_document_first)
+        }
+        // At the length limit the chat stays as it is, so it can be saved.
+        if (totalHistoryWordCount() > OpenAiTransport.CHAT_WORD_LIMIT) {
+            return transport.errors.chatFull
         }
 
         _isProcessing.value = true

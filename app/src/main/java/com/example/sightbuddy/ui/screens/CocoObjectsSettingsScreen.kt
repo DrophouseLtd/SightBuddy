@@ -1,7 +1,9 @@
 package com.example.sightbuddy.ui.screens
 
+import com.example.sightbuddy.ui.theme.currentBrand
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,9 +19,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.example.sightbuddy.R
+import com.example.sightbuddy.ui.buttonSemantics
 import com.example.sightbuddy.features.vision.CocoFinnish
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -27,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.sightbuddy.core.SettingsManager
 import com.example.sightbuddy.features.vision.COCO_OBJECTS
+import androidx.compose.ui.semantics.traversalIndex
+import androidx.compose.ui.semantics.isTraversalGroup
 
 @Composable
 fun CocoObjectsSettingsScreen(
@@ -100,7 +107,7 @@ fun CocoObjectsSettingsScreen(
                     focusedTextColor = labelColor,
                     unfocusedTextColor = labelColor,
                     cursorColor = labelColor,
-                    focusedBorderColor = if (highContrast) labelColor else Color(0xFF3DBAD0),
+                    focusedBorderColor = if (highContrast) labelColor else currentBrand().accent,
                     unfocusedBorderColor = labelColor.copy(alpha = 0.4f),
                 ),
                 modifier = Modifier
@@ -130,6 +137,11 @@ fun CocoObjectsSettingsScreen(
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
+                // First in TalkBack's order, as it is on screen: drawn after the
+                // list, it came last, so focus left on it (where the button that
+                // opened this screen was) made a swipe right find nothing and a
+                // swipe left walk the list backwards.
+                .semantics { isTraversalGroup = true; traversalIndex = -1f }
                 .padding(top = 16.dp, end = 16.dp)
                 .size(64.dp)
                 .background(
@@ -141,7 +153,7 @@ fun CocoObjectsSettingsScreen(
                     shape = CircleShape,
                 )
                 .clickable { onBack() }
-                .semantics { contentDescription = backCd },
+                .buttonSemantics(stringResource(R.string.btn_back)),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -170,11 +182,13 @@ private fun CocoObjectVisibilityRow(
 ) {
     val shownCd = stringResource(R.string.objects_shown_in_picker)
     val hiddenCd = stringResource(R.string.objects_hidden_from_picker)
+    // One focus stop per object; double tap anywhere on the row toggles it.
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .toggleable(value = visible, role = Role.Switch, onValueChange = onVisibleChange)
             .padding(vertical = 6.dp)
-            .semantics {
+            .clearAndSetSemantics {
                 contentDescription = "$label. ${if (visible) shownCd else hiddenCd}."
             },
         verticalAlignment = Alignment.CenterVertically,
@@ -188,12 +202,16 @@ private fun CocoObjectVisibilityRow(
         )
         Switch(
             checked = visible,
-            onCheckedChange = onVisibleChange,
+            onCheckedChange = null,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = if (highContrast && whiteMode) Color.White else Color.Black,
+                checkedThumbColor = when {
+                    highContrast && whiteMode -> Color.White
+                    highContrast -> Color.Black
+                    else -> currentBrand().onAccent
+                },
                 checkedTrackColor = if (highContrast) {
                     if (whiteMode) Color.Black else Color.White
-                } else Color(0xFF3DBAD0),
+                } else currentBrand().accent,
                 uncheckedThumbColor = if (highContrast && whiteMode) {
                     Color(0xFF757575)
                 } else {

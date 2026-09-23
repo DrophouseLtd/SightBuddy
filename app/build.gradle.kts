@@ -1,4 +1,5 @@
 import java.net.URI
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -27,12 +28,47 @@ fun escaped(value: String): String = value.replace("\"", "\\\"")
 // by the app at runtime from STT_MODEL_BASE_URL (empty = download disabled).
 // ---------------------------------------------------------------------------
 val sherpaOnnxVersion = "1.13.4"
+// The published release's checksum. Native code fetched over the network goes
+// into every build, so it is checked before it is used: a replaced release, or
+// anything tampered with on the way, fails the build instead of shipping.
+val sherpaOnnxSha256 = "03f9c4df965f21c71269365a7951a7f23b5696fddd093fa318c80d65550ab780"
 val sherpaOnnxAar = file("libs/sherpa-onnx-$sherpaOnnxVersion.aar")
+
+fun sha256Of(f: File): String =
+    MessageDigest.getInstance("SHA-256").let { digest ->
+        f.inputStream().use { input ->
+            val buffer = ByteArray(1 shl 16)
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                digest.update(buffer, 0, n)
+            }
+        }
+        digest.digest().joinToString("") { "%02x".format(it) }
+    }
 val downloadSherpaOnnx = tasks.register("downloadSherpaOnnx") {
     outputs.file(sherpaOnnxAar)
     doLast {
         val minBytes = 40_000_000L
-        if (sherpaOnnxAar.exists() && sherpaOnnxAar.length() >= minBytes) return@doLast
+
+        fun verify(f: File) {
+            val actual = sha256Of(f)
+            if (actual != sherpaOnnxSha256) {
+                f.delete()
+                throw GradleException(
+                    "The sherpa-onnx runtime is not the release this project expects." + "\n" +
+                        "  expected SHA-256: $sherpaOnnxSha256" + "\n" +
+                        "  got:              $actual" + "\n" +
+                        "  The file has been deleted. If the upstream release genuinely " +
+                        "changed, update sherpaOnnxSha256 in app/build.gradle.kts.",
+                )
+            }
+        }
+
+        if (sherpaOnnxAar.exists() && sherpaOnnxAar.length() >= minBytes) {
+            verify(sherpaOnnxAar)
+            return@doLast
+        }
 
         val url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/" +
             "v$sherpaOnnxVersion/sherpa-onnx-$sherpaOnnxVersion.aar"
@@ -52,6 +88,7 @@ val downloadSherpaOnnx = tasks.register("downloadSherpaOnnx") {
                 if (partial.length() < minBytes) {
                     error("incomplete download (${partial.length()} bytes)")
                 }
+                verify(partial)
                 partial.renameTo(sherpaOnnxAar)
                 return@doLast
             } catch (e: Exception) {
@@ -87,8 +124,8 @@ android {
         applicationId = "com.drophouse.sightbuddy"
         minSdk = 30
         targetSdk = 36
-        versionCode = 13
-        versionName = "2.2.0"
+        versionCode = 14
+        versionName = "2.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -113,10 +150,14 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-dev"
             buildConfigField("String", "STT_MODEL_BASE_URL", "\"${escaped(sttModelBaseUrl)}\"")
+            // The OCR debug overlay and session logs (OcrDebug). Off here; the
+            // testing branch feature/ocr-debug-overlay keeps it on.
+            buildConfigField("boolean", "OCR_DEBUG_OVERLAY", "false")
         }
         create("prod") {
             dimension = "environment"
             buildConfigField("String", "STT_MODEL_BASE_URL", "\"${escaped(sttModelBaseUrl)}\"")
+            buildConfigField("boolean", "OCR_DEBUG_OVERLAY", "false")
         }
     }
 
@@ -183,10 +224,11 @@ googleServices {
 // Uploading the R8 mapping file requires a real Firebase project. Without a
 // google-services.json (any clone of this repo) that task fails and takes the
 // whole release build with it — so skip it. Official builds ship the file and
-// still get deobfuscated crash reports.
+// still get deobfuscated crash reports. Only prod has one: the dev flavor's
+// release build (an R8 build installable beside the Play app) skips it too.
 val hasGoogleServices = file("src/prod/google-services.json").exists()
 tasks.matching { it.name.startsWith("uploadCrashlyticsMappingFile") }.configureEach {
-    enabled = hasGoogleServices
+    enabled = hasGoogleServices && name.contains("Prod")
 }
 
 tasks.named("preBuild") { dependsOn(downloadSherpaOnnx) }
@@ -194,6 +236,9 @@ tasks.named("preBuild") { dependsOn(downloadSherpaOnnx) }
 dependencies {
     // Local Whisper STT runtime (both flavors)
     implementation(files(sherpaOnnxAar))
+
+    // On-device Gemma (LiteRT-LM)
+    implementation(libs.litertlm)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

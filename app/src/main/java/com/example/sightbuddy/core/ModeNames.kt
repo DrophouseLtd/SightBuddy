@@ -23,6 +23,12 @@ object ModeNames {
     const val SCAN_LIGHT = "Scan Light"
     const val SCAN_COLOUR = "Scan Colour"
 
+    /** Features with the text bar and Ask; the others have Mute instead. */
+    val TAKES_INPUT = setOf(IMAGE_CHAT, TEXT_CHAT, FIND_OBJECTS)
+
+    /** Features that scan continuously; their latest spoken line is shown on screen. */
+    val SCANNING = setOf(DISCOVER_OBJECTS, FIND_OBJECTS, SCAN_LIGHT, SCAN_COLOUR)
+
     fun display(context: Context, mode: String): String = when (mode) {
         IMAGE_CHAT -> context.getString(R.string.help_title_image_chat)
         TEXT_CHAT -> context.getString(R.string.help_title_text_chat)

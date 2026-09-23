@@ -1,6 +1,6 @@
 # Architecture notes: Sight Buddy (native Android)
 
-Kotlin + Jetpack Compose accessibility app for AI-assisted vision. **There is no backend.** Everything runs on-device except optional cloud AI, which calls OpenAI **directly using the user's own API key** (BYOK). Earlier versions used a Supabase proxy; that was removed when the project was open-sourced.
+Kotlin + Jetpack Compose accessibility app for AI-assisted vision. **There is no backend.** Everything runs on-device: the AI answers come from **Gemma 4 E2B on the phone** when it is downloaded, or from OpenAI **directly using the user's own API key** (BYOK) when the user allows it. Earlier versions used a Supabase proxy; that was removed when the project was open-sourced — see [Worklog.md](Worklog.md) for the full history.
 
 ## 1. Build variants
 
@@ -24,10 +24,12 @@ Release builds are **arm64-only** (`minSdk 30` ⇒ every supported device is arm
 | **Discover objects** | EfficientDet-Lite0 (TFLite, COCO). YUV→RGB without a JPEG round-trip, rotation-aware |
 | **Find objects** | Voice target + proximity haptics and directional earcons; local label matching first, optional LLM fallback via `ObjectCommandResolver` |
 | **Text chat** | ML Kit OCR on-device; character-indexed playback (`TextScriptPlayer`); optional LLM Q&A about the captured text |
-| **Image chat** | Vision request (base64 JPEG) to OpenAI with the user's key |
+| **Image chat** | Photo + question to OpenAI (user's key, Use API on, online) or to Gemma 4 E2B on the device |
+| **Memories** | Save chat stores the chat on the phone (`core/MemoryStore.kt`); Gemma names it; list, read, rename, delete |
 | **Scan colour** | Median of a centre patch sampled straight from the YUV planes, mapped to colour names (incl. brown/beige); on-screen focus frame |
 | **Scan light** | Y-plane luma average |
-| **Speech-to-text** | Whisper `base.en` int8 + Silero VAD via sherpa-onnx (`core/stt/`). Models are opt-in (~154 MB, downloaded on request); falls back to the Android system recogniser until present |
+| **Speech-to-text** | Chosen in Settings: Whisper `base.en` int8 via sherpa-onnx (default), Gemma 4 E2B, or the Android recogniser; OpenAI transcription when enabled. English only on-device |
+| **Model setup** | `core/ModelSetup.kt` picks a tier from memory and free space (Gemma + Whisper / Whisper / nothing; Finnish: nothing) and offers it with sizes and free space. Downloads run under `ModelDownloadService` |
 
 Each carousel feature can be hidden in Settings, with a guard that keeps at least one enabled.
 
@@ -37,8 +39,21 @@ Each carousel feature can be hidden in Settings, with a guard that keeps at leas
 
 - [`ApiKeyStore`](app/src/main/java/com/example/sightbuddy/core/ApiKeyStore.kt) — the user's OpenAI key, encrypted with AES-GCM using a non-exportable Android Keystore key.
 - [`OpenAiTransport`](app/src/main/java/com/example/sightbuddy/core/OpenAiTransport.kt) — POSTs directly to `api.openai.com/v1/chat/completions`. Distinct spoken errors for 401 (bad key) and 429 (rate limit). The key is never logged.
-- **Key presence is the feature flag**: with a key saved, Image chat appears and Text chat gains AI Q&A; remove it and the app is fully local.
+- **Use API** switch: with a key saved and the switch on, OpenAI answers when online; with it off, nothing goes to OpenAI and Gemma (if downloaded) answers instead. See "On-device AI".
 - Model is read **per request** from `SettingsManager`, so the Settings picker (Fast / Balanced / Most capable) applies with no restart.
+
+### On-device AI
+
+- **Gemma 4 E2B** (`core/llm/LocalGemma.kt`) on LiteRT-LM: image questions,
+  text questions, the Find objects fallback, speech, chat names. Downloaded
+  from Hugging Face `litert-community` (Apache 2.0), pinned, resumable.
+- **One router:** `OpenAiTransport.executeChatCompletion` sends each request to
+  OpenAI (Use API on, key stored, online) or to Gemma (`LocalAnswerer`, the
+  same OpenAI-shaped body). Logged under `AI-ROUTE`.
+- **Use API** (Settings > Advanced > OpenAI): while off, nothing can be sent to
+  OpenAI whatever key is stored; see `ApiGateTest`.
+- AI features appear when either path is available: the key alone is no longer
+  the feature flag.
 
 ### Speech input
 
@@ -114,4 +129,4 @@ There is **no API key in the build** — cloud AI is bring-your-own-key, entered
 
 ## 7. Files worth reading first
 
-`MainActivity.kt` (orchestration), `core/ApiKeyStore.kt`, `core/OpenAiTransport.kt`, `core/stt/VoiceInputService.kt`, `core/SettingsManager.kt`, `ui/screens/HomeScreen.kt`, `app/build.gradle.kts`.
+`AppController.kt` (state and orchestration), `AppScreens.kt` (the screens), `MainActivity.kt` (wiring), `core/ApiKeyStore.kt`, `core/OpenAiTransport.kt`, `core/stt/VoiceInputService.kt`, `core/SettingsManager.kt`, `ui/screens/HomeScreen.kt`, `app/build.gradle.kts`.

@@ -2,6 +2,7 @@ package com.example.sightbuddy.core
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.SoundPool
 import android.util.Log
@@ -11,7 +12,7 @@ import com.example.sightbuddy.R
  * Low-latency one-shot audio player backed by [SoundPool].
  *
  * Every [play] call stops the previously playing stream so samples never
- * overlap — critical for the rapid-fire directional cues in Find Object mode.
+ * overlap. Direction cues are spoken now; see [DirectionCues].
  *
  * SoundPool.load() is asynchronous; samples are only playable after the
  * OnLoadCompleteListener fires for their sound ID.
@@ -25,7 +26,20 @@ class SoundFXService(context: Context) {
     private val loadedIds = mutableSetOf<Int>()
     private var activeStreamId: Int = 0
     private var primed = false
-    private var tutorialPlayer: MediaPlayer? = null
+
+    /**
+     * The loops are off: the waiting sound is the tick in [SFX.WORKING], which
+     * the cue pool plays reliably. Turning this on plays a loop under the tick,
+     * so take the tick out of AppController.workingTick at the same time.
+     */
+    private val LOOPS_ENABLED = false
+
+    private var loopPlayer: MediaPlayer? = null
+    private var playingLoop: Loop? = null
+    private val loopAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .build()
 
     init {
         val attrs = AudioAttributes.Builder()
@@ -59,16 +73,11 @@ class SoundFXService(context: Context) {
         }
 
         sounds[SFX.CAMERA_CLICK]     = soundPool.load(context, R.raw.sfx_camera_click, 1)
-        sounds[SFX.DIRECTION_LEFT]   = soundPool.load(context, R.raw.sfx_direction_left, 1)
-        sounds[SFX.DIRECTION_RIGHT]  = soundPool.load(context, R.raw.sfx_direction_right, 1)
-        sounds[SFX.DIRECTION_UP]     = soundPool.load(context, R.raw.sfx_direction_up, 1)
-        sounds[SFX.DIRECTION_DOWN]   = soundPool.load(context, R.raw.sfx_direction_down, 1)
-        sounds[SFX.DIRECTION_CENTRE] = soundPool.load(context, R.raw.sfx_direction_centre, 1)
         sounds[SFX.LISTENING]        = soundPool.load(context, R.raw.sfx_listening, 1)
         sounds[SFX.STOP_LISTENING]   = soundPool.load(context, R.raw.sfx_stop_listening, 1)
         sounds[SFX.RECORDING_PERK]   = soundPool.load(context, R.raw.sfx_recording_perk, 1)
         sounds[SFX.RECORDING_PERK_STOP] = soundPool.load(context, R.raw.sfx_recording_perk_stop, 1)
-        sounds[SFX.HINT]             = soundPool.load(context, R.raw.sfx_hint, 1)
+        sounds[SFX.WORKING]          = soundPool.load(context, R.raw.sfx_working, 1)
     }
 
     /**
@@ -105,6 +114,54 @@ class SoundFXService(context: Context) {
         soundPool.play(id, 1f, 1f, 1, 0, 1f)
     }
 
+    /**
+     * Starts a quiet loop under everything else: the app is recording, or an
+     * answer is on its way. One at a time, and never cut by [play] or [stop],
+     * which belong to the one-shot cues.
+     *
+     * A MediaPlayer, not the pool: these are seconds long, where SoundPool is
+     * for short cues held in memory decoded.
+     *
+     * Off, see [LOOPS_ENABLED].
+     */
+    fun startLoop(loop: Loop) {
+        if (!LOOPS_ENABLED) return
+        if (playingLoop == loop) return
+        stopLoop()
+        // Built by hand rather than MediaPlayer.create: the attributes have to be
+        // set before the player is prepared, or it plays as usage=UNKNOWN — which
+        // is what Android's audio dump showed while nothing could be heard.
+        // Accessibility, like the cues, so the recogniser's ducking of media
+        // cannot silence it.
+        val player = MediaPlayer()
+        val started = runCatching {
+            appContext.resources.openRawResourceFd(loop.res).use { fd ->
+                player.setAudioAttributes(loopAttributes)
+                player.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
+                player.isLooping = true
+                player.setVolume(loop.volume, loop.volume)
+                player.prepare()
+                player.start()
+            }
+        }
+        if (started.isFailure) {
+            Log.w("SoundFXService", "Could not play the $loop loop", started.exceptionOrNull())
+            runCatching { player.release() }
+            return
+        }
+        loopPlayer = player
+        playingLoop = loop
+    }
+
+    fun stopLoop() {
+        loopPlayer?.let { player ->
+            runCatching { player.stop() }
+            player.release()
+        }
+        loopPlayer = null
+        playingLoop = null
+    }
+
     fun stop() {
         if (activeStreamId != 0) {
             soundPool.stop(activeStreamId)
@@ -112,54 +169,6 @@ class SoundFXService(context: Context) {
         }
     }
 
-    /**
-     * Plays the longer tutorial sample from the sample pack (one-shot).
-     * Stops any active SoundPool stream first. Invokes [onComplete] when playback finishes
-     * or if the sample cannot be loaded.
-     */
-    fun playTutorial(onComplete: (() -> Unit)? = null) {
-        stop()
-        stopTutorial()
-        // Spoken guidance, so it declares itself as speech rather than borrowing the
-        // cue pool's attributes. It is the one clip in the app with words in it.
-        val speechAttrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANT)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-            .build()
-        val player = MediaPlayer.create(appContext, R.raw.sfx_tutorial, speechAttrs, 0)
-        if (player == null) {
-            Log.e("SoundFXService", "Failed to create tutorial MediaPlayer")
-            onComplete?.invoke()
-            return
-        }
-        tutorialPlayer = player
-        player.setOnCompletionListener {
-            stopTutorial()
-            onComplete?.invoke()
-        }
-        player.start()
-    }
-
-    fun stopTutorial() {
-        tutorialPlayer?.apply {
-            if (isPlaying) stop()
-            release()
-        }
-        tutorialPlayer = null
-    }
-
-    /** Short earcon for one-time automated hints only (not manual Help opens). */
-    fun playHint() {
-        stopTutorial()
-        play(SFX.HINT)
-    }
-
-    /**
-     * Hint earcon during welcome tutorial — does not stop [playTutorial] audio.
-     */
-    fun playHintOverlay() {
-        play(SFX.HINT)
-    }
 
     /**
      * The hint chime is an ordinary cue now, so silencing it is silencing the pool.
@@ -170,22 +179,33 @@ class SoundFXService(context: Context) {
     }
 
     fun shutdown() {
-        stopTutorial()
         stopHint()
+        stopLoop()
         soundPool.release()
+    }
+
+    /**
+     * A sound that runs under the app while something lasts. Quiet on purpose:
+     * it marks time rather than asking for attention.
+     *
+     * The recording loop was withdrawn: it played into an open microphone and
+     * was never heard anyway. This one is heard, once the attributes reached
+     * the player (see [startLoop]); before that it played as usage=UNKNOWN,
+     * with a Bluetooth sink connected, which is a good way to hear nothing.
+     * [LOOPS_ENABLED] turns them all off again in one place.
+     */
+    enum class Loop(val res: Int, val volume: Float) {
+        /** While an answer is being worked out. */
+        LOADING(R.raw.sfx_loading_loop, 0.45f),
     }
 
     enum class SFX {
         CAMERA_CLICK,
-        DIRECTION_LEFT,
-        DIRECTION_RIGHT,
-        DIRECTION_UP,
-        DIRECTION_DOWN,
-        DIRECTION_CENTRE,
         LISTENING,
         STOP_LISTENING,
         RECORDING_PERK,
         RECORDING_PERK_STOP,
-        HINT
+        /** A soft tick, repeated while an answer is being worked out. */
+        WORKING,
     }
 }

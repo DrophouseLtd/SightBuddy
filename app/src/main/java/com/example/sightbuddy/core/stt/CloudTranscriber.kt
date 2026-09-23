@@ -10,6 +10,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
+import com.example.sightbuddy.core.PrivateLog
 
 /**
  * Transcribes a recording with OpenAI, using the user's own API key.
@@ -69,7 +70,8 @@ class CloudTranscriber(private val transport: OpenAiTransport) {
             httpClient.newCall(request).execute().use { response ->
                 val payload = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    Log.w(TAG, "Transcription failed: ${response.code} $payload")
+                    Log.w(TAG, "Transcription failed: ${response.code}")
+                    PrivateLog.i(TAG) { "Transcription error body: $payload" }
                     return null
                 }
                 JSONObject(payload).optString("text", "").trim().ifBlank { null }
