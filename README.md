@@ -6,15 +6,7 @@
 
 Point your phone's camera to hear your surroundings described, read printed text aloud, find objects, and identify colours and lighting. It runs **on your device**: since 2.3.0 the AI answers can come from a model you download once, with no account and no internet. If you would rather use OpenAI, you can, with **your own API key**. Either way there's no subscription, no ads, no accounts, and no server of ours in the middle.
 
-Product page: **[drophouse.uk/products/sightbuddy](https://www.drophouse.uk/products/sightbuddy/)**
-
-<p>
-  <a href="#install">Install</a> ·
-  <a href="#using-the-ai-features-bring-your-own-key">BYOK setup</a> ·
-  <a href="#why-this-is-free">Why it's free</a> ·
-  <a href="#whats-technically-interesting-here">Technical notes</a> ·
-  <a href="#building-from-source">Build</a>
-</p>
+App page: **[drophouse.uk/products/sightbuddy](https://www.drophouse.uk/products/sightbuddy/)**
 
 ---
 
@@ -32,7 +24,7 @@ Product page: **[drophouse.uk/products/sightbuddy](https://www.drophouse.uk/prod
 
 **AI on the phone.** Settings offers a model to download once (about 2.6 GB, English). With it, Image chat and Text chat answer with no key, no account and no connection. It is offered where the phone can run it well; on other phones, and in Finnish, it stays available under Advanced settings.
 
-**Speech recognition runs on your device too** — optional Whisper models (~154 MB, downloaded once on request) give offline, accent-tolerant transcription. Until you download them the app falls back to Android's built-in recogniser, so it works immediately either way.
+**Speech recognition can run on your device too** — optional Whisper models (~154 MB, downloaded once on request) give offline, accent-tolerant transcription. Until you download them the app uses Android's own speech recognition, which is provided by your phone (usually Google's) and may process what you say online, under that provider's terms.
 
 Every surface is built accessibility-first: TalkBack labels throughout, spoken announcements, haptics, high-contrast light/dark themes, adjustable speech rate (1×–3×), a feature bar you can swipe or tap, per-feature show/hide, and Finnish as well as English. What the app says is written into the conversation too, so a screen reader can read it back.
 
@@ -50,19 +42,21 @@ Requires **Android 11 (API 30)** or newer.
 
 **Older versions** stay available: every past release keeps its APK on its own [Releases](../../releases) entry.
 
-**Pick one source and stay with it.** Google Play re-signs the apps it distributes, so the Play build and the APK here are signed with different keys — and Android refuses to replace an installed app with a differently-signed copy. If an install or update stops with a signature error, that is why. Switching sources means uninstalling first, which **erases your saved API key and any downloaded voice models**. If you want updates to arrive on their own, install from Google Play.
+**Pick one source and stay with it.** Google Play re-signs the apps it distributes, so the Play build and the APK here are signed with different keys — and Android refuses to replace an installed app with a differently-signed copy. If an install or update stops with a signature error, that is why. Switching sources means uninstalling first, which **erases your saved API key and any models you have downloaded** — including the 2.6 GB AI model. If you want updates to arrive on their own, install from Google Play.
 
 ## The AI features: on your phone, or your own key
 
 Image chat and the AI answers in Text chat need one of two things. Everything else works without either.
 
-**On your phone.** Settings → Model library offers a model sized for your phone. Download it once and the answers come from the phone itself: no account, no key, no connection, nothing sent anywhere. It is the slower of the two, and it is English-only for speech, though it answers in Finnish.
+**On your phone.** Settings → Model library offers a model sized for your phone. Download it once and the answers come from the phone itself: no account, no key, no connection, nothing sent anywhere.
 
-**Or your own OpenAI key**, which is faster and stronger at detail:
+**Or your own OpenAI key.** Answers come from OpenAI instead, billed to your account:
 
 1. Create a key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
-2. **Set a spending limit** on your OpenAI account (Billing → Limits). Worth doing before you start.
+2. **Set a hard limit** on your OpenAI account (Billing → Limits → "Set a monthly budget", and enable **Enforce hard limit**). A soft limit only emails you; a hard limit stops requests. Do this before you paste the key anywhere.
 3. In Sight Buddy: **Settings → OpenAI API key → paste → Save**.
+
+**The key is yours to look after.** Sight Buddy stores it and sends it only to OpenAI, but the account, the spending and the key's safety are between you and OpenAI: nobody else can cancel a key you lose control of, and nobody else pays the bill. If that is not something you want to manage, skip it — the on-device model above needs no key, and every other feature works without one.
 
 With both available, the **Use API** switch in Settings decides; with it off, or with no connection, the phone's own model answers. Your key is encrypted on your device using the Android Keystore and is sent **only** to OpenAI, never to us. Usage bills to your own OpenAI account — typically a fraction of a penny per question. Remove the key any time to switch the app back to fully-local mode.
 
@@ -74,11 +68,12 @@ With both available, the **Use API** switch in Settings decides; with it off, or
 | Balanced | `gpt-4o` | Default — strong vision at low cost |
 | Most capable | `gpt-4.1` | Complex questions; slower and pricier |
 
-**A note on privacy.** With a key saved, three things can leave your device, and only at the moment you ask for them:
+**A note on privacy.** With a key saved, four things can leave your device, and only at the moment you ask for them:
 
 - **Image chat** — the captured photo and your question.
 - **Text chat** — the text read from your capture (not the image itself) and your question.
 - **Find objects** — the spoken phrase, *only* when the app can't match it to a known object locally. No image is ever sent.
+- **Speech recognition** — only if you switch on OpenAI transcription in Settings: the speech recognition audio.
 
 **Saved chats** (Memories) are written to your phone's private storage and are left out of Android's cloud backup, so they stay on the device they were made on.
 
@@ -90,17 +85,14 @@ That's the complete list. Everything else — object detection, reading text alo
 
 ## Why this is free
 
-Sight Buddy started as a commercial project and ran as an open beta on Google Play in the UK and Europe. After a proper market and financial analysis we concluded it couldn't work as a paid product: the core features are already offered free by far better-resourced players (Microsoft's Seeing AI, Be My Eyes, Envision), and the per-request cost of cloud AI has to be paid by someone.
-
-Monetising was not realistic. So rather than quietly shelve the code, we shut down the backend and released the app as a gift to the people it was built for.
+Sight Buddy started as a commercial project and ran as an open beta on Google Play in the UK and Europe. We decided it should not be a paid product, took the server down, and opened the source instead. It is still built and released — this is not an archive.
 
 What that means in practice:
 
 - **No subscription and no ads — ever.** Not a marketing line: the app contains no billing code and no advertising SDKs, and the advertising-ID permissions are explicitly stripped from the manifest.
-- **You own your data and your costs.** With BYOK, your usage goes directly to your own OpenAI account. Nothing routes through a server we control, because there isn't one.
+- **Nothing runs through us.** There is no server of ours in the middle, because there isn't one at all. The AI runs on your phone, or on your own OpenAI account if you choose that.
+- **You own your costs.** On-device answers cost nothing. With a key, usage bills to your account and nobody takes a cut.
 - **It's yours to fork.** MIT licensed.
-
-The silver lining of local-first architecture: shutting down the backend didn't brick anything. The cloud features became BYOK, everything else kept working, and the app stayed on the store.
 
 ## What's technically interesting here
 
@@ -133,7 +125,7 @@ Crash reporting (Firebase Crashlytics) is prod-flavor only and inactive without 
 
 ## Contributing
 
-Issues and pull requests are welcome. The project is no longer under active development, so it's a good candidate for anyone who wants to take a piece further. Ideas that would genuinely help:
+Issues and pull requests are welcome. It is a small project with a narrow focus; these are the ideas that would genuinely help:
 
 - **More languages.** The interface speaks English and Finnish, but the on-device speech model is `base.en` and the object labels are English. Adding a language means the whole chain together — labels, announcements, text-to-speech and a speech model that serves it.
 - **An iOS version.** There isn't one, and the people this app is for are split roughly evenly across platforms. The on-device pieces (Whisper via sherpa-onnx, OCR, object detection) all have iOS equivalents.
@@ -141,7 +133,7 @@ Issues and pull requests are welcome. The project is no longer under active deve
 
 ## Credits
 
-Built by [Drophouse Ltd](https://www.drophouse.uk). Development — including the local-STT migration, the accessibility work, and the sunset/open-sourcing process — was done with AI pair-programming throughout: **Claude (Anthropic)** via Claude Code, and **Cursor**.
+Built by [Drophouse Ltd](https://www.drophouse.uk). Development — the on-device speech and AI work, the accessibility work, and opening the source — was done with AI pair-programming throughout: **Claude (Anthropic)** via Claude Code, and **Cursor**.
 
 Questions or feedback: **contact@drophouse.uk**.
 
