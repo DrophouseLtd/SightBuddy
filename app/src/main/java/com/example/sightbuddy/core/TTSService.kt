@@ -8,6 +8,7 @@ import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 class TTSService(context: Context) : TextToSpeech.OnInitListener {
 
@@ -19,11 +20,27 @@ class TTSService(context: Context) : TextToSpeech.OnInitListener {
     private val _suppressAppSpeech = MutableStateFlow(false)
     val suppressAppSpeech = _suppressAppSpeech.asStateFlow()
 
+    /**
+     * The last line spoken, for the scanning features to show on screen. Set
+     * while muted too, so muting silences the voice, not the text, but never
+     * while app speech is suppressed: nothing is said then either.
+     */
+    private val _lastSpoken = MutableStateFlow("")
+    val lastSpoken = _lastSpoken.asStateFlow()
+
+    fun clearLastSpoken() {
+        _lastSpoken.value = ""
+    }
+
+    /** The user's Mute: feature output is silent; forced speech still plays. */
+    @Volatile
+    var muted: Boolean = false
+
     private var utteranceDoneListener: ((String?) -> Unit)? = null
     private var utteranceRangeListener: ((String?, Int, Int) -> Unit)? = null
 
     /** One-shot per-utterance completion callbacks (e.g. resume reading after a rate announcement). */
-    private val oneShotDone = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
+    private val oneShotDone = ConcurrentHashMap<String, () -> Unit>()
 
     fun setOnUtteranceDone(listener: ((String?) -> Unit)?) {
         utteranceDoneListener = listener
@@ -145,16 +162,24 @@ class TTSService(context: Context) : TextToSpeech.OnInitListener {
      * @param force speak even while app speech is suppressed. Use only for
      *   directly user-initiated feedback (e.g. Settings confirmations), never
      *   for background/feature output — that is what suppression exists to stop.
+     * @param caption false for a line that is not the feature's own: it is said
+     *   but never becomes [lastSpoken], which the scanning features show on
+     *   screen. A download finishing is not what the camera is looking at.
      */
     fun speak(
         text: String,
         flush: Boolean = false,
         utteranceId: String = "TTS_ID_${System.currentTimeMillis()}",
         force: Boolean = false,
+        caption: Boolean = true,
         onDone: (() -> Unit)? = null,
     ): Boolean {
-        if (micHasFloor()) return false
-        if ((_suppressAppSpeech.value && !force) || text.isBlank()) return false
+        if (micHasFloor() || text.isBlank()) return false
+        // Suppressed: this feature does not own the screen either, so the line is
+        // not shown as if it had been said.
+        if (_suppressAppSpeech.value && !force) return false
+        if (caption) _lastSpoken.value = text
+        if (muted && !force) return false
         if (!_isInitialized.value) return false
         val queueMode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
         val params = Bundle()
@@ -187,6 +212,9 @@ class TTSService(context: Context) : TextToSpeech.OnInitListener {
     }
 
     /** Stops all in-flight and queued TTS. */
+    /** True while anything is being spoken. */
+    fun isSpeaking(): Boolean = tts?.isSpeaking == true
+
     fun stop(@Suppress("UNUSED_PARAMETER") utteranceId: String? = null) {
         tts?.stop()
     }

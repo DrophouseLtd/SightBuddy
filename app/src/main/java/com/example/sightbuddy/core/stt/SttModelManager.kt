@@ -58,6 +58,21 @@ class SttModelManager(context: Context, private val baseUrl: String) {
 
     val downloadEnabled: Boolean get() = baseUrl.isNotBlank()
 
+    /** Space the model files take up on the device, in bytes. */
+    fun sizeOnDisk(): Long =
+        modelDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+
+    /**
+     * Removes every model file. Refused while a download is running. The caller
+     * unloads the engine first; the recogniser then falls back to the system one.
+     */
+    fun deleteModels(): Boolean {
+        if (downloadInProgress) return false
+        val ok = modelDir.deleteRecursively()
+        _downloadState.value = DownloadState.Idle
+        return ok
+    }
+
     /**
      * Download any missing model files. Safe to call repeatedly; skips files
      * already fully present. No-op (returns false) when downloads are disabled.

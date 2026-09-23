@@ -13,7 +13,7 @@ import java.util.Locale
  * SharedPreferences lookup with no coroutine machinery behind it.
  *
  * Applying the locale through [wrap] means every localised resource follows
- * automatically — `values-fi` for text and `raw-fi` for the spoken earcons —
+ * automatically — `values-fi` for text, including the spoken direction cues —
  * without any per-call-site language branching.
  */
 class LanguageStore(context: Context) {

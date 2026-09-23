@@ -1,5 +1,6 @@
 package com.example.sightbuddy.ui.screens
 
+import com.example.sightbuddy.ui.theme.currentBrand
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -18,14 +19,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.sightbuddy.R
+import com.example.sightbuddy.ui.DialogWindowTitle
+import com.example.sightbuddy.ui.buttonSemantics
 import com.example.sightbuddy.ui.theme.actionButtonBackground
 import com.example.sightbuddy.ui.theme.actionButtonText
 
@@ -46,19 +47,21 @@ fun ChoiceRespectedDialog(
     val cardBg = when {
         highContrast && whiteMode -> Color.White
         highContrast -> Color.Black
-        else -> Color.White
+        else -> currentBrand().surface
     }
     val textColor = when {
         highContrast && whiteMode -> Color.Black
         highContrast -> Color.White
-        else -> Color(0xFF1A1A1A)
+        else -> currentBrand().ink
     }
     val message = stringResource(R.string.choice_respected_body)
+    val continueLabel = stringResource(R.string.choice_respected_ok)
 
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        DialogWindowTitle(stringResource(R.string.choice_respected_title))
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -71,13 +74,12 @@ fun ChoiceRespectedDialog(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
                     .background(cardBg)
-                    .padding(horizontal = 24.dp, vertical = 28.dp)
-                    .semantics { contentDescription = message },
+                    .padding(horizontal = 24.dp, vertical = 28.dp),
             ) {
                 Text(
                     text = stringResource(R.string.choice_respected_title),
                     style = MaterialTheme.typography.headlineSmall,
-                    color = textColor,
+                    color = if (highContrast) textColor else currentBrand().label,
                     fontWeight = FontWeight.Bold,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -97,13 +99,11 @@ fun ChoiceRespectedDialog(
                         )
                         .clickable(onClick = onDismiss)
                         .padding(vertical = 16.dp)
-                        .semantics {
-                            this.contentDescription = message
-                        },
+                        .buttonSemantics(continueLabel),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = stringResource(R.string.choice_respected_ok),
+                        text = continueLabel,
                         color = actionButtonText(highContrast, whiteMode, Color.Black),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,

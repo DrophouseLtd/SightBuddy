@@ -28,8 +28,14 @@ class ApiKeyStore(context: Context) {
     private val _keyPresent = MutableStateFlow(false)
     val keyPresent = _keyPresent.asStateFlow()
 
+    /** The saved key shortened by [preview], or blank when none is saved. */
+    private val _keyPreview = MutableStateFlow("")
+    val keyPreview = _keyPreview.asStateFlow()
+
     init {
-        _keyPresent.value = getKey().isNotBlank()
+        val key = getKey()
+        _keyPresent.value = key.isNotBlank()
+        _keyPreview.value = preview(key)
     }
 
     fun getKey(): String {
@@ -53,6 +59,7 @@ class ApiKeyStore(context: Context) {
         if (trimmed.isEmpty()) {
             prefs.edit().remove(KEY_ENCRYPTED).apply()
             _keyPresent.value = false
+            _keyPreview.value = ""
             return
         }
         try {
@@ -63,6 +70,7 @@ class ApiKeyStore(context: Context) {
                 .putString(KEY_ENCRYPTED, Base64.encodeToString(blob, Base64.NO_WRAP))
                 .apply()
             _keyPresent.value = true
+            _keyPreview.value = preview(trimmed)
         } catch (e: Exception) {
             Log.e(TAG, "Could not encrypt API key", e)
         }
@@ -87,6 +95,21 @@ class ApiKeyStore(context: Context) {
     }
 
     companion object {
+        /** Characters kept from each end of a key when it is shown shortened. */
+        const val PREVIEW_HEAD = 12
+        const val PREVIEW_TAIL = 4
+
+        /**
+         * Enough of a key to recognise it, never enough to use it: the start,
+         * which for OpenAI keys is mostly the fixed "sk-proj-" prefix, and the
+         * last four, as OpenAI's own dashboard shows them.
+         */
+        fun preview(key: String): String = when {
+            key.isBlank() -> ""
+            key.length <= PREVIEW_HEAD + PREVIEW_TAIL -> "…" + key.takeLast(PREVIEW_TAIL)
+            else -> key.take(PREVIEW_HEAD) + "…" + key.takeLast(PREVIEW_TAIL)
+        }
+
         private const val TAG = "ApiKeyStore"
         private const val PREFS = "sight_buddy_api"
         private const val KEY_ENCRYPTED = "openai_api_key_enc"

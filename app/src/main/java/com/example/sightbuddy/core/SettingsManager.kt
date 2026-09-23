@@ -26,6 +26,15 @@ class SettingsManager(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("sight_buddy_settings", Context.MODE_PRIVATE)
 
+    init {
+        // Retired settings: an older version may have stored these. Unread
+        // keys are harmless, but they are cleared so they do not linger.
+        val retired = listOf(KEY_BUTTON_NAV_RETIRED, KEY_FEATURE_ANNOUNCEMENTS_RETIRED, KEY_USE_LOCAL_STT_RETIRED)
+        if (retired.any { prefs.contains(it) }) {
+            prefs.edit().apply { retired.forEach { remove(it) } }.apply()
+        }
+    }
+
     // --- Feature settings ---
     private val _textPreviewEnabled = MutableStateFlow(prefs.getBoolean(KEY_TEXT_PREVIEW, true))
     val textPreviewEnabled = _textPreviewEnabled.asStateFlow()
@@ -42,6 +51,9 @@ class SettingsManager(context: Context) {
     private val _findEnabled = MutableStateFlow(prefs.getBoolean(KEY_FIND, true))
     val findEnabled = _findEnabled.asStateFlow()
 
+    // Scan Light and Scan Colour are shown by default, as they always were:
+    // hiding them would take them away from existing users who never touched
+    // the switch (no stored value means the default applies).
     private val _scanLightEnabled = MutableStateFlow(prefs.getBoolean(KEY_SCAN_LIGHT, true))
     val scanLightEnabled = _scanLightEnabled.asStateFlow()
 
@@ -65,16 +77,29 @@ class SettingsManager(context: Context) {
     private val _whiteModeEnabled = MutableStateFlow(prefs.getBoolean(KEY_WHITE_MODE, false))
     val whiteModeEnabled = _whiteModeEnabled.asStateFlow()
 
-    private val _useButtonNav = MutableStateFlow(prefs.getBoolean(KEY_BUTTON_NAV, true))
-    val useButtonNav = _useButtonNav.asStateFlow()
 
-    /** Off by default: the ends of the carousel give a useful sense of place. */
-    private val _loopCarousel = MutableStateFlow(prefs.getBoolean(KEY_LOOP_CAROUSEL, false))
+    /** On by default: past the last feature, carry on to the first. */
+    private val _loopCarousel = MutableStateFlow(prefs.getBoolean(KEY_LOOP_CAROUSEL, true))
     val loopCarousel = _loopCarousel.asStateFlow()
 
     /** Off by default: it costs the user money, so it is always their choice. */
     private val _cloudStt = MutableStateFlow(prefs.getBoolean(KEY_CLOUD_STT, false))
     val cloudStt = _cloudStt.asStateFlow()
+
+    /**
+     * The user's "Use API" switch. Turned on whenever a key is saved. While it is
+     * off nothing is sent to OpenAI, whatever key is stored (see OpenAiTransport).
+     */
+    private val _useApi = MutableStateFlow(prefs.getBoolean(KEY_USE_API, true))
+    val useApi = _useApi.asStateFlow()
+
+    /** Speech recognition: an SttChoice key. Whisper by default; see SttChoice.effective. */
+    private val _sttChoice = MutableStateFlow(prefs.getString(KEY_STT_ENGINE, null) ?: "whisper")
+    val sttChoice = _sttChoice.asStateFlow()
+
+    /** On by default: Gemma answers when the API is off or offline. */
+    private val _useLocalChat = MutableStateFlow(prefs.getBoolean(KEY_USE_LOCAL_CHAT, true))
+    val useLocalChat = _useLocalChat.asStateFlow()
 
     private val _cloudSttAsked = MutableStateFlow(prefs.getBoolean(KEY_CLOUD_STT_ASKED, false))
     val cloudSttAsked = _cloudSttAsked.asStateFlow()
@@ -82,6 +107,53 @@ class SettingsManager(context: Context) {
     /** Off by default: testing found the spoken direction cues easier to act on. */
     private val _pitchFeedback = MutableStateFlow(prefs.getBoolean(KEY_PITCH_FEEDBACK, false))
     val pitchFeedback = _pitchFeedback.asStateFlow()
+
+    /**
+     * On by default: Text chat's Capture, and a question asked before any page,
+     * guide the camera onto the text before taking the picture. Off keeps the
+     * plain path: Capture takes the picture at once, and an early question
+     * takes one automatically, as before the guidance existed.
+     */
+    private val _textScanGuidance = MutableStateFlow(prefs.getBoolean(KEY_TEXT_SCAN_GUIDANCE, true))
+    val textScanGuidance = _textScanGuidance.asStateFlow()
+
+    fun setTextScanGuidance(enabled: Boolean) {
+        _textScanGuidance.value = enabled
+        prefs.edit().putBoolean(KEY_TEXT_SCAN_GUIDANCE, enabled).apply()
+    }
+
+    /**
+     * Off by default. On, Text chat shows the text in view over the camera, and
+     * reads it out, until the chat starts. Off leaves the camera clear, TalkBack
+     * with nothing to meet there, and the chat's opening message in its place.
+     */
+    private val _liveText = MutableStateFlow(prefs.getBoolean(KEY_LIVE_TEXT, false))
+    val liveText = _liveText.asStateFlow()
+
+    fun setLiveText(enabled: Boolean) {
+        _liveText.value = enabled
+        prefs.edit().putBoolean(KEY_LIVE_TEXT, enabled).apply()
+    }
+
+    /**
+     * On by default: the camera shows behind every feature, the chat faint over
+     * it. The Preview button on screen is the same switch.
+     */
+    private val _cameraPreview = MutableStateFlow(prefs.getBoolean(KEY_CAMERA_PREVIEW, true))
+    val cameraPreview = _cameraPreview.asStateFlow()
+
+    fun setCameraPreview(enabled: Boolean) {
+        _cameraPreview.value = enabled
+        prefs.edit().putBoolean(KEY_CAMERA_PREVIEW, enabled).apply()
+    }
+
+    /** On by default: vibration in place of the recording cues and the pitch note. */
+    private val _hapticFeedback = MutableStateFlow(prefs.getBoolean(KEY_HAPTIC_FEEDBACK, true))
+    val hapticFeedback = _hapticFeedback.asStateFlow()
+
+    /** Off by default: features with Mute start with it on, to be unmuted when wanted. */
+    private val _startFeaturesMuted = MutableStateFlow(prefs.getBoolean(KEY_START_FEATURES_MUTED, false))
+    val startFeaturesMuted = _startFeaturesMuted.asStateFlow()
 
     // OFF (default) = tap to start / tap to stop recording; ON = hold while speaking.
     private val _holdToSpeak = MutableStateFlow(prefs.getBoolean(KEY_HOLD_TO_SPEAK, false))
@@ -124,11 +196,6 @@ class SettingsManager(context: Context) {
         },
     )
     val ttsSpeechRate = _ttsSpeechRate.asStateFlow()
-
-    private val _featureActivationAnnouncementsEnabled = MutableStateFlow(
-        prefs.getBoolean(KEY_FEATURE_ACTIVATION_ANNOUNCEMENTS, true),
-    )
-    val featureActivationAnnouncementsEnabled = _featureActivationAnnouncementsEnabled.asStateFlow()
 
     /** "": undecided (ask each launch), STT_CHOICE_LATER: ask again, STT_CHOICE_NEVER: don't ask. */
     private val _sttDownloadChoice = MutableStateFlow(prefs.getString(KEY_STT_CHOICE, "") ?: "")
@@ -198,10 +265,35 @@ class SettingsManager(context: Context) {
         prefs.edit().putBoolean(KEY_CLOUD_STT, enabled).apply()
     }
 
+    fun setSttChoice(key: String) {
+        _sttChoice.value = key
+        prefs.edit().putString(KEY_STT_ENGINE, key).apply()
+    }
+
+    fun setUseLocalChat(enabled: Boolean) {
+        _useLocalChat.value = enabled
+        prefs.edit().putBoolean(KEY_USE_LOCAL_CHAT, enabled).apply()
+    }
+
+    fun setUseApi(enabled: Boolean) {
+        _useApi.value = enabled
+        prefs.edit().putBoolean(KEY_USE_API, enabled).apply()
+    }
+
     /** Remembers that the offer was made, so it is not pushed a second time. */
     fun markCloudSttAsked() {
         _cloudSttAsked.value = true
         prefs.edit().putBoolean(KEY_CLOUD_STT_ASKED, true).apply()
+    }
+
+    fun setHapticFeedback(enabled: Boolean) {
+        _hapticFeedback.value = enabled
+        prefs.edit().putBoolean(KEY_HAPTIC_FEEDBACK, enabled).apply()
+    }
+
+    fun setStartFeaturesMuted(enabled: Boolean) {
+        _startFeaturesMuted.value = enabled
+        prefs.edit().putBoolean(KEY_START_FEATURES_MUTED, enabled).apply()
     }
 
     fun setPitchFeedback(enabled: Boolean) {
@@ -214,10 +306,6 @@ class SettingsManager(context: Context) {
         prefs.edit().putBoolean(KEY_LOOP_CAROUSEL, enabled).apply()
     }
 
-    fun setButtonNav(enabled: Boolean) {
-        _useButtonNav.value = enabled
-        prefs.edit().putBoolean(KEY_BUTTON_NAV, enabled).apply()
-    }
 
     fun setHoldToSpeak(enabled: Boolean) {
         _holdToSpeak.value = enabled
@@ -251,10 +339,6 @@ class SettingsManager(context: Context) {
         return next
     }
 
-    fun setFeatureActivationAnnouncements(enabled: Boolean) {
-        _featureActivationAnnouncementsEnabled.value = enabled
-        prefs.edit().putBoolean(KEY_FEATURE_ACTIVATION_ANNOUNCEMENTS, enabled).apply()
-    }
 
     fun visibleCocoObjects(): List<String> = filterVisibleCocoObjects(_hiddenCocoObjects.value)
 
@@ -297,7 +381,10 @@ class SettingsManager(context: Context) {
         private const val KEY_LLM_CHAT = "llm_chat_enabled"
         private const val KEY_HIGH_CONTRAST = "high_contrast_enabled"
         private const val KEY_WHITE_MODE = "white_mode_enabled"
-        private const val KEY_BUTTON_NAV = "button_nav_enabled"
+        // No longer read: the feature bar is always on. Older installs may still
+        // hold it; it is removed at start-up, and nothing depends on it either way.
+        private const val KEY_BUTTON_NAV_RETIRED = "button_nav_enabled"
+        private const val KEY_FEATURE_ANNOUNCEMENTS_RETIRED = "feature_activation_announcements_enabled"
         private const val KEY_HOLD_TO_SPEAK = "hold_to_speak_enabled"
         private const val KEY_AUTO_CAPTURE = "auto_capture_enabled"
         private const val KEY_LLM_MODEL = "llm_model"
@@ -316,7 +403,17 @@ class SettingsManager(context: Context) {
         private const val KEY_TTS_SPEECH_RATE = "tts_speech_rate"
         private const val KEY_LOOP_CAROUSEL = "loop_carousel"
         private const val KEY_PITCH_FEEDBACK = "pitch_feedback"
+        private const val KEY_HAPTIC_FEEDBACK = "haptic_feedback"
+        private const val KEY_CAMERA_PREVIEW = "camera_preview"
+        private const val KEY_START_FEATURES_MUTED = "start_features_muted"
+        private const val KEY_TEXT_SCAN_GUIDANCE = "text_scan_guidance"
+        private const val KEY_LIVE_TEXT = "live_text"
         private const val KEY_CLOUD_STT = "cloud_stt"
+        private const val KEY_USE_API = "use_api"
+        private const val KEY_STT_ENGINE = "stt_engine"
+        // A switch that lived only in test builds; replaced by KEY_STT_ENGINE.
+        private const val KEY_USE_LOCAL_STT_RETIRED = "use_local_stt"
+        private const val KEY_USE_LOCAL_CHAT = "use_local_chat"
         private const val KEY_CLOUD_STT_ASKED = "cloud_stt_asked"
         private const val KEY_STT_CHOICE = "stt_download_choice"
 
@@ -341,7 +438,6 @@ class SettingsManager(context: Context) {
             3.0f -> "Ultra fast"
             else -> "${rate}x"
         }
-        private const val KEY_FEATURE_ACTIVATION_ANNOUNCEMENTS = "feature_activation_announcements_enabled"
         private const val KEY_COCO_HIDDEN = "coco_hidden_objects"
     }
 }

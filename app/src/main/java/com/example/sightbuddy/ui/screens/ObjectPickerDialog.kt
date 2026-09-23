@@ -12,6 +12,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.example.sightbuddy.R
+import com.example.sightbuddy.ui.DialogWindowTitle
+import com.example.sightbuddy.ui.buttonSemantics
 import com.example.sightbuddy.features.vision.CocoFinnish
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
@@ -22,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.sightbuddy.ui.theme.Brand
+import com.example.sightbuddy.ui.theme.BrandDark
 @Composable
 fun ObjectPickerDialog(
     visibleObjects: List<String>,
@@ -49,10 +53,11 @@ fun ObjectPickerDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
+        DialogWindowTitle(stringResource(R.string.picker_title))
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF121212))
+                .background(BrandDark.wall)
                 .padding(16.dp)
         ) {
             Text(
@@ -76,7 +81,7 @@ fun ObjectPickerDialog(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
                     cursorColor = Color.White,
-                    focusedBorderColor = if (highContrast) Color.White else Color(0xFF3DBAD0),
+                    focusedBorderColor = if (highContrast) Color.White else Brand.Sky,
                     unfocusedBorderColor = Color.Gray
                 ),
                 modifier = Modifier
@@ -93,10 +98,10 @@ fun ObjectPickerDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFF1E1E1E), shape = RoundedCornerShape(12.dp))
+                            .background(BrandDark.surface, shape = RoundedCornerShape(12.dp))
                             .clickable { onObjectSelected(obj) }
                             .padding(horizontal = 20.dp, vertical = 18.dp)
-                            .semantics { contentDescription = CocoFinnish.displayName(obj) },
+                            .buttonSemantics(CocoFinnish.displayName(obj)),
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Text(
@@ -115,12 +120,12 @@ fun ObjectPickerDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
-                        if (highContrast) Color.White else Color(0xFF3DBAD0),
+                        if (highContrast) Color.White else Brand.Sky,
                         shape = RoundedCornerShape(12.dp),
                     )
                     .clickable { onDismiss() }
                     .padding(vertical = 18.dp)
-                    .semantics { contentDescription = cancelCd },
+                    .buttonSemantics(stringResource(R.string.settings_cancel)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(

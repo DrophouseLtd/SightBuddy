@@ -5,14 +5,15 @@
     <string name="language_title">Choose your language</string>
     <string name="language_english">English</string>
     <string name="language_finnish">Suomi</string>
+    <!-- The languages named in the app's own language, for Settings. -->
+    <string name="language_name_english">English</string>
+    <string name="language_name_finnish">Finnish</string>
     <string name="language_english_cd">English. Use the app in English</string>
     <string name="language_finnish_cd">Suomi. Use the app in Finnish</string>
 
     <!-- Torch -->
     <!-- Short form for the round button face; the full word is used when spoken. -->
     <string name="torch_short">Torch</string>
-    <string name="torch_on_cd">Torch, on. Double tap to turn the light off.</string>
-    <string name="torch_off_cd">Torch, off. Double tap to turn the light on.</string>
     <string name="torch_on_spoken">Torch on</string>
     <string name="torch_off_spoken">Torch off</string>
 
@@ -20,16 +21,12 @@
       Spoken cues. English ships pre-recorded audio for these, so the strings are
       only used where a recording does not exist for the active language.
     -->
-    <string name="tutorial_spoken">Hello, and thank you for downloading Sight Buddy. If you need help, press the button in the top left corner. To open settings, press the button in the top right corner. Your feedback is always welcome, and you can leave it with the Leave feedback button in settings.</string>
 
-    <string name="welcome_image_cd">Sight Buddy</string>
-    <string name="welcome_skip">Skip welcome</string>
-    <string name="welcome_skip_cd">Skip welcome message and open the app</string>
-    <string name="welcome_help_tap_cd">Help. During welcome, plays a confirmation sound only</string>
-    <string name="welcome_settings_tap_cd">Settings. During welcome, plays a confirmation sound only</string>
+    <string name="spoken_select_language_first">Please select language first.</string>
+    <string name="spoken_permission_camera">Sight Buddy needs the camera for this. You can allow it in the phone\'s settings, under Apps, Sight Buddy, Permissions.</string>
+    <string name="spoken_permission_mic">Sight Buddy needs the microphone to hear your question. You can allow it in the phone\'s settings, under Apps, Sight Buddy, Permissions.</string>
 
     <string name="terms_prompt">Before use, please accept our privacy policy and terms of use.</string>
-    <string name="terms_prompt_cd">Before use, please accept our privacy policy and terms of use</string>
     <string name="terms_of_use">Terms of use</string>
     <string name="terms_of_use_cd">Terms of use. Opens terms of use in your browser</string>
     <string name="terms_privacy_policy">Privacy policy</string>
@@ -37,7 +34,6 @@
     <string name="terms_accept">Accept</string>
     <string name="terms_accept_cd">Accept privacy policy and terms of use</string>
 
-    <string name="help_button_cd">Open help for this feature</string>
     <string name="help_close">Close help</string>
     <string name="help_close_cd">Close help and return to the app</string>
     <string name="help_leave_feedback">Leave feedback</string>
@@ -52,26 +48,18 @@
     <string name="feedback_thanks_body">Your feedback was received.</string>
     <string name="feedback_submit_failed">Could not send feedback. Check your connection and try again.</string>
 
-    <string name="settings_delete_data">Delete data</string>
-    <string name="settings_delete_data_description">Remove your cloud quota and feedback from our servers</string>
-    <string name="settings_delete_data_cd">Delete data. Double tap to open confirmation.</string>
-    <string name="delete_data_confirm_message">Are you sure? If you delete your data you will be unable to use LLM chat functions for two days.</string>
-    <string name="delete_data_confirm_yes">Yes</string>
-    <string name="delete_data_confirm_yes_cd">Yes, delete my data</string>
-    <string name="delete_data_confirm_no">No</string>
-    <string name="delete_data_confirm_no_cd">No, keep my data</string>
 
     <string name="help_title_image_chat">Image chat</string>
-    <string name="help_body_image_chat">Point the camera at what you want to know about, then use the Ask button to ask a question — for example \"what colour is this?\" Sight Buddy captures the picture as you finish and answers. Ask nothing to simply hear the scene described. After that, use Ask again to ask more about the same picture, or tap Capture for a fresh description. Swipe between features, or use Previous and Next when button navigation is on.</string>
+    <string name="help_body_image_chat">Point the camera at what you want to know about, then use the Ask button to ask a question — for example \"what colour is this?\" Sight Buddy captures the picture as you finish and answers. Ask nothing to simply hear the scene described.\n\nAfter that, use Ask again to ask more about the same picture, or tap Capture for a fresh description.</string>
 
     <string name="help_title_text_chat">Text chat</string>
-    <string name="help_body_text_chat">Point the camera at text. Tap Capture to have it read aloud, or use the Ask button to ask a question about it — Sight Buddy captures the picture as you finish and answers. While it reads: tap Play to pause or resume, tap Back or Forward to skip, hold Forward to read faster and hold Back to read slower (the new speed is announced and reading continues), and hold Play to restart from the beginning.</string>
+    <string name="help_body_text_chat">With Live text on (in More or in settings; off at first) and Preview on, text in view is shown over the camera where it sits, to read with TalkBack or to select and copy, and read out once when new text comes into view. Tap a box to pin it and hear it, to copy from; the rest stays live. Tap outside the boxes to let it go.\n\nTo read a page in full, tap Capture: it says looking for text, then guides you to the text, saying no text visible until it sees some, then left, right, up or down to bring the page to the middle of the view, and closer or further when the text is too small or runs off both sides. When it says hold steady, keep still for two seconds and it takes the picture and reads the page, section by section. Tap Capture again while it is guiding to take the picture straight away.\n\nYou can also use Ask, or type, to ask a question about the text. Asked before any page is captured, it guides you to the text first, the same way, and answers once the picture is taken.\n\nTo take pictures yourself instead, turn off Guidance, in More or in settings: Capture then takes the picture at once.</string>
 
     <string name="help_title_discover_objects">Discover objects</string>
     <string name="help_body_discover_objects">Move the camera slowly. Sight Buddy names the most confident object it sees, with a short pause between announcements so speech stays clear.</string>
 
     <string name="help_title_find_objects">Find objects</string>
-    <string name="help_body_find_objects">Use the Ask button and say what to find, for example \"keys\" or \"cup\". Directional sounds guide you left, right, up, down, or centre. Tap Browse Objects to pick from a list.</string>
+    <string name="help_body_find_objects">Use the Ask button and say what to find, for example \"keys\" or \"cup\". The voice guides you: left, right, up, down, or centred. Tap Objects to pick from a list.</string>
 
     <string name="help_title_scan_light">Scan Light</string>
     <string name="help_body_scan_light">Point the camera at the scene. Sight Buddy reports whether lighting is bright, dim, or dark based on the camera image.</string>
@@ -79,15 +67,27 @@
     <string name="help_title_scan_colour">Scan Colour</string>
     <string name="help_body_scan_colour">Point the camera so the colour fills the small frame in the centre of the screen. Sight Buddy speaks the colour name. Works best in good, even lighting — dim or warm indoor light can shift colours.</string>
 
-    <string name="help_title_text_playback_controls">Text playback controls</string>
-    <string name="help_body_text_playback_controls">Tap the middle Play button to pause or resume the reader. Hold Play to start again from the beginning. A short tap on Back or Forward skips about twenty characters. Hold Forward to read faster, or hold Back to read slower — the new speed is announced and reading continues. You can open this help any time with the Help button.</string>
+    <!-- What each button does, appended to every feature's help. -->
+    <!-- Help is shown in parts under these sub-headings. -->
+    <string name="help_heading_how">How it works</string>
+    <string name="help_heading_buttons">Buttons</string>
+    <string name="help_heading_top">Top of the screen</string>
+    <string name="help_heading_moving">Changing feature</string>
+    <string name="help_common_top">Along the top, left to right: Help opens this help. Memories lists the chats you have saved. More opens a second row of buttons: Save chat in the chat features, Torch for the phone\'s light, Preview, then this feature\'s own switches. Settings opens settings. Preview shows the camera behind the screen; any messages stay, faint, over it.</string>
+    <string name="help_common_moving">Swipe with two fingers to change feature. The feature bar along the bottom lists every feature; tap one to go straight there.
+
+With looping off, the first and last features say when there is no feature further that way.</string>
+    <string name="help_buttons_mute">Mute silences this feature\'s voice until you leave it; Unmute brings it back. To have features start muted, turn on Start features muted in settings.</string>
+    <string name="help_buttons_image_chat">Capture takes a picture and describes it. Ask: tap, speak your question, then tap Send. Or type a question in the box above the buttons and tap Send.\n\nEverything said in this session is shown above as messages you can read, select and copy. Leaving the feature starts it over.\n\nWhile an answer is on its way, a soft tick plays.\n\nIn More, Auto capture takes the picture for you when you press Ask with no picture yet; off, press Capture first.</string>
+    <string name="help_buttons_text_chat">Capture starts guiding you to the text, then takes the picture; tap it again to take the picture at once. Ask: tap, speak your question about the text, then tap Send. Or type a question in the box above the buttons and tap Send.\n\nThe text and the answers are shown above as messages you can read, select and copy. Leaving the feature starts it over.\n\nWhile an answer is on its way, a soft tick plays.\n\nIn More: Guidance guides you to the text before the picture is taken. Summarize has the AI sum up the captured text instead of reading it all first. Live text shows the text in view over the camera.</string>
+    <string name="help_buttons_find_objects">Objects opens the list of objects to choose from. Ask: tap, say what to find, then tap Send. Or type an object in the box and tap Send. What you asked for and the replies are shown above.\n\nIn More, Pitch swaps the spoken directions for a held note that rises as the object nears the middle of the view.</string>
     <!-- Feedback (last item in Settings) -->
     <string name="settings_feedback_section">Feedback</string>
     <string name="settings_feedback_button">Leave feedback</string>
     <string name="settings_feedback_button_cd">Leave feedback. Opens your email app to write to contact@drophouse.uk</string>
     <string name="settings_feedback_fallback">contact@drophouse.uk</string>
+    <string name="settings_version">Version %1$s (%2$d)</string>
     <!-- Spoken announcements. %1$s is a feature or object name. -->
-    <string name="spoken_mode_activated">%1$s activated</string>
     <string name="spoken_looking_for">Looking for %1$s</string>
     <string name="spoken_repeat">Sorry, could you please repeat?</string>
     <string name="spoken_nothing_heard">I did not hear anything. Please try again.</string>
@@ -101,6 +101,8 @@
     <string name="spoken_speech_rate">Speech rate %1$s</string>
     <string name="spoken_models_downloading">Downloading voice models. This may take a few minutes.</string>
     <string name="spoken_models_installed">Voice models installed. Speech recognition upgraded.</string>
+    <string name="spoken_models_deleted">Voice models deleted.</string>
+    <string name="spoken_models_delete_failed">The voice models could not be deleted right now. Please try again.</string>
 
     <!-- Spoken by the find-objects resolver when it cannot match a command itself. -->
     <string name="resolver_did_not_catch">I did not catch that. Please say an object name.</string>
@@ -115,60 +117,154 @@
     <string name="btn_back">Back</string>
     <string name="btn_play">Play</string>
     <string name="btn_pause">Pause</string>
-    <string name="btn_forward">Fwd</string>
-    <string name="btn_previous">Previous</string>
-    <string name="btn_next">Next</string>
-    <string name="btn_browse_objects">Browse Objects</string>
+    <string name="btn_forward">Forward</string>
+    <string name="spoken_previous_unavailable">Previous feature unavailable</string>
+    <string name="spoken_next_unavailable">Next feature unavailable</string>
     <string name="btn_settings">Settings</string>
-    <string name="cd_previous_mode">Previous mode</string>
-    <string name="cd_next_mode">Next mode</string>
-    <string name="cd_open_settings">Open settings</string>
-    <string name="cd_close_settings">Close settings</string>
-    <string name="settings_title">Settings</string>
-    <string name="cd_mode_active">%1$s active. Swipe left or right to change modes.</string>
-    <string name="cd_mode_inactive">%1$s.</string>
-    <string name="cd_ask_hold">Ask. Hold and speak your question, then release</string>
-    <string name="cd_ask_listening">Listening. Tap to send</string>
-    <string name="cd_ask_tap">Ask. Tap, speak your question, then tap to send</string>
+    <string name="btn_help">Help</string>
+    <!-- A feature title as TalkBack reads it: its name and place in the carousel. -->
+    <string name="btn_preview">Preview</string>
+    <string name="btn_mute">Mute</string>
+    <string name="btn_unmute">Unmute</string>
+    <string name="btn_objects">Objects</string>
+    <string name="chat_empty_find">Ask or type what to find, or choose from Objects. AI can make mistakes.</string>
+    <string name="chat_input_find_hint">Type an object to find</string>
+    <string name="chat_empty_ai">Nothing here yet. Capture a picture, or ask a question. AI can make mistakes.</string>
+    <!-- The area around Text chat's frozen live text boxes: tap to let it go live again. -->
+    <string name="live_text_area">Live text</string>
+    <string name="chat_empty_text">Nothing here yet. Capture to read some text. AI can make mistakes.</string>
+    <string name="chat_empty_text_live_off">Nothing here yet. Capture text or enable live text. AI can make mistakes.</string>
+    <string name="chat_working">Working…</string>
+    <string name="chat_input_hint">Type a question</string>
+    <string name="transcript_scanned_text">Scanned text</string>
+    <string name="transcript_question">You asked</string>
+    <string name="transcript_system">Sight Buddy</string>
+    <string name="transcript_answer">Answer</string>
+    <!-- A settings row's place in its section, read after the row: "2 of 5". -->
+    <string name="settings_row_position">%1$d of %2$d</string>
+    <plurals name="settings_section_count">
+        <item quantity="one">%1$s, %2$d setting</item>
+        <item quantity="other">%1$s, %2$d settings</item>
+    </plurals>
+    <string name="settings_section_advanced">Advanced</string>
+    <string name="settings_advanced">Advanced settings</string>
+    <string name="state_expanded">Expanded</string>
+    <string name="state_collapsed">Collapsed</string>
+    <string name="feature_position">%1$s, %2$d of %3$d</string>
     <!-- Settings -->
     <string name="settings_section_cloud_ai">Cloud AI — bring your own key</string>
-    <string name="settings_section_voice">Voice recognition</string>
+    <string name="settings_section_models">Model library</string>
     <string name="settings_section_features">Features — show in carousel</string>
     <string name="settings_section_prefs">User preferences</string>
     <string name="settings_section_privacy">Privacy</string>
     <string name="settings_api_key">OpenAI API key</string>
+    <string name="settings_use_api">Use API</string>
+    <string name="settings_use_api_desc">Use the OpenAI API (prioritized over local AI if both AI switches are on). When off, nothing is sent to OpenAI</string>
     <string name="settings_api_key_desc_set">Key saved. AI chat features enabled. Tap to change or remove</string>
     <string name="settings_api_key_desc_unset">Add your own OpenAI API key to enable Image chat and AI questions</string>
-    <string name="settings_api_key_cd_set">OpenAI API key. A key is saved and AI features are enabled. Double tap to change or remove it.</string>
-    <string name="settings_api_key_cd_unset">OpenAI API key. Not set. Double tap to add your own key and enable AI features.</string>
-    <string name="settings_stt_models">Voice recognition models</string>
+    <string name="settings_api_key_cd_set">OpenAI API key. A key is saved and AI features are enabled</string>
+    <string name="settings_api_key_cd_unset">OpenAI API key. Not set. Your own key enables AI features</string>
+    <string name="settings_api_key_action_set">change or remove the key</string>
+    <string name="settings_api_key_action_unset">add a key</string>
+    <string name="settings_stt_models">Whisper speech recognition</string>
+    <string name="settings_gemma_model">Gemma on-device AI</string>
+    <string name="settings_gemma_downloaded">Downloaded. Speech recognition and chat on this device</string>
+    <string name="settings_gemma_paused">Download paused at %1$d%%</string>
+    <string name="settings_gemma_not_recommended">Not recommended for this phone. 2.6 GB</string>
+    <string name="settings_section_downloads">Download models</string>
+    <string name="btn_memories">Memories</string>
+    <string name="btn_more">More</string>
+    <string name="bar_save_chat">Save chat</string>
+    <string name="bar_auto_capture">Auto capture</string>
+    <string name="bar_guidance">Guidance</string>
+    <string name="bar_summarize">Summarize</string>
+    <string name="bar_live_text">Live text</string>
+    <string name="bar_pitch">Pitch</string>
+    <string name="memories_title">Memories</string>
+    <string name="memories_empty">No saved chats yet. Open More in a chat and choose Save chat.</string>
+    <string name="memories_rename">Rename</string>
+    <string name="memories_delete">Delete</string>
+    <string name="memories_save">Save</string>
+    <string name="memories_cancel">Cancel</string>
+    <string name="memories_delete_confirm">Delete %1$s?</string>
+    <string name="memories_options_cd">Options for %1$s</string>
+    <string name="memories_kind_question">You</string>
+    <string name="memories_kind_answer">Answer</string>
+    <string name="memories_kind_text">Text</string>
+    <string name="memories_kind_note">Note</string>
+    <string name="memories_saved">Chat saved as %1$s.</string>
+    <string name="memories_nothing">Nothing to save yet.</string>
+    <string name="settings_setup">Set up models for this phone</string>
+    <string name="settings_setup_desc">Recommended: %1$s. Download %2$s, free space %3$s</string>
+    <string name="setup_title">Onboarding</string>
+    <string name="setup_body">We aim to provide the best possible setup for your phone. Would you like to download the best models for your device to access all the features?\n\nRecommended: %1$s.\nDownload size: %2$s.\nFree space on your phone: %3$s.</string>
+    <string name="setup_models_full">Whisper speech recognition and Gemma on-device AI</string>
+    <string name="setup_models_whisper">Whisper speech recognition</string>
+    <string name="setup_yes">Yes</string>
+    <string name="setup_yes_cd">Yes, download the recommended models now</string>
+    <string name="spoken_setup_downloading">Downloading %1$s. This can take a while.</string>
+    <string name="spoken_setup_done">Models installed. All features are ready.</string>
+    <string name="spoken_setup_failed">The download did not finish. You can try again from settings.</string>
+    <string name="spoken_no_space">Not enough free space for this download.</string>
+    <string name="settings_gemma_not_downloaded">Describes images and answers questions on this phone, even offline. Not downloaded. 2.6 GB</string>
+    <string name="settings_stt_engine">Speech recognition</string>
+    <string name="settings_stt_engine_desc">Current: %1$s. Tap to change</string>
+    <string name="settings_stt_engine_cd">Speech recognition. Currently %1$s</string>
+    <string name="settings_cycle_action">switch to the next one</string>
+    <string name="settings_action_download">download</string>
+    <string name="settings_action_continue_download">continue the download</string>
+    <string name="stt_choice_whisper">Whisper (recommended)</string>
+    <string name="stt_choice_gemma">Gemma</string>
+    <string name="stt_choice_android">Android</string>
+    <string name="spoken_stt_choice">Speech recognition: %1$s</string>
+    <string name="gemma_download_title">Download Gemma?</string>
+    <string name="gemma_download_body">Gemma describes images and answers questions on this phone, even offline. The download is 2.6 GB, so Wi-Fi is recommended.</string>
+    <string name="download_channel">Model downloads</string>
+    <string name="download_notification_title">Downloading %1$s</string>
+    <string name="gemma_download_now">Download</string>
+    <string name="gemma_download_now_cd">Download the on-device AI model now. About 2.6 gigabytes.</string>
+    <string name="gemma_download_cancel">Not now</string>
+    <string name="spoken_gemma_downloading">Downloading the on-device AI model. This can take a while.</string>
+    <string name="spoken_gemma_installed">On-device AI model installed.</string>
+    <string name="spoken_gemma_download_failed">The on-device AI model could not be downloaded. Please try again.</string>
+    <string name="settings_use_local_chat">Use local chat AI</string>
+    <string name="settings_use_local_chat_desc">Use downloaded local AI models</string>
+    <string name="gemma_model_body">The on-device AI model takes up %1$s. It recognises speech and answers questions on the phone, even offline.</string>
+    <string name="gemma_model_delete_confirm">Delete the on-device AI model and free %1$s?</string>
+    <string name="spoken_gemma_deleted">On-device AI model deleted.</string>
     <string name="settings_stt_downloaded">Downloaded. Speech is recognised on this device</string>
     <string name="settings_stt_downloading">Downloading… %1$d%%</string>
-    <string name="settings_stt_not_downloaded">Not downloaded. Tap to download (154 MB)</string>
+    <string name="settings_stt_not_downloaded">Not downloaded. 154 MB</string>
     <string name="settings_show_in_carousel">Show %1$s in the carousel</string>
     <string name="settings_auto_capture">Automatic capture</string>
     <string name="settings_auto_capture_desc">Press Ask with no picture to snap one automatically. When off, press Capture first</string>
     <string name="settings_text_preview">Auto text summarization</string>
-    <string name="settings_text_preview_desc">Send captured text straight to the AI instead of reading the raw text first</string>
+    <string name="settings_text_preview_desc">Summarize with AI once captured, instead of reading the raw text first</string>
     <string name="settings_high_contrast">High contrast mode</string>
     <string name="settings_high_contrast_desc">Solid background instead of camera preview</string>
     <string name="settings_white_mode">White mode</string>
     <string name="settings_white_mode_desc">Switch between dark and white contrast themes</string>
-    <string name="settings_button_nav">Button navigation</string>
-    <string name="settings_button_nav_desc">Replace carousel swipe with left / right buttons</string>
     <string name="settings_hold_to_speak">Hold to speak</string>
     <string name="settings_hold_to_speak_desc">Hold the Ask button while talking. When off, tap once to start and tap again to send</string>
     <string name="settings_speech_rate">Speech rate</string>
     <string name="settings_speech_rate_desc">Current: %1$s. Tap to change</string>
-    <string name="settings_speech_rate_cd">Speech rate. Currently %1$s. Double tap to switch to the next speed.</string>
-    <string name="settings_feature_announcements">Feature activation announcements</string>
-    <string name="settings_feature_announcements_desc">Turn off to bypass feature activation announcements</string>
+    <string name="settings_speech_rate_cd">Speech rate. Currently %1$s</string>
     <string name="settings_object_list">Object list</string>
     <string name="settings_object_list_desc">Show or hide items in the Find objects picker</string>
     <string name="settings_crash_reports">Send crash reports</string>
     <string name="settings_crash_reports_desc">Share anonymous crash diagnostics so faults can be fixed. No personal data, no tracking</string>
+    <string name="settings_licences">Open-source licences</string>
+    <string name="settings_licences_desc">The software and models Sight Buddy is built on</string>
     <string name="settings_api_dialog_body">Your key is stored encrypted on this device and sent only to OpenAI. Usage is billed to your own OpenAI account.</string>
     <string name="settings_api_input_cd">API key input field. Paste your OpenAI API key.</string>
+    <string name="settings_api_input_replace_cd">New API key input field. Paste a key to replace the saved one.</string>
+    <string name="settings_api_placeholder">Paste your key: sk-…</string>
+    <string name="settings_api_placeholder_replace">Paste a new key to replace it</string>
+    <string name="settings_saved_key">Saved key</string>
+    <string name="settings_saved_key_cd">Saved key: %1$s</string>
+    <string name="settings_copy_saved_key">Copy</string>
+    <string name="settings_copy_saved_key_cd">Copy the start and end of the saved key</string>
+    <string name="settings_copied">Copied</string>
     <string name="settings_save_key">Save key</string>
     <string name="settings_save_key_cd">Save the entered API key</string>
     <string name="settings_remove_key">Remove saved key</string>
@@ -177,13 +273,9 @@
     <string name="settings_cancel_cd">Cancel without changing the key</string>
     <string name="settings_show">Show</string>
     <string name="settings_hide">Hide</string>
-    <string name="settings_show_cd">Show the API key</string>
-    <string name="settings_hide_cd">Hide the API key</string>
-    <string name="cd_row">%1$s. %2$s. </string>
-    <string name="cd_selected">Selected.</string>
-    <string name="cd_not_selected">Not selected. Double tap to select.</string>
-    <string name="cd_currently_on">Currently on.</string>
-    <string name="cd_currently_off">Currently off.</string>
+    <string name="settings_show_cd">Show the entered key in full</string>
+    <string name="settings_hide_cd">Shorten the entered key</string>
+    <!-- A setting switch's action, as TalkBack says it: "Double tap to enable". -->
     <string name="rate_normal">Normal</string>
     <string name="rate_fast">Fast</string>
     <string name="rate_very_fast">Very fast</string>
@@ -198,24 +290,26 @@
     <string name="picker_filter_hint">Type to filter…</string>
     <string name="picker_search_cd">Search objects. Type an object name to filter the list.</string>
     <string name="picker_cancel_cd">Cancel and go back</string>
-    <string name="stt_dialog_title">Better voice recognition?</string>
-    <string name="stt_download_now">Download now</string>
-    <string name="stt_download_now_cd">Download voice models now. About 154 megabytes.</string>
+    <string name="stt_models_body">The voice models are on this device and take up %1$s. Speech is recognised on the phone, even offline.</string>
+    <string name="stt_models_delete_confirm">Delete the voice models and free %1$s? Speech recognition goes back to the phone\'s own engine until you download them again from settings.</string>
+    <string name="stt_models_delete">Delete models</string>
+    <string name="stt_models_delete_cd">Delete the voice models. Asks to confirm first.</string>
+    <string name="stt_models_delete_yes">Yes, delete</string>
+    <string name="stt_models_delete_yes_cd">Yes, delete the voice models</string>
+    <string name="stt_models_keep">Keep them</string>
+    <string name="stt_models_keep_cd">Keep the voice models and close</string>
+    <string name="stt_models_close_cd">Close and return to settings</string>
     <string name="stt_later">Later</string>
     <string name="stt_later_cd">Later. Ask again next time the app opens.</string>
     <string name="stt_never">Never</string>
     <string name="stt_never_cd">Never. Do not ask again. You can still download from settings.</string>
-    <string name="stt_dialog_body">Download voice models to improve speech recognition? Speech is then recognised fully on your device, even offline. One-time download of about 154 megabytes — Wi-Fi recommended.</string>
     <string name="objects_shown_in_picker">Shown in picker</string>
     <string name="objects_hidden_from_picker">Hidden from picker</string>
-    <string name="waiting_camera_permission">Waiting for camera permission…</string>
     <!-- Spoken descriptions for the on-screen controls. -->
     <string name="cd_playback_back">Backwards. Tap skips back twenty characters. Hold one second to read slower.</string>
     <string name="cd_playback_pause">Pause. Tap to pause reading. Hold one second to restart from the beginning.</string>
     <string name="cd_playback_play">Play. Tap to start or resume reading. Hold one second to restart from the beginning.</string>
     <string name="cd_playback_forward">Forward. Tap skips ahead twenty characters. Hold one second to read faster.</string>
-    <string name="cd_colour_focus_frame">Colour scanner focus frame. Point the centre of the screen at the colour.</string>
-    <string name="cd_browse_objects">Browse objects list. Tap to choose an object to find.</string>
     <!-- Spoken results of the light and colour scanners. -->
     <string name="light_unknown">Unknown</string>
     <string name="light_very_dark">Very dark</string>
@@ -251,6 +345,10 @@
     <string name="model_smart_label">Most capable</string>
     <string name="model_smart_desc">Best for complex questions. Slower and costs more</string>
     <!-- OpenAI transport errors, spoken to the user. -->
+    <string name="error_api_off">AI answers are off. Turn on Use API in settings, or install the on-device model.</string>
+    <string name="error_too_long">Sorry, your message was too long. Can you summarize it?</string>
+    <string name="error_chat_full">This chat has reached its maximum length. You can save it with Save chat under More. Capture again to start a new chat.</string>
+    <string name="error_local_failed">The on-device model could not answer. Please try again.</string>
     <string name="error_no_api_key">No API key set. Add your OpenAI API key in settings to use AI features.</string>
     <string name="error_key_rejected">Your OpenAI API key was rejected. Please check it in settings.</string>
     <string name="error_rate_limited">OpenAI rate limit or spending cap reached. Please try again later.</string>
@@ -258,13 +356,26 @@
     <string name="spoken_image_processing_error">An error occurred while processing the image. Please try again.</string>
     <string name="spoken_ask_about_image">Please ask a question about the image.</string>
     <string name="spoken_session_expired">Session expired for optimal performance. Please scan again.</string>
+    <string name="spoken_taking_picture">Let me take a picture.</string>
+    <string name="spoken_no_text_visible">No text visible.</string>
+    <string name="spoken_looking_for_text">Looking for text.</string>
+    <!-- Direction cues for Find objects and text scanning, spoken by the voice. -->
+    <string name="cue_left">Left</string>
+    <string name="cue_right">Right</string>
+    <string name="cue_up">Up</string>
+    <string name="cue_down">Down</string>
+    <string name="cue_closer">Closer</string>
+    <string name="cue_further">Further</string>
+    <string name="cue_centre">Centred</string>
+    <string name="cue_hold_steady">Hold steady</string>
     <string name="spoken_capture_failed">The picture could not be taken. Please try again.</string>
     <string name="spoken_offline">Your device seems to be offline. Chat features need internet.</string>
     <!-- Language row in Settings. -->
     <string name="settings_section_language">Language</string>
     <string name="settings_language">App language</string>
     <string name="settings_language_desc">Currently %1$s. Tap to change</string>
-    <string name="settings_language_cd">App language, currently %1$s. Double tap to switch to %2$s</string>
+    <string name="settings_language_cd">App language, currently %1$s</string>
+    <string name="settings_language_action">switch to %1$s</string>
     <string name="language_switch_title">Switch language?</string>
     <string name="language_switch_body">Sight Buddy will restart in %1$s.</string>
     <string name="language_switch_confirm">Restart now</string>
@@ -276,6 +387,16 @@
     <string name="settings_loop_carousel_desc">Keep both arrows on every feature. Past the last one, start again at the first</string>
     <!-- Find objects feedback style. -->
     <string name="settings_pitch_feedback">Find objects: Pitch feedback</string>
+    <string name="settings_text_scan_guidance">Text scanning guidance</string>
+    <string name="settings_text_scan_guidance_desc">In Text chat, Capture guides the camera onto the text before taking the picture. When off, Capture takes the picture straight away</string>
+    <string name="settings_live_text">Live text</string>
+    <string name="settings_live_text_desc">In Text chat, text in view is shown over the camera and read out until the chat starts. Needs Preview on</string>
+    <string name="settings_start_features_muted">Start features muted</string>
+    <string name="settings_start_features_muted_desc">Features with a Mute button start muted; press Mute to hear them</string>
+    <string name="settings_camera_preview">Camera preview</string>
+    <string name="settings_camera_preview_desc">Show the camera behind every feature. The Preview button does the same</string>
+    <string name="settings_haptic_feedback">Haptic feedback</string>
+    <string name="settings_haptic_feedback_desc">Prioritize vibration over sound effects</string>
     <string name="settings_pitch_feedback_desc">A held note that rises as the object nears the middle of the frame, instead of spoken direction cues</string>
     <!-- OpenAI speech recognition. -->
     <string name="settings_cloud_stt">OpenAI speech recognition</string>

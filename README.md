@@ -1,8 +1,12 @@
 # Sight Buddy
 
-**A free, open-source, bring-your-own-key assistive vision app for blind and low-vision users.**
+[![Build](https://github.com/DrophouseLtd/SightBuddy/actions/workflows/ci.yml/badge.svg)](https://github.com/DrophouseLtd/SightBuddy/actions/workflows/ci.yml)
 
-Point your phone's camera to hear your surroundings described, read printed text aloud, find objects, and identify colours and lighting. Most of it runs **entirely on your device**. The optional AI features run on **your own OpenAI API key** — so there's no subscription, no ads, no accounts, and no server of ours in the middle.
+**A free, open-source assistive vision app for blind and low-vision users.**
+
+Point your phone's camera to hear your surroundings described, read printed text aloud, find objects, and identify colours and lighting. It runs **on your device**: since 2.3.0 the AI answers can come from a model you download once, with no account and no internet. If you would rather use OpenAI, you can, with **your own API key**. Either way there's no subscription, no ads, no accounts, and no server of ours in the middle.
+
+Product page: **[drophouse.uk/products/sightbuddy](https://www.drophouse.uk/products/sightbuddy/)**
 
 <p>
   <a href="#install">Install</a> ·
@@ -20,14 +24,17 @@ Point your phone's camera to hear your surroundings described, read printed text
 |------|--------------|-----------|
 | **Discover objects** | Names what the camera sees as you move | On device |
 | **Find objects** | Say "keys" or "cup" — directional sounds and haptics guide you to it | On device; if you've added a key, unclear phrases are disambiguated by AI |
-| **Text chat** | Reads printed text aloud with seekable playback; ask questions about it | OCR on device, Q&A via your key |
-| **Image chat** | Describes a scene and answers follow-up questions about it | Your key |
+| **Text chat** | Reads printed text aloud with seekable playback; ask questions about it | OCR on device; answers on device or via your key |
+| **Image chat** | Describes a scene and answers follow-up questions about it | On device or via your key |
+| **Memories** | Save a chat and read it again later | On device; saved chats never leave the phone |
 | **Scan colour** | Speaks the colour inside the on-screen focus frame | On device |
 | **Scan light** | Reports bright, dim, or dark lighting | On device |
 
+**AI on the phone.** Settings offers a model to download once (about 2.6 GB, English). With it, Image chat and Text chat answer with no key, no account and no connection. It is offered where the phone can run it well; on other phones, and in Finnish, it stays available under Advanced settings.
+
 **Speech recognition runs on your device too** — optional Whisper models (~154 MB, downloaded once on request) give offline, accent-tolerant transcription. Until you download them the app falls back to Android's built-in recogniser, so it works immediately either way.
 
-Every surface is built accessibility-first: TalkBack labels throughout, spoken announcements, haptics, high-contrast light/dark themes, adjustable speech rate (1×–3×), button navigation instead of swipes, per-feature show/hide, and a choice of tap-to-speak or hold-to-speak.
+Every surface is built accessibility-first: TalkBack labels throughout, spoken announcements, haptics, high-contrast light/dark themes, adjustable speech rate (1×–3×), a feature bar you can swipe or tap, per-feature show/hide, and Finnish as well as English. What the app says is written into the conversation too, so a screen reader can read it back.
 
 ## Install
 
@@ -41,17 +48,23 @@ Every surface is built accessibility-first: TalkBack labels throughout, spoken a
 
 Requires **Android 11 (API 30)** or newer.
 
+**Older versions** stay available: every past release keeps its APK on its own [Releases](../../releases) entry.
+
 **Pick one source and stay with it.** Google Play re-signs the apps it distributes, so the Play build and the APK here are signed with different keys — and Android refuses to replace an installed app with a differently-signed copy. If an install or update stops with a signature error, that is why. Switching sources means uninstalling first, which **erases your saved API key and any downloaded voice models**. If you want updates to arrive on their own, install from Google Play.
 
-## Using the AI features (bring your own key)
+## The AI features: on your phone, or your own key
 
-Image chat and the AI answers in Text chat need an OpenAI API key. Everything else works without one.
+Image chat and the AI answers in Text chat need one of two things. Everything else works without either.
+
+**On your phone.** Settings → Model library offers a model sized for your phone. Download it once and the answers come from the phone itself: no account, no key, no connection, nothing sent anywhere. It is the slower of the two, and it is English-only for speech, though it answers in Finnish.
+
+**Or your own OpenAI key**, which is faster and stronger at detail:
 
 1. Create a key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
 2. **Set a spending limit** on your OpenAI account (Billing → Limits). Worth doing before you start.
 3. In Sight Buddy: **Settings → OpenAI API key → paste → Save**.
 
-Your key is encrypted on your device using the Android Keystore and is sent **only** to OpenAI, never to us. Usage bills to your own OpenAI account — typically a fraction of a penny per question. Remove the key any time to switch the app back to fully-local mode.
+With both available, the **Use API** switch in Settings decides; with it off, or with no connection, the phone's own model answers. Your key is encrypted on your device using the Android Keystore and is sent **only** to OpenAI, never to us. Usage bills to your own OpenAI account — typically a fraction of a penny per question. Remove the key any time to switch the app back to fully-local mode.
 
 **Choosing a model** (Settings, under the key):
 
@@ -66,6 +79,10 @@ Your key is encrypted on your device using the Android Keystore and is sent **on
 - **Image chat** — the captured photo and your question.
 - **Text chat** — the text read from your capture (not the image itself) and your question.
 - **Find objects** — the spoken phrase, *only* when the app can't match it to a known object locally. No image is ever sent.
+
+**Saved chats** (Memories) are written to your phone's private storage and are left out of Android's cloud backup, so they stay on the device they were made on.
+
+**Model downloads** come from Hugging Face (the AI model) and GitHub (the speech models). Downloading one shows those services your IP address, as any download does; nothing about you or your use is sent with it.
 
 That's the complete list. Everything else — object detection, reading text aloud, colour, light, and speech recognition once the models are downloaded — happens on your device and sends nothing. **With no key saved, the app makes no AI requests at all.** Requests go to OpenAI under their privacy policy, billed to your own account.
 
@@ -94,9 +111,12 @@ If you're reading this as a portfolio piece, or mining the repo for parts, these
 - **Encrypted BYOK key storage** — [`ApiKeyStore`](app/src/main/java/com/example/sightbuddy/core/ApiKeyStore.kt) seals the key with an AES-GCM key held in the Android Keystore (hardware-backed where available), so the preferences file alone is useless.
 - **Accessible Compose patterns** — TalkBack labels on every control, a high-contrast mode that masks the preview *without* stopping frame analysis, and a character-indexed TTS playback engine whose seek/pause survives speech-rate changes by design.
 - **A disciplined CameraX pipeline** — YUV→RGB without a lossy JPEG round-trip, rotation-aware TFLite input, and a capacity-1 frame `Channel` with explicit ownership accounting to prevent backpressure stalls.
+- **A 2.6 GB language model running on the phone** — [`core/llm/LocalGemma.kt`](app/src/main/java/com/example/sightbuddy/core/llm/LocalGemma.kt). Gemma via [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM), vision on the GPU and audio on the CPU, warmed up before the first question, released when nothing needs it, and answering the same OpenAI-shaped request the cloud path uses — so every feature works either way without knowing which answered.
+- **A resumable download that cannot be fooled** — the server may answer a range request with the whole file. The model download only appends when the reply says the body starts exactly where the file ends, after a complete 2.6 GB download was once thrown away for being 65 MB too long.
+- **Keeping a Compose screen compilable** — the main screen grew past ART's per-method instruction limit, so Android refused to compile it and ran it interpreted. Splitting the state and logic into a controller, with one composable per screen, took it from 25,712 dex code units to about 4,000. `dexdump` tells you; nothing else will.
 - **Environment isolation without a DI framework** — dev/prod flavors swap real vs. mock behaviour through plain factory functions. Boring, explicit, testable.
 
-Architecture notes: [AGENT_HANDOVER.md](AGENT_HANDOVER.md).
+Architecture notes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Building from source
 
@@ -115,7 +135,7 @@ Crash reporting (Firebase Crashlytics) is prod-flavor only and inactive without 
 
 Issues and pull requests are welcome. The project is no longer under active development, so it's a good candidate for anyone who wants to take a piece further. Ideas that would genuinely help:
 
-- **More languages.** Both the speech model and the UI strings are English-only today. The app deliberately ships `base.en` because the whole chain — object labels, announcements, text-to-speech — assumes English; proper localisation means changing all of it together, not just the model.
+- **More languages.** The interface speaks English and Finnish, but the on-device speech model is `base.en` and the object labels are English. Adding a language means the whole chain together — labels, announcements, text-to-speech and a speech model that serves it.
 - **An iOS version.** There isn't one, and the people this app is for are split roughly evenly across platforms. The on-device pieces (Whisper via sherpa-onnx, OCR, object detection) all have iOS equivalents.
 - **An Apache-licensed detector.** Worth a note, since the licensing here is easy to get wrong: the popular Ultralytics YOLO models (v5/v8/v11) are **AGPL-3.0**, which would force this whole MIT project to relicense — so they are *not* an option. **YOLOX** (Megvii) is genuinely Apache-2.0 and would be a clean swap for the current EfficientDet-Lite0 detector.
 
@@ -127,7 +147,7 @@ Questions or feedback: **contact@drophouse.uk**.
 
 ## Licence
 
-Code is [MIT](LICENSE) © 2026 Drophouse Ltd.
+Code is [MIT](LICENSE) © 2026 Drophouse Ltd. Third-party components keep their own licenses: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Third-party components keep their own licences: OpenAI Whisper models (MIT; ONNX export via sherpa-onnx, Apache-2.0), Silero VAD (MIT), sherpa-onnx runtime (Apache-2.0), and EfficientDet-Lite0 (Apache-2.0, see [legal/](legal/)).
 

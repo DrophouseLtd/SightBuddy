@@ -9,6 +9,7 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
 import com.example.sightbuddy.core.VoiceCommandService
+import com.example.sightbuddy.core.llm.LocalGemma
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +24,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.sightbuddy.core.PrivateLog
+import android.media.AudioAttributes
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Unified speech-to-text front door.
@@ -38,7 +42,18 @@ import kotlinx.coroutines.withContext
  * Exposes the same flow surface as the old service ([recognizedText],
  * [isListening], [lastError]) plus [events] for result/empty notifications.
  */
-class VoiceInputService(private val context: Context, val models: SttModelManager) {
+class VoiceInputService(
+    private val context: Context,
+    val models: SttModelManager,
+    /**
+     * On-device Gemma. When its model is installed it replaces Whisper entirely
+     * in English: Whisper is not loaded, and a recording made while Gemma is still
+     * loading waits for it.
+     */
+    private val localGemma: LocalGemma? = null,
+    /** The user's speech recognition choice in Settings. */
+    private val sttChoice: () -> SttChoice = { SttChoice.WHISPER },
+) {
 
     sealed class SttEvent {
         /** Recording ended by the service, not the user. */
@@ -62,6 +77,19 @@ class VoiceInputService(private val context: Context, val models: SttModelManage
 
     private fun usingCloud(): Boolean = cloudTranscriber?.isConfigured() == true
 
+    /** Which engine runs right now, from the choice and what is installed and loaded. */
+    private fun effectiveChoice(): SttChoice = SttChoice.effective(
+        chosen = sttChoice(),
+        whisperReady = engine != null,
+        gemmaInstalled = localGemma?.installed == true,
+        english = Locale.getDefault().language == "en",
+    )
+
+    private fun usingGemma(): Boolean = effectiveChoice() == SttChoice.GEMMA
+
+    /** True when the app, not the platform recogniser, holds the recording. */
+    private fun appOwnsRecording(): Boolean = usingWhisper() || usingCloud() || usingGemma()
+
     private val audioManager =
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     private var focusRequest: AudioFocusRequest? = null
@@ -78,9 +106,9 @@ class VoiceInputService(private val context: Context, val models: SttModelManage
         if (focusRequest != null) return
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
             .setAudioAttributes(
-                android.media.AudioAttributes.Builder()
-                    .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
-                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
             )
             .setOnAudioFocusChangeListener { }
@@ -118,7 +146,7 @@ class VoiceInputService(private val context: Context, val models: SttModelManage
 
     private var engine: WhisperEngine? = null
 
-    private val engineLoadStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val engineLoadStarted = AtomicBoolean(false)
 
     @Volatile
     private var recordJob: Job? = null
@@ -148,21 +176,21 @@ class VoiceInputService(private val context: Context, val models: SttModelManage
         }
         scope.launch {
             legacy.isListening.collect { listening ->
-                if (!usingWhisper()) _isListening.value = listening
+                if (!appOwnsRecording()) _isListening.value = listening
                 if (!listening) releaseAudioFocus()
             }
         }
         loadEngineIfReady()
     }
 
-    private fun usingWhisper(): Boolean = engine != null
+    private fun usingWhisper(): Boolean = effectiveChoice() == SttChoice.WHISPER
 
     /**
      * True when the platform recogniser is driving the mic, which means the system
      * plays its own start, stop and error earcons. Callers use this to avoid
      * stacking the app's cues on top of them.
      */
-    fun usesSystemEarcons(): Boolean = !usingWhisper() && !usingCloud()
+    fun usesSystemEarcons(): Boolean = !appOwnsRecording()
 
     /** Load the Whisper engine when model files are available. Single-flight. */
     fun loadEngineIfReady() {
@@ -181,6 +209,19 @@ class VoiceInputService(private val context: Context, val models: SttModelManage
         }
     }
 
+    /**
+     * Drops the loaded Whisper engine so its model files can be deleted; the
+     * system recogniser takes over. Refused while a recording is using it.
+     */
+    fun unloadEngine(): Boolean {
+        if (recordJob?.isActive == true) return false
+        engine?.release()
+        engine = null
+        _whisperReady.value = false
+        engineLoadStarted.set(false)
+        return true
+    }
+
     fun startListening() {
         _recognizedText.value = ""
         _lastError.value = 0
@@ -190,8 +231,9 @@ class VoiceInputService(private val context: Context, val models: SttModelManage
         // deferred open means a stop arriving first cancels it rather than ending a
         // live session. That is what stopped follow-up questions recording at all.
         val cloud = cloudTranscriber?.takeIf { it.isConfigured() }
-        val eng = engine
-        if (cloud == null && eng == null) {
+        val gemma = localGemma?.takeIf { usingGemma() }
+        val eng = engine?.takeIf { usingWhisper() }
+        if (cloud == null && gemma == null && eng == null) {
             legacy.startListening()
             return
         }
@@ -199,13 +241,23 @@ class VoiceInputService(private val context: Context, val models: SttModelManage
         stopRequested = false
         _isListening.value = true
         recordJob = scope.launch {
-            if (cloud != null) recordAndSendToCloud(cloud) else recordAndTranscribe(eng!!)
+            when {
+                cloud != null -> recordAndSend("Cloud") { pcm, rate ->
+                    withContext(Dispatchers.IO) {
+                        cloud.transcribe(pcm, rate, Locale.getDefault().language)
+                    }
+                }
+                gemma != null -> recordAndSend("Gemma") { pcm, rate ->
+                    gemma.transcribe(pcm, rate)
+                }
+                else -> recordAndTranscribe(eng!!)
+            }
         }
     }
 
     /** Idempotent; safe to call when not recording (e.g. release after auto-stop). */
     fun stopListening() {
-        if (usingWhisper() || usingCloud()) {
+        if (appOwnsRecording()) {
             releaseAudioFocus()
             stopRequested = true
         } else {
@@ -299,7 +351,7 @@ class VoiceInputService(private val context: Context, val models: SttModelManage
             if (text.isBlank()) {
                 finishWithError()
             } else {
-                Log.i(TAG, "Whisper transcription: $text")
+                PrivateLog.i(TAG) { "Whisper transcription: $text" }
                 _recognizedText.value = text
             }
         } catch (e: Exception) {
@@ -311,14 +363,17 @@ class VoiceInputService(private val context: Context, val models: SttModelManage
     }
 
     /**
-     * Record until the user stops, or the cap, then send the audio for
-     * transcription.
+     * Record until the user stops, or the cap, then hand the audio to
+     * [transcribe] (OpenAI or on-device Gemma).
      *
      * No voice activity detection and no auto-stop: that is the entire point of
      * this path. The silero detector also lives in the Whisper download, which a
      * user on this path may never have fetched.
      */
-    private suspend fun recordAndSendToCloud(cloud: CloudTranscriber) {
+    private suspend fun recordAndSend(
+        label: String,
+        transcribe: suspend (pcm: ShortArray, sampleRate: Int) -> String?,
+    ) {
         val sampleRate = WhisperEngine.SAMPLE_RATE
         val chunk = 1600 // 100 ms
         val maxSamples = sampleRate * (MAX_RECORDING_MS / 1000L).toInt()
@@ -380,9 +435,7 @@ class VoiceInputService(private val context: Context, val models: SttModelManage
 
         _isTranscribing.value = true
         val text = try {
-            withContext(Dispatchers.IO) {
-                cloud.transcribe(pcm, sampleRate, Locale.getDefault().language)
-            }
+            transcribe(pcm, sampleRate)
         } finally {
             _isTranscribing.value = false
         }
@@ -391,7 +444,7 @@ class VoiceInputService(private val context: Context, val models: SttModelManage
             _lastError.value = ERROR_NO_MATCH
             _events.tryEmit(SttEvent.Empty)
         } else {
-            Log.i(TAG, "Cloud transcription: $text")
+            PrivateLog.i(TAG) { "$label transcription: $text" }
             _recognizedText.value = text
         }
     }

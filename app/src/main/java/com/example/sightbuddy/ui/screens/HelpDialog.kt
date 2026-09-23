@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,9 +37,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.sightbuddy.R
+import com.example.sightbuddy.ui.DialogWindowTitle
+import com.example.sightbuddy.ui.buttonSemantics
 import com.example.sightbuddy.ui.theme.actionButtonBackground
 import com.example.sightbuddy.ui.theme.actionButtonText
 import kotlinx.coroutines.launch
+import com.example.sightbuddy.core.hints.HelpSection
 
 private enum class HelpPane {
     INSTRUCTIONS,
@@ -50,6 +54,8 @@ private enum class HelpPane {
 fun HelpDialog(
     title: String,
     body: String,
+    /** When not empty, shown instead of [body]: parts under sub-headings. */
+    sections: List<HelpSection> = emptyList(),
     darkTheme: Boolean,
     highContrast: Boolean,
     whiteMode: Boolean,
@@ -57,8 +63,17 @@ fun HelpDialog(
     onSubmitFeedback: suspend (String) -> Boolean,
 ) {
     val scrim = Color.Black.copy(alpha = 0.72f)
-    val cardBg = if (darkTheme) Color(0xFF1E1E1E) else Color.White
-    val textColor = if (darkTheme) Color.White else Color(0xFF1A1A1A)
+    // Brand colours, except in high contrast, which keeps black and white.
+    val brand = com.example.sightbuddy.ui.theme.brandPalette(darkTheme)
+    val cardBg = when {
+        highContrast -> if (darkTheme) Color(0xFF1E1E1E) else Color.White
+        else -> brand.surface
+    }
+    val textColor = when {
+        highContrast -> if (darkTheme) Color.White else Color(0xFF1A1A1A)
+        else -> brand.ink
+    }
+    val titleColor = if (highContrast) textColor else brand.label
     val mutedColor = textColor.copy(alpha = 0.75f)
     val fieldBorder = if (darkTheme) Color.Gray else Color(0xFF9E9E9E)
 
@@ -93,6 +108,7 @@ fun HelpDialog(
         onDismissRequest = { resetAndClose() },
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        DialogWindowTitle(title)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -112,19 +128,43 @@ fun HelpDialog(
                         Text(
                             text = title,
                             style = MaterialTheme.typography.headlineSmall,
-                            color = textColor,
+                            color = titleColor,
                             fontWeight = FontWeight.Bold,
                         )
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = body,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = textColor.copy(alpha = 0.92f),
-                            lineHeight = 26.sp,
+                        // Short parts under sub-headings, each paragraph on its own,
+                        // so TalkBack can move heading to heading.
+                        val parts = sections.ifEmpty {
+                            listOf(HelpSection(null, body))
+                        }
+                        Column(
                             modifier = Modifier
-                                .heightIn(max = 360.dp)
+                                .heightIn(max = 420.dp)
                                 .verticalScroll(rememberScrollState()),
-                        )
+                        ) {
+                            parts.forEachIndexed { index, part ->
+                                if (index > 0) Spacer(modifier = Modifier.height(18.dp))
+                                part.heading?.let { heading ->
+                                    Text(
+                                        text = heading,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = textColor,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.semantics { heading() },
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                }
+                                part.text.split("\n\n").forEachIndexed { p, paragraph ->
+                                    if (p > 0) Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = paragraph.trim(),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = textColor.copy(alpha = 0.92f),
+                                        lineHeight = 26.sp,
+                                    )
+                                }
+                            }
+                        }
                         Spacer(modifier = Modifier.height(24.dp))
                         HelpActionButton(
                             label = closeLabel,
@@ -257,7 +297,7 @@ private fun HelpActionButton(
             .background(background)
             .clickable(onClick = onClick)
             .padding(vertical = 16.dp)
-            .semantics { this.contentDescription = contentDescription },
+            .buttonSemantics(label),
         contentAlignment = Alignment.Center,
     ) {
         Text(

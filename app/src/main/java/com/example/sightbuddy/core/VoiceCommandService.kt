@@ -84,7 +84,7 @@ class VoiceCommandService(private val context: Context) {
                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 if (!matches.isNullOrEmpty()) {
                     val command = matches[0]
-                    Log.i("VoiceCommandService", "Recognized command: $command")
+                    PrivateLog.i("VoiceCommandService") { "Recognized command: $command" }
                     _recognizedText.value = command
                 }
                 _isListening.value = false

@@ -2,13 +2,17 @@ package com.example.sightbuddy.features.vision
 
 import android.util.Log
 import com.example.sightbuddy.core.OpenAiTransport
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import org.json.JSONObject
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.max
+import com.example.sightbuddy.core.PrivateLog
 
 class ObjectCommandResolver(
     private val transport: OpenAiTransport,
@@ -137,14 +141,14 @@ class ObjectCommandResolver(
         // --- Path 1a: direct alias lookup ---
         val directAlias = activeAliases()[normalized]
         if (directAlias != null && directAlias in COCO_OBJECTS) {
-            Log.i(TAG, "Resolved locally by alias: '$raw' -> '$directAlias'")
+            PrivateLog.i(TAG) { "Resolved locally by alias: '$raw' -> '$directAlias'" }
             return@withContext ResolveResult.Activate(directAlias, Source.LOCAL, 1.0f)
         }
 
         // --- Path 1b: exact COCO label match (after normalization) ---
         val exactMatch = COCO_OBJECTS.find { normalize(it) == normalized }
         if (exactMatch != null) {
-            Log.i(TAG, "Resolved locally by exact match: '$raw' -> '$exactMatch'")
+            PrivateLog.i(TAG) { "Resolved locally by exact match: '$raw' -> '$exactMatch'" }
             return@withContext ResolveResult.Activate(exactMatch, Source.LOCAL, 1.0f)
         }
 
@@ -168,7 +172,7 @@ class ObjectCommandResolver(
         }
 
         if (!llmEnabled) {
-            Log.i(TAG, "LLM disabled. Returning local-only unavailable for '$raw'")
+            PrivateLog.i(TAG) { "LLM disabled. Returning local-only unavailable for '$raw'" }
             return@withContext ResolveResult.Unavailable(
                 message = itemListUnavailableMessage(raw)
             )
@@ -176,9 +180,9 @@ class ObjectCommandResolver(
 
         // --- Path 2: delegate to API ---
         val localHints = scored.take(3).map { it.item }
-        Log.i(TAG, "Local uncertain (top=${top?.item} score=${top?.score}). Calling API for '$raw'")
+        PrivateLog.i(TAG) { "Local uncertain (top=${top?.item} score=${top?.score}). Calling API for '$raw'" }
 
-        val apiResult = resolveWithApi(raw, localHints)
+        val apiResult = cancellable { resolveWithApi(raw, localHints) }
         if (apiResult != null) {
             return@withContext mapApiDecision(apiResult)
         }
@@ -189,7 +193,8 @@ class ObjectCommandResolver(
         }
 
         // --- Path 3: API unreachable, fail with the local-only item-list message ---
-        Log.w(TAG, "API fallback failed for '$raw'. Returning suggestions: $localHints")
+        Log.w(TAG, "API fallback failed. Returning ${localHints.size} suggestions")
+        PrivateLog.i(TAG) { "API fallback failed for '$raw'. Suggestions: $localHints" }
         return@withContext ResolveResult.Unavailable(
             message = itemListUnavailableMessage(raw),
             suggestions = localHints
@@ -337,9 +342,23 @@ class ObjectCommandResolver(
 
     // --- OpenAI API fallback ---
 
+    /**
+     * Runs a blocking model call so that cancelling the caller (the 10 s limit in
+     * Find objects) also stops an on-device answer, instead of waiting it out.
+     */
+    private suspend fun <T> cancellable(block: () -> T): T = coroutineScope {
+        val work = async(Dispatchers.IO) { block() }
+        try {
+            work.await()
+        } catch (e: CancellationException) {
+            transport.cancelLocal()
+            throw e
+        }
+    }
+
     private fun resolveWithApi(userText: String, localCandidates: List<String>): ApiDecision? {
-        if (!transport.isConfigured()) {
-            Log.w(TAG, "API fallback skipped: LLM not configured")
+        if (!transport.canAnswer()) {
+            Log.w(TAG, "API fallback skipped: no AI available")
             return null
         }
         return try {
@@ -385,7 +404,10 @@ class ObjectCommandResolver(
 
     private fun parseApiDecision(content: String): ApiDecision? {
         return try {
-            val json = JSONObject(content)
+            // Small on-device models like to wrap JSON in a code fence.
+            val start = content.indexOf('{')
+            val end = content.lastIndexOf('}')
+            val json = JSONObject(if (start >= 0 && end > start) content.substring(start, end + 1) else content)
             val actionRaw = json.optString("action", "unavailable")
             val action = when (actionRaw.lowercase(Locale.US)) {
                 "activate", "clarify", "unavailable" -> actionRaw.lowercase(Locale.US)
@@ -400,7 +422,8 @@ class ObjectCommandResolver(
             val confidence = json.optDouble("confidence", 0.0).toFloat().coerceIn(0f, 1f)
             ApiDecision(action = action, item = item, message = message, confidence = confidence)
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse API JSON: $content", e)
+            Log.w(TAG, "Failed to parse API JSON", e)
+            PrivateLog.i(TAG) { "Unparsed API reply: $content" }
             null
         }
     }
@@ -410,7 +433,7 @@ class ObjectCommandResolver(
         private const val MIN_EMBEDDED_TOKEN_LENGTH = 3
         private val SYSTEM_PROMPT = """
             You are an object-command resolver for a vision assistant app used by visually impaired people.
-            ${com.example.sightbuddy.core.OpenAiTransport.LLM_USER_SAFETY_INSTRUCTION}
+            ${OpenAiTransport.LLM_USER_SAFETY_INSTRUCTION}
             The user spoke a voice command to find an object. Their speech may be noisy, contain extra words, or use everyday synonyms instead of the exact label.
 
             IMPORTANT — Synonym and common-name mapping:
@@ -443,7 +466,7 @@ class ObjectCommandResolver(
          */
         private val SYSTEM_PROMPT_FI = """
             You are an object-command resolver for a vision assistant app used by visually impaired people.
-            ${com.example.sightbuddy.core.OpenAiTransport.LLM_USER_SAFETY_INSTRUCTION}
+            ${OpenAiTransport.LLM_USER_SAFETY_INSTRUCTION}
             The user speaks FINNISH. Their speech may be noisy, contain extra words, or use everyday Finnish synonyms.
             The allowed_items list is in ENGLISH and you must return an English item from it.
 
