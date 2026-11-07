@@ -28,7 +28,7 @@ class TFLiteObjectAnalyzer(private val context: Context) {
     )
 
     private var objectDetector: ObjectDetector? = null
-    private val confidenceThreshold = 0.4f
+    private val confidenceThreshold = DetectionRules.DETECTOR_FLOOR
 
     companion object {
         private const val TAG = "TFLiteObjectAnalyzer"

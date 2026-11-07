@@ -30,10 +30,18 @@ keystore_base64.txt
 # Supabase CLI local state (may contain connection strings)
 supabase/.temp/
 
-# Internal working docs (kept private)
+# Migration artifacts
 migrate_working_dir/
-Implementation Plan.md
-Worklog.md
 
 # sherpa-onnx AAR (48 MB; fetched by the downloadSherpaOnnx gradle task)
 app/libs/*.aar
+
+# Release notes for whoever is shipping: the checks, the blockers and the
+# test list for a version. Kept on the machine doing the release.
+RELEASE_*.md
+
+# Claude Code: per-machine permissions; agents and skills are shared
+.claude/settings.local.json
+
+# Worktrees made for parallel agents
+.claude/worktrees/

@@ -7,6 +7,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import com.example.sightbuddy.core.stt.Transcripts
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
@@ -31,8 +32,8 @@ class VoiceCommandService(private val context: Context) {
     /** Incremented per recording; callbacks from older sessions are dropped. */
     private var sessionId = 0
     
-    private val _recognizedText = MutableStateFlow("")
-    val recognizedText = _recognizedText.asStateFlow()
+    private val _transcripts = Transcripts()
+    val transcripts = _transcripts.flow
 
     private val _lastError = MutableStateFlow(0)
     val lastError = _lastError.asStateFlow()
@@ -85,7 +86,7 @@ class VoiceCommandService(private val context: Context) {
                 if (!matches.isNullOrEmpty()) {
                     val command = matches[0]
                     PrivateLog.i("VoiceCommandService") { "Recognized command: $command" }
-                    _recognizedText.value = command
+                    _transcripts.deliver(command)
                 }
                 _isListening.value = false
             }
@@ -98,7 +99,6 @@ class VoiceCommandService(private val context: Context) {
 
     fun startListening() {
         if (!rebuild()) return
-        _recognizedText.value = ""
         _lastError.value = 0
         _isListening.value = true
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {

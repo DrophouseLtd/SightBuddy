@@ -6,6 +6,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,6 +28,8 @@ import com.example.sightbuddy.core.stt.SttChoice
 import com.example.sightbuddy.core.stt.SttModelManager
 import com.example.sightbuddy.features.chat.OcrDebug
 import com.example.sightbuddy.features.vision.CocoFinnish
+import com.example.sightbuddy.ui.LocalTextLanguages
+import com.example.sightbuddy.ui.ScreenReaderLines
 import com.example.sightbuddy.ui.screens.BarToggle
 import com.example.sightbuddy.ui.screens.ChoiceRespectedDialog
 import com.example.sightbuddy.ui.screens.CloudSttDialog
@@ -34,6 +38,9 @@ import com.example.sightbuddy.ui.screens.HelpDialog
 import com.example.sightbuddy.ui.screens.HomeScreen
 import com.example.sightbuddy.ui.screens.LanguageSwitchDialog
 import com.example.sightbuddy.ui.screens.MemoriesScreen
+import com.example.sightbuddy.ui.screens.MessageMenuHost
+import com.example.sightbuddy.ui.screens.MissingVoiceDialog
+import java.util.Locale
 import com.example.sightbuddy.ui.screens.ModelSetupDialog
 import com.example.sightbuddy.ui.screens.ObjectPickerDialog
 import com.example.sightbuddy.ui.screens.OcrDebugOverlay
@@ -60,6 +67,21 @@ fun AppScreens(c: AppController, modifier: Modifier = Modifier) {
     val highContrast by c.settingsManager.highContrastEnabled.collectAsState()
     val whiteMode by c.settingsManager.whiteModeEnabled.collectAsState()
     val effectiveDarkTheme = if (highContrast) !whiteMode else isSystemInDarkTheme()
+    // Chat messages are tagged with their languages for TalkBack (issue #26).
+    val textLanguages = remember(c.ttsService) { c.ttsService::languagesOf }
+    CompositionLocalProvider(LocalTextLanguages provides textLanguages) {
+        AppScreensContent(c, highContrast, whiteMode, effectiveDarkTheme, modifier)
+    }
+}
+
+@Composable
+private fun AppScreensContent(
+    c: AppController,
+    highContrast: Boolean,
+    whiteMode: Boolean,
+    effectiveDarkTheme: Boolean,
+    modifier: Modifier,
+) {
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -76,6 +98,9 @@ fun AppScreens(c: AppController, modifier: Modifier = Modifier) {
             FeaturesHost(c, effectiveDarkTheme, highContrast, whiteMode)
         }
         AppDialogs(c, highContrast, whiteMode)
+        // Last, over every screen: the app's speech for the screen reader (issue #15).
+        val screenReaderLines by c.ttsService.screenReaderLines.collectAsState()
+        ScreenReaderLines(screenReaderLines, Modifier.align(Alignment.TopStart))
     }
 }
 
@@ -149,6 +174,7 @@ private fun MemoriesHost(
             whiteMode = whiteMode,
             featureLabel = { ModeNames.display(context, it) },
             onRename = { memory, name -> memoryStore.rename(memory.id, name) },
+            onShare = { memory -> shareMemory(memory) },
             onDelete = { memory -> memoryStore.delete(memory.id) },
             onBack = { showMemories = false },
         )
@@ -275,6 +301,8 @@ private fun SettingsHost(
                 onCrashReportingChange = { enabled ->
                     createCrashReporter().setEnabled(enabled)
                 },
+                onPrivacyPolicy = { openUrlInBrowser(TermsStore.PRIVACY_POLICY_URL) },
+                onTermsOfUse = { openUrlInBrowser(TermsStore.TERMS_OF_USE_URL) },
             )
         }
     }
@@ -294,7 +322,6 @@ private fun FeaturesHost(
         val cameraPreviewSetting by settingsManager.cameraPreview.collectAsState()
         val lastSpokenLine by ttsService.lastSpoken.collectAsState()
         val isListening by voiceInputService.isListening.collectAsState()
-        settingsManager.holdToSpeak.collectAsState().value
         val playbackState by textScriptPlayer.playbackState.collectAsState()
         val hiddenCocoObjects by settingsManager.hiddenCocoObjects.collectAsState()
         val visibleCocoObjects = remember(hiddenCocoObjects) { settingsManager.visibleCocoObjects() }
@@ -316,7 +343,6 @@ private fun FeaturesHost(
         // One conversation for every feature, kept by the controller.
         val transcriptEntries = c.transcriptEntries
         val autoCaptureOn by settingsManager.autoCaptureEnabled.collectAsState()
-        val textGuidanceOn by settingsManager.textScanGuidance.collectAsState()
         val textPreviewOn by settingsManager.textPreviewEnabled.collectAsState()
         val liveTextOn by settingsManager.liveText.collectAsState()
         val pitchOn by settingsManager.pitchFeedback.collectAsState()
@@ -325,7 +351,6 @@ private fun FeaturesHost(
                 BarToggle(stringResource(R.string.bar_auto_capture), autoCaptureOn) { settingsManager.setAutoCapture(it) },
             )
             ModeNames.TEXT_CHAT -> listOfNotNull(
-                BarToggle(stringResource(R.string.bar_guidance), textGuidanceOn) { settingsManager.setTextScanGuidance(it) },
                 BarToggle(stringResource(R.string.bar_live_text), liveTextOn) { settingsManager.setLiveText(it) },
                 // Shown as "summarise": the stored setting is its opposite (read the raw text).
                 BarToggle(stringResource(R.string.bar_summarize), !textPreviewOn) { settingsManager.setTextPreview(!it) }
@@ -336,6 +361,8 @@ private fun FeaturesHost(
             )
             else -> emptyList()
         }
+        // The launcher's shortcuts follow the features switched on.
+        LaunchedEffect(pages) { publishShortcuts(pages) }
         if (!cameraDisabled) {
             AndroidView(
                 factory = { ctx ->
@@ -375,6 +402,7 @@ private fun FeaturesHost(
             pendingQuestion = chatPendingQuestion.takeUnless {
                 transcriptEntries.lastOrNull { e -> e.kind == TranscriptEntry.Kind.QUESTION }?.text == it
             },
+            pendingAnswer = chatPendingAnswer,
             working = chatWorking,
             onSendText = { text ->
                 cutAllAudio()
@@ -395,6 +423,7 @@ private fun FeaturesHost(
                     }
                 }
             },
+            onTypingChanged = { keyboardUp, draftTyped -> onTypingChanged(keyboardUp, draftTyped) },
             onToggleTorch = { wanted ->
                 torchOn = wanted
                 cameraXManager.setTorch(wanted)
@@ -404,65 +433,19 @@ private fun FeaturesHost(
                     force = true,
                 )
             },
-            holdToSpeak = holdToSpeak,
             isRecording = isListening,
             onModeSelected = { mode -> selectMode(mode) },
-            onMicPressed = {
-                if (micPressIsStaleStop()) {
-                    // The recogniser has only just stopped by itself; this is
-                    // the tail of the user reaching for stop, not a new start.
-                    // The release that follows is swallowed with it.
-                    micPressSwallowed = true
-                    return@HomeScreen
-                }
-                micPressSwallowed = false
-                val micModes = buildSet {
-                    if (llmChatEnabled) add("Image chat")
-                    if (llmChatEnabled) add("Text chat")
-                    add("Find objects")
-                }
-                if (activeMode in micModes) {
-                    val mode = activeMode
-                    if (mode != null && modeNeedsCapture(mode) && !autoCaptureEnabled) {
-                        // Auto-capture off: require an explicit Capture first.
-                        micCaptureBlocked = true
-                        cutAllAudio()
-                        ttsService.speak(
-                            if (mode == ModeNames.TEXT_CHAT) {
-                                context.getString(R.string.spoken_capture_text_first)
-                            } else {
-                                context.getString(R.string.spoken_capture_first)
-                            },
-                            flush = true,
-                        )
-                    } else if (ensurePermission(Manifest.permission.RECORD_AUDIO)) {
-                        micCaptureBlocked = false
-                        cutAllAudio()
-                        if (mode != null && modeNeedsCapture(mode)) armMicFirst(mode)
-                        cueThenListen()
-                    }
-                }
-            },
-            onMicReleased = { holdMs ->
-                if (micPressSwallowed) {
-                    micPressSwallowed = false
-                    return@HomeScreen
-                }
-                val micModes = buildSet {
-                    if (llmChatEnabled) add("Image chat")
-                    if (llmChatEnabled) add("Text chat")
-                    add("Find objects")
-                }
-                if (activeMode in micModes && !micCaptureBlocked) {
-                    // Just stop. The frame and the cue both follow the recording
-                    // ending; see the isListening effect.
-                    stopListeningByUser()
-                }
-                micCaptureBlocked = false
-            },
+            focusSelectedTab = focusFeatureTab,
+            requestTabFocus = { requestLaunchFocus() },
+            selectedTabFirst = featureTabFirst,
+            requestedFeature = requestedFeature,
+            onFeatureRequestHandled = { onFeatureRequestHandled() },
             onMicTapped = { onAskTapped() },
             onTakePicture = if (activeMode == "Image chat" || activeMode == "Text chat") {
                 { onChatCapture() }
+            } else null,
+            onFindPage = if (activeMode == ModeNames.TEXT_CHAT) {
+                { onFindPage() }
             } else null,
             onBrowseObjects = if (activeMode == "Find objects") {
                 { showObjectPicker = true }
@@ -472,6 +455,17 @@ private fun FeaturesHost(
             moreOpen = moreOpen,
             onToggleMore = { moreOpen = !moreOpen },
             onSaveChat = if (activeMode in ModeNames.TAKES_INPUT) ({ saveCurrentChat() }) else null,
+            onShareChat = if (activeMode in ModeNames.TAKES_INPUT) ({ shareCurrentChat() }) else null,
+            messageMenu = if (activeMode in ModeNames.TAKES_INPUT) {
+                MessageMenuHost(
+                    openAt = messageMenuAt,
+                    focusBackTo = messageFocusBackTo,
+                    onOpen = { index -> openMessageMenu(index) },
+                    onClose = { index, focusBack -> closeMessageMenu(index, focusBack) },
+                    onChoose = { index, entry, item -> chooseFromMessageMenu(index, entry, item) },
+                    onFocusReturned = { index -> messageFocusReturned(index) },
+                )
+            } else null,
             featureToggles = featureToggles,
             muted = ttsMuted,
             onToggleMute = {
@@ -479,7 +473,7 @@ private fun FeaturesHost(
                 ttsService.muted = ttsMuted
                 if (ttsMuted) ttsService.stop()
             },
-            liveText = liveText.takeIf { activeMode == ModeNames.TEXT_CHAT && liveTextWanted() },
+            liveText = liveText.takeIf { activeMode == ModeNames.TEXT_CHAT && liveTextDrawn() },
             // Find objects shows its line only until its chat starts.
             spokenCaption = lastSpokenLine.takeIf {
                 activeMode in ModeNames.SCANNING && it.isNotBlank() &&
@@ -492,7 +486,7 @@ private fun FeaturesHost(
                 settingsManager.setCameraPreview(it)
                 if (it) ensurePermission(Manifest.permission.CAMERA)
             },
-            liveTextPinned = pinnedLiveText.takeIf { activeMode == ModeNames.TEXT_CHAT && liveTextWanted() },
+            liveTextPinned = pinnedLiveText.takeIf { activeMode == ModeNames.TEXT_CHAT && liveTextDrawn() },
             onLiveTextPin = { pinLiveTextBox(it) },
             onLiveTextResume = { resumeLiveText() },
             onStepUnavailable = { forward ->
@@ -554,9 +548,6 @@ private fun FeaturesHost(
                     highContrast = highContrast,
                     whiteMode = whiteMode,
                     onClose = { closeHelp() },
-                    onSubmitFeedback = { _ ->
-                        false // Feedback flow removed with the backend.
-                    },
                 )
             }
         }
@@ -591,6 +582,17 @@ private fun AppDialogs(c: AppController, highContrast: Boolean, whiteMode: Boole
                 highContrast = highContrast,
                 whiteMode = whiteMode,
                 onDismiss = { showChoiceRespectedDialog = false },
+            )
+        }
+
+        missingVoiceLanguage?.let { tag ->
+            // The language's name in the app's language: "Arabic", "arabia".
+            val name = remember(tag) { Locale.forLanguageTag(tag).getDisplayLanguage(Locale.getDefault()) }
+            MissingVoiceDialog(
+                languageName = name,
+                highContrast = highContrast,
+                whiteMode = whiteMode,
+                onDismiss = { missingVoiceLanguage = null },
             )
         }
 

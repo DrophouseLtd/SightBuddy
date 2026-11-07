@@ -3,6 +3,7 @@ package com.example.sightbuddy.core
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.annotation.StringRes
+import androidx.core.content.edit
 import com.example.sightbuddy.R
 import com.example.sightbuddy.features.vision.COCO_OBJECTS
 import com.example.sightbuddy.features.vision.defaultHiddenCocoObjects
@@ -29,7 +30,10 @@ class SettingsManager(context: Context) {
     init {
         // Retired settings: an older version may have stored these. Unread
         // keys are harmless, but they are cleared so they do not linger.
-        val retired = listOf(KEY_BUTTON_NAV_RETIRED, KEY_FEATURE_ANNOUNCEMENTS_RETIRED, KEY_USE_LOCAL_STT_RETIRED)
+        val retired = listOf(
+            KEY_BUTTON_NAV_RETIRED, KEY_FEATURE_ANNOUNCEMENTS_RETIRED, KEY_USE_LOCAL_STT_RETIRED,
+            KEY_HAPTIC_FEEDBACK_RETIRED, KEY_TEXT_SCAN_GUIDANCE_RETIRED, KEY_HOLD_TO_SPEAK_RETIRED,
+        )
         if (retired.any { prefs.contains(it) }) {
             prefs.edit().apply { retired.forEach { remove(it) } }.apply()
         }
@@ -39,9 +43,9 @@ class SettingsManager(context: Context) {
     private val _textPreviewEnabled = MutableStateFlow(prefs.getBoolean(KEY_TEXT_PREVIEW, true))
     val textPreviewEnabled = _textPreviewEnabled.asStateFlow()
 
-    // Per-feature carousel visibility. These five are always-available (local)
-    // features; the guarded setters keep at least one of them enabled so the
-    // carousel is never empty. Image chat is separate (key-gated).
+    // Per-feature carousel visibility. The guarded setters keep at least one
+    // feature in the carousel: the five always-available (local) ones, and Image
+    // chat while it can be shown (see setImageChatAvailable).
     private val _textChatEnabled = MutableStateFlow(prefs.getBoolean(KEY_TEXT_CHAT, true))
     val textChatEnabled = _textChatEnabled.asStateFlow()
 
@@ -60,7 +64,7 @@ class SettingsManager(context: Context) {
     private val _scanColourEnabled = MutableStateFlow(prefs.getBoolean(KEY_SCAN_COLOUR, true))
     val scanColourEnabled = _scanColourEnabled.asStateFlow()
 
-    // Image chat visibility (only shown when an API key is also set).
+    // Image chat visibility (only shown when there is an AI to answer it).
     private val _imageChatEnabled = MutableStateFlow(prefs.getBoolean(KEY_IMAGE_CHAT, true))
     val imageChatEnabled = _imageChatEnabled.asStateFlow()
 
@@ -108,19 +112,6 @@ class SettingsManager(context: Context) {
     private val _pitchFeedback = MutableStateFlow(prefs.getBoolean(KEY_PITCH_FEEDBACK, false))
     val pitchFeedback = _pitchFeedback.asStateFlow()
 
-    /**
-     * On by default: Text chat's Capture, and a question asked before any page,
-     * guide the camera onto the text before taking the picture. Off keeps the
-     * plain path: Capture takes the picture at once, and an early question
-     * takes one automatically, as before the guidance existed.
-     */
-    private val _textScanGuidance = MutableStateFlow(prefs.getBoolean(KEY_TEXT_SCAN_GUIDANCE, true))
-    val textScanGuidance = _textScanGuidance.asStateFlow()
-
-    fun setTextScanGuidance(enabled: Boolean) {
-        _textScanGuidance.value = enabled
-        prefs.edit().putBoolean(KEY_TEXT_SCAN_GUIDANCE, enabled).apply()
-    }
 
     /**
      * Off by default. On, Text chat shows the text in view over the camera, and
@@ -147,22 +138,51 @@ class SettingsManager(context: Context) {
         prefs.edit().putBoolean(KEY_CAMERA_PREVIEW, enabled).apply()
     }
 
-    /** On by default: vibration in place of the recording cues and the pitch note. */
-    private val _hapticFeedback = MutableStateFlow(prefs.getBoolean(KEY_HAPTIC_FEEDBACK, true))
-    val hapticFeedback = _hapticFeedback.asStateFlow()
+    /**
+     * On by default: the app's sounds other than speech (the recording cues, the
+     * shutter, the waiting tick, Find objects' pitch note). See [FeedbackOutputs].
+     */
+    private val _soundEffects = MutableStateFlow(prefs.getBoolean(KEY_SOUND_EFFECTS, true))
+    val soundEffects = _soundEffects.asStateFlow()
+
+    /** On by default: the recording cues, the shutter and Find objects' pulse are felt as well. */
+    private val _vibration = MutableStateFlow(prefs.getBoolean(KEY_VIBRATION, true))
+    val vibration = _vibration.asStateFlow()
 
     /** Off by default: features with Mute start with it on, to be unmuted when wanted. */
     private val _startFeaturesMuted = MutableStateFlow(prefs.getBoolean(KEY_START_FEATURES_MUTED, false))
     val startFeaturesMuted = _startFeaturesMuted.asStateFlow()
 
-    // OFF (default) = tap to start / tap to stop recording; ON = hold while speaking.
-    private val _holdToSpeak = MutableStateFlow(prefs.getBoolean(KEY_HOLD_TO_SPEAK, false))
-    val holdToSpeak = _holdToSpeak.asStateFlow()
 
     // ON (default) = Ask with no capture snaps a picture automatically on release.
     // OFF = the user must press Capture first, then Ask for follow-ups.
     private val _autoCaptureEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_CAPTURE, true))
     val autoCaptureEnabled = _autoCaptureEnabled.asStateFlow()
+
+    // Text chat, Automatic capture on: Ask before any page finds the page as Find
+    // page does (on, the default), or takes everything in view at once (off).
+    private val _askFindsPage = MutableStateFlow(prefs.getBoolean(KEY_ASK_FINDS_PAGE, true))
+    val askFindsPage = _askFindsPage.asStateFlow()
+
+    /**
+     * Off by default: volume up is Capture and volume down is Ask, where those
+     * buttons are. The keys also set TalkBack's volume, so it is a choice.
+     */
+    private val _volumeKeys = MutableStateFlow(prefs.getBoolean(KEY_VOLUME_KEYS, false))
+    val volumeKeys = _volumeKeys.asStateFlow()
+
+    /**
+     * Off by default: Speak with screen reader. On, and with a screen reader
+     * running, what the app says goes to the screen reader, in its voice and
+     * speed, instead of the app's own voice (issue #15; see SpeechRoute).
+     */
+    private val _speakWithScreenReader = MutableStateFlow(prefs.getBoolean(KEY_SPEAK_WITH_SCREEN_READER, false))
+    val speakWithScreenReader = _speakWithScreenReader.asStateFlow()
+
+    fun setSpeakWithScreenReader(enabled: Boolean) {
+        _speakWithScreenReader.value = enabled
+        prefs.edit().putBoolean(KEY_SPEAK_WITH_SCREEN_READER, enabled).apply()
+    }
 
     // Anonymous crash diagnostics (Firebase Crashlytics). On by default; users
     // can opt out in Settings → Privacy.
@@ -173,6 +193,19 @@ class SettingsManager(context: Context) {
     fun setCrashReporting(enabled: Boolean) {
         _crashReportingEnabled.value = enabled
         prefs.edit().putBoolean(KEY_CRASH_REPORTING, enabled).apply()
+    }
+
+    /**
+     * Off by default: the user's choice to let a feedback email carry the app's
+     * version, the phone and the main settings ([FeedbackEmail]). Off, the email
+     * carries nothing about either.
+     */
+    private val _feedbackDetails = MutableStateFlow(prefs.getBoolean(KEY_FEEDBACK_DETAILS, false))
+    val feedbackDetails = _feedbackDetails.asStateFlow()
+
+    fun setFeedbackDetails(enabled: Boolean) {
+        _feedbackDetails.value = enabled
+        prefs.edit().putBoolean(KEY_FEEDBACK_DETAILS, enabled).apply()
     }
 
     /** OpenAI model used for Image/Text chat (BYOK — the user pays, so they choose). */
@@ -217,17 +250,19 @@ class SettingsManager(context: Context) {
         prefs.edit().putBoolean(KEY_TEXT_PREVIEW, enabled).apply()
     }
 
-    /** Number of enabled always-available (local) carousel features. */
-    fun localFeatureEnabledCount(): Int = listOf(
-        _textChatEnabled, _discoverEnabled, _findEnabled, _scanLightEnabled, _scanColourEnabled,
-    ).count { it.value }
+    /**
+     * Whether Image chat can be in the carousel: there is an AI to answer it (a
+     * key with Use API on, or the on-device model). The app keeps it current;
+     * the guard counts Image chat only while it is true.
+     */
+    private var imageChatAvailable = false
 
     /**
-     * Toggle a local feature. Disabling the last enabled one is refused so the
+     * Toggle a local feature. Disabling the last feature shown is refused so the
      * carousel is never empty. Returns true if applied, false if blocked.
      */
     private fun setLocalFeature(flow: MutableStateFlow<Boolean>, key: String, enabled: Boolean): Boolean {
-        if (!enabled && flow.value && localFeatureEnabledCount() <= 1) return false
+        if (!enabled && flow.value && shownFeatures(imageChatAvailable).size <= 1) return false
         flow.value = enabled
         prefs.edit().putBoolean(key, enabled).apply()
         return true
@@ -239,10 +274,43 @@ class SettingsManager(context: Context) {
     fun setScanLight(enabled: Boolean): Boolean = setLocalFeature(_scanLightEnabled, KEY_SCAN_LIGHT, enabled)
     fun setScanColour(enabled: Boolean): Boolean = setLocalFeature(_scanColourEnabled, KEY_SCAN_COLOUR, enabled)
 
-    /** Image chat is key-gated, so it has no minimum guard. */
-    fun setImageChat(enabled: Boolean) {
+    /**
+     * Guarded like the local features while Image chat is shown: switching it
+     * off as the last feature is refused. Returns true if applied.
+     */
+    fun setImageChat(enabled: Boolean): Boolean {
+        if (!enabled && _imageChatEnabled.value && imageChatAvailable &&
+            shownFeatures(imageChatAvailable).size <= 1
+        ) return false
         _imageChatEnabled.value = enabled
         prefs.edit().putBoolean(KEY_IMAGE_CHAT, enabled).apply()
+        return true
+    }
+
+    /**
+     * Image chat comes and goes with its AI: a key saved or removed, Use API,
+     * the on-device model and its switch. If it goes while it is the only
+     * feature on, the carousel would be empty, so Text chat comes back on.
+     */
+    fun setImageChatAvailable(available: Boolean) {
+        imageChatAvailable = available
+        if (shownFeatures(available).isEmpty()) {
+            _textChatEnabled.value = true
+            prefs.edit().putBoolean(KEY_TEXT_CHAT, true).apply()
+        }
+    }
+
+    /**
+     * The features the carousel shows, in its order. The one definition: the
+     * guard counts from it and the app builds its pages from it.
+     */
+    fun shownFeatures(imageChatAvailable: Boolean): List<String> = buildList {
+        if (imageChatAvailable && _imageChatEnabled.value) add(ModeNames.IMAGE_CHAT)
+        if (_textChatEnabled.value) add(ModeNames.TEXT_CHAT)
+        if (_discoverEnabled.value) add(ModeNames.DISCOVER_OBJECTS)
+        if (_findEnabled.value) add(ModeNames.FIND_OBJECTS)
+        if (_scanLightEnabled.value) add(ModeNames.SCAN_LIGHT)
+        if (_scanColourEnabled.value) add(ModeNames.SCAN_COLOUR)
     }
 
     @Suppress("UNUSED_PARAMETER")
@@ -286,9 +354,21 @@ class SettingsManager(context: Context) {
         prefs.edit().putBoolean(KEY_CLOUD_STT_ASKED, true).apply()
     }
 
-    fun setHapticFeedback(enabled: Boolean) {
-        _hapticFeedback.value = enabled
-        prefs.edit().putBoolean(KEY_HAPTIC_FEEDBACK, enabled).apply()
+    /** The one-time hint about a missing voice (issue #26) has been shown. */
+    fun missingVoiceHintShown(): Boolean = prefs.getBoolean(KEY_MISSING_VOICE_HINT_SHOWN, false)
+
+    fun markMissingVoiceHintShown() {
+        prefs.edit { putBoolean(KEY_MISSING_VOICE_HINT_SHOWN, true) }
+    }
+
+    fun setSoundEffects(enabled: Boolean) {
+        _soundEffects.value = enabled
+        prefs.edit { putBoolean(KEY_SOUND_EFFECTS, enabled) }
+    }
+
+    fun setVibration(enabled: Boolean) {
+        _vibration.value = enabled
+        prefs.edit { putBoolean(KEY_VIBRATION, enabled) }
     }
 
     fun setStartFeaturesMuted(enabled: Boolean) {
@@ -307,14 +387,20 @@ class SettingsManager(context: Context) {
     }
 
 
-    fun setHoldToSpeak(enabled: Boolean) {
-        _holdToSpeak.value = enabled
-        prefs.edit().putBoolean(KEY_HOLD_TO_SPEAK, enabled).apply()
-    }
 
     fun setAutoCapture(enabled: Boolean) {
         _autoCaptureEnabled.value = enabled
         prefs.edit().putBoolean(KEY_AUTO_CAPTURE, enabled).apply()
+    }
+
+    fun setAskFindsPage(enabled: Boolean) {
+        _askFindsPage.value = enabled
+        prefs.edit().putBoolean(KEY_ASK_FINDS_PAGE, enabled).apply()
+    }
+
+    fun setVolumeKeys(enabled: Boolean) {
+        _volumeKeys.value = enabled
+        prefs.edit().putBoolean(KEY_VOLUME_KEYS, enabled).apply()
     }
 
     fun setTtsSpeechRate(rate: Float) {
@@ -385,10 +471,15 @@ class SettingsManager(context: Context) {
         // hold it; it is removed at start-up, and nothing depends on it either way.
         private const val KEY_BUTTON_NAV_RETIRED = "button_nav_enabled"
         private const val KEY_FEATURE_ANNOUNCEMENTS_RETIRED = "feature_activation_announcements_enabled"
-        private const val KEY_HOLD_TO_SPEAK = "hold_to_speak_enabled"
+        // Hold to speak, withdrawn in 2.3 and removed: Ask is tap to start, tap to send.
+        private const val KEY_HOLD_TO_SPEAK_RETIRED = "hold_to_speak_enabled"
         private const val KEY_AUTO_CAPTURE = "auto_capture_enabled"
+        private const val KEY_ASK_FINDS_PAGE = "ask_finds_page"
+        private const val KEY_VOLUME_KEYS = "volume_keys"
+        private const val KEY_SPEAK_WITH_SCREEN_READER = "speak_with_screen_reader"
         private const val KEY_LLM_MODEL = "llm_model"
         private const val KEY_CRASH_REPORTING = "crash_reporting_enabled"
+        private const val KEY_FEEDBACK_DETAILS = "feedback_details"
 
         const val MODEL_FAST = "gpt-4o-mini"
         const val MODEL_BALANCED = "gpt-4o"
@@ -403,10 +494,15 @@ class SettingsManager(context: Context) {
         private const val KEY_TTS_SPEECH_RATE = "tts_speech_rate"
         private const val KEY_LOOP_CAROUSEL = "loop_carousel"
         private const val KEY_PITCH_FEEDBACK = "pitch_feedback"
-        private const val KEY_HAPTIC_FEEDBACK = "haptic_feedback"
+        // 2.3.0's Haptic feedback, vibration instead of sound; replaced by the
+        // two below, each on its own. Removed at start-up.
+        private const val KEY_HAPTIC_FEEDBACK_RETIRED = "haptic_feedback"
+        private const val KEY_SOUND_EFFECTS = "sound_effects"
+        private const val KEY_VIBRATION = "vibration"
         private const val KEY_CAMERA_PREVIEW = "camera_preview"
         private const val KEY_START_FEATURES_MUTED = "start_features_muted"
-        private const val KEY_TEXT_SCAN_GUIDANCE = "text_scan_guidance"
+        // Text scanning guidance: Find page is its own button now (2026-10-30).
+        private const val KEY_TEXT_SCAN_GUIDANCE_RETIRED = "text_scan_guidance"
         private const val KEY_LIVE_TEXT = "live_text"
         private const val KEY_CLOUD_STT = "cloud_stt"
         private const val KEY_USE_API = "use_api"
@@ -415,6 +511,7 @@ class SettingsManager(context: Context) {
         private const val KEY_USE_LOCAL_STT_RETIRED = "use_local_stt"
         private const val KEY_USE_LOCAL_CHAT = "use_local_chat"
         private const val KEY_CLOUD_STT_ASKED = "cloud_stt_asked"
+        private const val KEY_MISSING_VOICE_HINT_SHOWN = "missing_voice_hint_shown"
         private const val KEY_STT_CHOICE = "stt_download_choice"
 
         const val STT_CHOICE_LATER = "later"

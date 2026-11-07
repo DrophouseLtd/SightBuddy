@@ -14,6 +14,7 @@ tfliteTaskVision = "0.4.4"
 generativeAi = "0.9.0"
 coroutines = "1.8.0"
 mlkitTextRecognition = "16.0.1"
+mlkitLanguageId = "17.0.6"
 okhttp = "4.12.0"
 firebaseBom = "33.7.0"
 googleServices = "4.4.2"
@@ -21,6 +22,8 @@ firebaseCrashlyticsPlugin = "3.0.3"
 playIntegrity = "1.4.0"
 playAppUpdate = "2.1.0"
 litertlm = "0.17.1"
+# The release inside sherpa-onnx's AAR: the two share one libonnxruntime.so.
+onnxruntime = "1.27.0"
 
 [libraries]
 litertlm = { group = "com.google.ai.edge.litertlm", name = "litertlm-android", version.ref = "litertlm" }
@@ -50,11 +53,12 @@ tensorflow-lite-task-vision = { group = "org.tensorflow", name = "tensorflow-lit
 
 google-generativeai = { group = "com.google.ai.client.generativeai", name = "generativeai", version.ref = "generativeAi" }
 google-mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitTextRecognition" }
+google-mlkit-language-id = { group = "com.google.mlkit", name = "language-id", version.ref = "mlkitLanguageId" }
+onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxruntime" }
 
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
-firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
 play-integrity = { group = "com.google.android.play", name = "integrity", version.ref = "playIntegrity" }
 play-app-update = { group = "com.google.android.play", name = "app-update", version.ref = "playAppUpdate" }
 play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playAppUpdate" }

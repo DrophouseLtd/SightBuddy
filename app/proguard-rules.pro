@@ -33,6 +33,11 @@
 -keep class com.k2fsa.sherpa.onnx.** { *; }
 -dontwarn com.k2fsa.sherpa.onnx.**
 
+# ── ONNX Runtime (page-corner model) ─────────────────────────────────────────
+# Its JNI code builds and reads these classes by name; the AAR has no rules.
+-keep class ai.onnxruntime.** { *; }
+-dontwarn ai.onnxruntime.**
+
 # ── LiteRT-LM (on-device Gemma) ──────────────────────────────────────────────
 # The AAR ships no consumer rules, and its JNI code reads these classes by name
 # (SamplerConfig.getTopK/getTemperature, InputData$Text.getText, the message

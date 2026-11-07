@@ -6,6 +6,8 @@
         <exclude domain="file" path="memories/" />
         <!-- Models are downloads (hundreds of MB to 2.6 GB, far over the backup quota) -->
         <exclude domain="file" path="stt/" />
+        <!-- Which model files were checked on this phone: means nothing on another -->
+        <exclude domain="file" path="verified-models/" />
         <exclude domain="external" path="." />
         <!-- The API key is encrypted with a key that never leaves this phone -->
         <exclude domain="sharedpref" path="sight_buddy_api.xml" />
@@ -13,6 +15,8 @@
     <device-transfer>
         <!-- Models are downloads (hundreds of MB to 2.6 GB, far over the backup quota) -->
         <exclude domain="file" path="stt/" />
+        <!-- Which model files were checked on this phone: means nothing on another -->
+        <exclude domain="file" path="verified-models/" />
         <exclude domain="external" path="." />
         <!-- The API key is encrypted with a key that never leaves this phone -->
         <exclude domain="sharedpref" path="sight_buddy_api.xml" />

@@ -3,6 +3,15 @@ package com.example.sightbuddy.core.stt
 import com.example.sightbuddy.R
 
 /**
+ * Gemma speech recognition is hidden (decided 2026-10-24): on the phone it was
+ * slower than Whisper (it shares the model with the chat answers, one call at a
+ * time) and made up text from silence (#25). Not offered in Settings, never
+ * chosen by the fallback, and a stored choice of it runs Whisper. The path stays
+ * in the code: set true to offer it again.
+ */
+const val GEMMA_SPEECH_OFFERED = false
+
+/**
  * The user's speech recognition choice in Settings. Whisper and Gemma can both be
  * installed; Whisper is the default because it is faster at the same quality.
  */
@@ -12,7 +21,10 @@ enum class SttChoice(val key: String, val labelRes: Int) {
     ANDROID("android", R.string.stt_choice_android);
 
     companion object {
-        fun fromKey(key: String): SttChoice = entries.firstOrNull { it.key == key } ?: WHISPER
+        fun fromKey(key: String): SttChoice =
+            entries.firstOrNull { it.key == key }
+                ?.takeUnless { it == GEMMA && !GEMMA_SPEECH_OFFERED }
+                ?: WHISPER
 
         /**
          * What actually runs: the choice when its model is here, otherwise the other
@@ -26,13 +38,18 @@ enum class SttChoice(val key: String, val labelRes: Int) {
                 ANDROID -> listOf(ANDROID)
             }
             return order.first {
-                it == ANDROID || (it == WHISPER && whisperReady) || (it == GEMMA && gemmaInstalled)
+                it == ANDROID || (it == WHISPER && whisperReady) ||
+                    (it == GEMMA && gemmaInstalled && GEMMA_SPEECH_OFFERED)
             }
         }
 
         /** The options Settings cycles through: installed models, then the platform. */
         fun available(whisperReady: Boolean, gemmaInstalled: Boolean): List<SttChoice> =
-            listOfNotNull(WHISPER.takeIf { whisperReady }, GEMMA.takeIf { gemmaInstalled }, ANDROID)
+            listOfNotNull(
+                WHISPER.takeIf { whisperReady },
+                GEMMA.takeIf { gemmaInstalled && GEMMA_SPEECH_OFFERED },
+                ANDROID,
+            )
     }
 }
 

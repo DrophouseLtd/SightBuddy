@@ -11,13 +11,13 @@ import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Message
+import com.google.ai.edge.litertlm.MessageCallback
 import com.google.ai.edge.litertlm.SamplerConfig
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.concurrent.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlinx.coroutines.CoroutineScope
@@ -25,15 +25,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.graphics.Bitmap
 import android.graphics.Color
+import com.example.sightbuddy.core.ModelFileGate
+import com.example.sightbuddy.core.ModelFileGate.ForLoad
+import com.example.sightbuddy.core.ModelFileGate.Install
 import com.example.sightbuddy.core.ModelSetup
+import com.example.sightbuddy.core.OpenAiTransport
+import com.example.sightbuddy.core.VerifiedModels
 import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * On-device Gemma through LiteRT-LM.
@@ -71,10 +76,13 @@ class LocalGemma(context: Context) : LocalAnswerer {
     /** Progress of a download in progress, or null. */
     val downloadPercent = _downloadPercent.asStateFlow()
 
+    /** Model files already checked against their SHA-256, so each is hashed once. */
+    private val checks = VerifiedModels(File(context.filesDir, VerifiedModels.DIR))
+
     /**
      * Downloads the model from Hugging Face (litert-community, Apache 2.0, no
-     * login), pinned to one revision and checked by size. Resumes a partial
-     * download. Single-flight: a second call while one runs returns false.
+     * login), pinned to one revision and checked by size and SHA-256. Resumes a
+     * partial download. Single-flight: a second call while one runs returns false.
      */
     suspend fun download(): Boolean = withContext(Dispatchers.IO) {
         if (installed) return@withContext true
@@ -83,8 +91,13 @@ class LocalGemma(context: Context) : LocalAnswerer {
             // A dropped connection is normal over 2.6 GB on a phone: retry, resuming
             // where it stopped, before giving up.
             for (attempt in 1..DOWNLOAD_ATTEMPTS) {
-                if (downloadOnce()) return@withContext true
-                if (attempt < DOWNLOAD_ATTEMPTS) kotlinx.coroutines.delay(attempt * 5_000L)
+                when (downloadOnce()) {
+                    Attempt.DONE -> return@withContext true
+                    // Not retried: 2.6 GB again would most likely bring the same file.
+                    Attempt.WRONG_FILE -> return@withContext false
+                    Attempt.INTERRUPTED ->
+                        if (attempt < DOWNLOAD_ATTEMPTS) kotlinx.coroutines.delay(attempt * 5_000L)
+                }
             }
             false
         } finally {
@@ -92,8 +105,10 @@ class LocalGemma(context: Context) : LocalAnswerer {
         }
     }
 
-    /** One attempt, resuming a partial file. True when the model is complete and in place. */
-    private fun downloadOnce(): Boolean {
+    private enum class Attempt { DONE, INTERRUPTED, WRONG_FILE }
+
+    /** One attempt, resuming a partial file; [Attempt.DONE] when the model is complete, checked and in place. */
+    private fun downloadOnce(): Attempt {
         try {
             modelDir.mkdirs()
             val part = partFile
@@ -103,14 +118,27 @@ class LocalGemma(context: Context) : LocalAnswerer {
             if (part.length() < E2B_SIZE) fetchInto(part)
             if (part.length() != E2B_SIZE) {
                 Log.e(TAG, "Download incomplete: ${part.length()} of $E2B_SIZE bytes")
-                return false
+                return Attempt.INTERRUPTED
             }
-            val ok = part.renameTo(File(modelDir, E2B_FILE))
-            _installed.value = ok
-            return ok
+            // Progress stays at 99 % for the few seconds this takes: the model
+            // is not installed until it is known to be the right file.
+            val started = SystemClock.elapsedRealtime()
+            val result = ModelFileGate.install(part, File(modelDir, E2B_FILE), E2B_SHA256, checks)
+            Log.i(TAG, "SHA-256 checked in ${SystemClock.elapsedRealtime() - started} ms: $result")
+            return when (result) {
+                Install.INSTALLED -> {
+                    _installed.value = true
+                    Attempt.DONE
+                }
+                Install.WRONG_FILE -> {
+                    Log.e(TAG, "Downloaded model does not match its SHA-256: deleted")
+                    Attempt.WRONG_FILE
+                }
+                Install.NOT_MOVED -> Attempt.INTERRUPTED
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Download interrupted at ${partFile.length()} bytes", e)
-            return false
+            return Attempt.INTERRUPTED
         }
     }
 
@@ -175,8 +203,8 @@ class LocalGemma(context: Context) : LocalAnswerer {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val loadStarted = AtomicBoolean(false)
-    /** One model call at a time. A lock, not synchronized, so waiting can be given up. */
-    private val inference = ReentrantLock()
+    /** One model call at a time; waiting can be given up, and any thread may let go. */
+    private val inference = ModelGate()
 
     /** Bumped by [cancel]; a request that sees it change gives up. */
     @Volatile
@@ -204,9 +232,20 @@ class LocalGemma(context: Context) : LocalAnswerer {
         val file = modelFile ?: return
         if (loadFailed || !loadStarted.compareAndSet(false, true)) return
         val gen = generation
+        // Set before the launch, so a request starting its wait now sees it.
+        verifying = true
         scope.launch {
+            val checked = try {
+                verifiedForLoad(file)
+            } finally {
+                verifying = false
+            }
+            if (checked == null || gen != generation) {
+                loadStarted.set(false)
+                return@launch
+            }
             val started = SystemClock.elapsedRealtime()
-            val loaded = open(file, Backend.GPU()) ?: open(file, Backend.CPU())
+            val loaded = open(checked, Backend.GPU()) ?: open(checked, Backend.CPU())
             if (loaded == null) {
                 loadFailed = true
                 loadStarted.set(false)
@@ -224,11 +263,57 @@ class LocalGemma(context: Context) : LocalAnswerer {
     }
 
     /**
+     * [file] once it has matched its SHA-256, or null: nothing else is ever
+     * loaded ([ModelFileGate]). A model downloaded by an earlier version, or
+     * put there by hand, is hashed here once, off the main thread (a few
+     * seconds, remembered after; a request's wait does not count them, see
+     * [LoadWait]). One that does not match is deleted: the model is then not
+     * installed, a request waiting for it gives up, the download is offered
+     * again, and [removedAsDamaged] is set for the app to say so.
+     */
+    private suspend fun verifiedForLoad(file: File): ForLoad.Verified? = withContext(Dispatchers.IO) {
+        val started = SystemClock.elapsedRealtime()
+        when (val result = ModelFileGate.forLoad(file, E2B_SHA256, checks)) {
+            is ForLoad.Verified -> {
+                val ms = SystemClock.elapsedRealtime() - started
+                if (ms > 100) Log.i(TAG, "SHA-256 of ${file.name} checked in $ms ms")
+                result
+            }
+            ForLoad.Missing -> null
+            is ForLoad.Unreadable -> {
+                Log.e(TAG, "Could not read ${file.name} to check it", result.error)
+                loadFailed = true
+                null
+            }
+            ForLoad.Damaged -> {
+                Log.e(TAG, "${file.name} does not match its SHA-256: deleted")
+                File(cacheDir).listFiles { f -> f.name.startsWith(E2B_FILE) }?.forEach { it.delete() }
+                _installed.value = false
+                _removedAsDamaged.value = true
+                null
+            }
+        }
+    }
+
+    /** True while the model file is being hashed before a load. */
+    @Volatile
+    private var verifying = false
+
+    private val _removedAsDamaged = MutableStateFlow(false)
+
+    /** True when the model on the phone failed its check and was removed, until [damagedNoticeSaid]. */
+    val removedAsDamaged = _removedAsDamaged.asStateFlow()
+
+    fun damagedNoticeSaid() {
+        _removedAsDamaged.value = false
+    }
+
+    /**
      * The first image and the first recording each paid a one-off set-up cost
      * (the first picture took 15 s, later ones 7 s). Pay it here, before anyone
      * is waiting: one tiny image question and one second of silence.
      */
-    private fun warmUp(eng: Engine) = inference.withLock {
+    private fun warmUp(eng: Engine) = inference.withModel {
         val started = SystemClock.elapsedRealtime()
         try {
             eng.createConversation(ConversationConfig(maxOutputToken = 1)).use {
@@ -253,10 +338,11 @@ class LocalGemma(context: Context) : LocalAnswerer {
         }
     }
 
-    private fun open(file: File, backend: Backend): Engine? = try {
+    /** Takes only a file the gate has checked: an unchecked [File] cannot be opened. */
+    private fun open(model: ForLoad.Verified, backend: Backend): Engine? = try {
         Engine(
             EngineConfig(
-                modelPath = file.absolutePath,
+                modelPath = model.file.absolutePath,
                 backend = backend,
                 visionBackend = Backend.GPU(),
                 // The audio encoder must run on the CPU for Gemma's E models.
@@ -265,7 +351,7 @@ class LocalGemma(context: Context) : LocalAnswerer {
             )
         ).also { it.initialize() }
     } catch (e: Throwable) {
-        Log.e(TAG, "Could not load ${file.name} on $backend", e)
+        Log.e(TAG, "Could not load ${model.file.name} on $backend", e)
         null
     }
 
@@ -276,11 +362,15 @@ class LocalGemma(context: Context) : LocalAnswerer {
     suspend fun transcribe(pcm: ShortArray, sampleRate: Int): String? {
         // A question asked while the model is still loading waits for it.
         loadIfPresent()
-        withTimeoutOrNull(LOAD_WAIT_MS) { while (!ready.value && !loadFailed) kotlinx.coroutines.delay(100) }
+        val wait = LoadWait(LOAD_WAIT_MS, SystemClock.elapsedRealtime())
+        while (!ready.value && !loadFailed && installed) {
+            if (wait.expired(SystemClock.elapsedRealtime(), verifying)) break
+            kotlinx.coroutines.delay(100)
+        }
         return withContext(Dispatchers.Default) {
-            inference.withLock {
+            inference.withModel {
                 // Read under the lock: a release in between would leave a closed engine.
-                val eng = engine ?: return@withLock null
+                val eng = engine ?: return@withModel null
                 try {
                     val started = SystemClock.elapsedRealtime()
                     val text = eng.createConversation(
@@ -323,7 +413,21 @@ class LocalGemma(context: Context) : LocalAnswerer {
         active?.cancelProcess()
     }
 
-    override fun complete(openAiRequestBody: JSONObject): String? {
+    override fun complete(openAiRequestBody: JSONObject): String? = answer(openAiRequestBody, onDelta = null)
+
+    /**
+     * [complete], with the reply handed to [onDelta] as LiteRT-LM writes it
+     * (issue #24). Through the callback form of `Conversation.sendMessageAsync`,
+     * not its Flow form: that one is a `callbackFlow` that drops messages once
+     * its buffer is full (`trySend`), and leaves the generation running when
+     * its collector goes away. The callback is waited for on this thread, so
+     * the model is taken and let go on the same one ([ModelGate]).
+     */
+    override fun stream(openAiRequestBody: JSONObject, onDelta: (String) -> Unit): String? =
+        answer(openAiRequestBody, onDelta)
+
+    /** One answer, whole ([onDelta] null) or streamed. */
+    private fun answer(openAiRequestBody: JSONObject, onDelta: ((String) -> Unit)?): String? {
         val token = cancelToken
         val waitStarted = SystemClock.elapsedRealtime()
         fun cancelled() = (token != cancelToken).also {
@@ -331,13 +435,14 @@ class LocalGemma(context: Context) : LocalAnswerer {
         }
         // Wait for the load and then for any other request, giving up on cancel.
         loadIfPresent()
+        val wait = LoadWait(LOAD_WAIT_MS, waitStarted)
         while (!ready.value) {
-            if (loadFailed || cancelled() || SystemClock.elapsedRealtime() - waitStarted > LOAD_WAIT_MS) return null
+            // Not installed: deleted meanwhile, or it failed its SHA-256 check.
+            if (loadFailed || !installed || cancelled()) return null
+            if (wait.expired(SystemClock.elapsedRealtime(), verifying)) return null
             Thread.sleep(100)
         }
-        while (!inference.tryLock(100, TimeUnit.MILLISECONDS)) {
-            if (cancelled()) return null
-        }
+        if (!inference.enter { cancelled() }) return null
         try {
             if (cancelled()) return null
             // Read under the lock: a release in between would leave a closed engine.
@@ -361,10 +466,15 @@ class LocalGemma(context: Context) : LocalAnswerer {
                     }
                 }
                 val question = last ?: return null
-                val maxTokens = openAiRequestBody.optInt("max_tokens", 256)
-                checkFits(messages, maxTokens)
+                val maxTokens = replyBudget(messages, openAiRequestBody.optInt("max_tokens", 256))
                 val temperature = openAiRequestBody.optDouble("temperature", 0.7)
-                val text = eng.createConversation(
+                if (onDelta != null) {
+                    StreamLog.i {
+                        "request: waited ${started - waitStarted} ms for the model; ${history.size} earlier turns, " +
+                            "image ${question.contents.any { it is Content.ImageBytes }}, up to $maxTokens tokens"
+                    }
+                }
+                val conversation = eng.createConversation(
                     ConversationConfig(
                         systemInstruction = system?.let { Contents.of(it) },
                         initialMessages = history,
@@ -375,19 +485,29 @@ class LocalGemma(context: Context) : LocalAnswerer {
                         ),
                         maxOutputToken = maxTokens,
                     )
-                ).use { conversation ->
+                )
+                // Closed when done, unless a streamed answer never said it was:
+                // closing a conversation the model may still be running is worse
+                // than leaving it.
+                var abandoned = false
+                val text = try {
                     active = conversation
                     // A cancel between the check above and here would have missed it.
                     if (token != cancelToken) conversation.cancelProcess()
-                    try {
+                    if (onDelta == null) {
                         conversation.sendMessage(question).toString().trim()
-                    } finally {
-                        active = null
+                    } else {
+                        val streamed = streamInto(conversation, question, token, started, onDelta)
+                        abandoned = streamed.abandoned
+                        streamed.text
                     }
+                } finally {
+                    active = null
+                    if (!abandoned) conversation.close()
                 }
                 if (cancelled()) return null
                 Log.i(TAG, "Answered in ${SystemClock.elapsedRealtime() - started} ms (${history.size} earlier turns)")
-                text.ifBlank { null }
+                text?.ifBlank { null }
             } catch (e: PromptTooLongException) {
                 throw e
             } catch (e: Throwable) {
@@ -396,16 +516,95 @@ class LocalGemma(context: Context) : LocalAnswerer {
                 null
             }
         } finally {
-            inference.unlock()
+            inference.leave()
         }
     }
 
+    /** A streamed answer's text, null when it failed or was stopped part way; [abandoned]: never said it was done. */
+    private class Streamed(val text: String?, val abandoned: Boolean)
+
     /**
-     * Refuses a request that would not fit the context window, rather than let it
-     * fail inside the model. A rough count on the safe side: three characters a
-     * token (English runs nearer four), a picture [IMAGE_TOKENS].
+     * Runs [question] with LiteRT-LM's streaming callback and waits here for it
+     * to finish, handing each message's new text to [onDelta] (on LiteRT-LM's
+     * own thread) unless the answer has been cancelled meanwhile.
+     *
+     * The text is the whole answer only when the model finished it. Stopped by
+     * the time limit or failing part way, it is null, as for any failure: what
+     * was said by then is not an answer (the caller says the failure after
+     * it). A cancel or the limit tells the model to stop; if it has still not
+     * called back [STOP_WAIT_MS] later, the wait ends anyway ([StreamWatch]),
+     * the model is let go, and nothing it writes later is handed on.
      */
-    private fun checkFits(messages: JSONArray, maxTokens: Int) {
+    private fun streamInto(
+        conversation: com.google.ai.edge.litertlm.Conversation,
+        question: Contents,
+        token: Long,
+        started: Long,
+        onDelta: (String) -> Unit,
+    ): Streamed {
+        val deltas = StreamDeltas()
+        val done = CountDownLatch(1)
+        val failure = AtomicReference<Throwable?>(null)
+        val over = AtomicBoolean(false)
+        var count = 0
+        conversation.sendMessageAsync(
+            question,
+            object : MessageCallback {
+                override fun onMessage(message: Message) {
+                    if (over.get()) return
+                    val chunk = message.toString()
+                    val new = deltas.next(chunk)
+                    count++
+                    val at = SystemClock.elapsedRealtime() - started
+                    StreamLog.i { StreamDeltas.logLine(count, at, chunk, new) }
+                    if (new.isNotEmpty() && token == cancelToken) onDelta(new)
+                }
+
+                override fun onDone() = done.countDown()
+
+                override fun onError(throwable: Throwable) {
+                    failure.set(throwable)
+                    done.countDown()
+                }
+            },
+        )
+        val watch = StreamWatch(limitMs = STREAM_LIMIT_MS, capMs = STOP_WAIT_MS)
+        var abandoned = false
+        while (!done.await(100, TimeUnit.MILLISECONDS)) {
+            val step = watch.step(SystemClock.elapsedRealtime() - started, cancelled = token != cancelToken)
+            if (step == StreamWatch.Step.STOP) {
+                if (watch.stoppedByLimit) Log.w(TAG, "Streamed answer still running after $STREAM_LIMIT_MS ms: stopped")
+                conversation.cancelProcess()
+            } else if (step == StreamWatch.Step.GIVE_UP) {
+                Log.w(TAG, "No word from the model $STOP_WAIT_MS ms after stopping it: no longer waited for")
+                abandoned = true
+                break
+            }
+        }
+        over.set(true)
+        val failed = failure.get()
+        // Read after the wait: on a give-up the model's thread may still be writing.
+        val text = if (abandoned) "" else deltas.text.trim()
+        StreamLog.i {
+            "done at ${SystemClock.elapsedRealtime() - started} ms: $count messages, ${text.length} chars, " +
+                "each message ${if (deltas.cumulative) "the whole text so far" else "new text"}" +
+                (failed?.let { ", ended by $it" } ?: "") +
+                (if (watch.stoppedByLimit) ", stopped by the time limit" else "") +
+                (if (abandoned) ", given up" else "")
+        }
+        if (failed != null && token == cancelToken) Log.e(TAG, "Streamed answer failed", failed)
+        val whole = failed == null && !watch.stoppedByLimit && !abandoned
+        return Streamed(if (whole) text else null, abandoned)
+    }
+
+    /**
+     * The reply's token cap: [maxTokens], or what the context window has left
+     * after the prompt ([ContextBudget]). Refuses a request that would not leave
+     * room for an ordinary answer, rather than let it fail inside the model. A
+     * rough count on the safe side: three characters a token (English runs
+     * nearer four), a picture [IMAGE_TOKENS].
+     */
+    private fun replyBudget(messages: JSONArray, maxTokens: Int): Int {
         fun tokens(message: JSONObject): Int {
             val content = message.opt("content")
             if (content !is JSONArray) return content.toString().length / 3 + 8
@@ -419,11 +618,17 @@ class LocalGemma(context: Context) : LocalAnswerer {
         val all = (0 until messages.length()).map { messages.getJSONObject(it) }
         val system = all.filter { it.optString("role") == "system" }.sumOf { tokens(it) }
         val latest = tokens(all.last())
-        val total = all.sumOf { tokens(it) } + maxTokens
-        if (total <= CONTEXT_TOKENS) return
-        val latestAlone = system + latest + maxTokens
-        Log.w(TAG, "Too long for the context: about $total tokens (latest message alone $latestAlone)")
-        throw PromptTooLongException(chatTooLong = latestAlone <= CONTEXT_TOKENS)
+        val prompt = all.sumOf { tokens(it) }
+        fun budget(promptTokens: Int) = ContextBudget.replyTokens(
+            promptTokens = promptTokens,
+            requested = maxTokens,
+            window = CONTEXT_TOKENS,
+            floor = OpenAiTransport.LLM_MAX_OUTPUT_TOKENS,
+        )
+        budget(prompt)?.let { return it }
+        Log.w(TAG, "Too long for the context: about $prompt tokens before the reply (latest message alone ${system + latest})")
+        // Too long only with the conversation: the chat is full, rather than the message too long.
+        throw PromptTooLongException(chatTooLong = budget(system + latest) != null)
     }
 
     /** OpenAI user content: a string, or parts of type text / image_url (data URL). */
@@ -446,7 +651,7 @@ class LocalGemma(context: Context) : LocalAnswerer {
     }
 
     /** Frees the memory (about 2 GB). Waits for a request in progress to finish. */
-    fun release() = inference.withLock {
+    fun release() = inference.withModel {
         generation++
         engine?.close()
         engine = null
@@ -460,6 +665,7 @@ class LocalGemma(context: Context) : LocalAnswerer {
         release()
         val file = File(modelDir, E2B_FILE)
         val deleted = !file.exists() || file.delete()
+        checks.forget(file)
         File(cacheDir).listFiles { f -> f.name.startsWith(E2B_FILE) }?.forEach { it.delete() }
         _installed.value = !deleted
         return deleted
@@ -477,12 +683,30 @@ class LocalGemma(context: Context) : LocalAnswerer {
 
         /** What a picture costs in the prompt (the vision encoder's token budget, rounded up). */
         private const val IMAGE_TOKENS = 300
-        private const val E2B_URL =
+        internal const val E2B_URL =
             "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/" +
                 "6e5c4f1e395deb959c494953478fa5cec4b8008f/$E2B_FILE"
 
+        /**
+         * What the model must be, or it is deleted and never loaded. The Git LFS
+         * object id (the file's SHA-256) Hugging Face lists for this file at the
+         * pinned revision above (`lfs.oid` in api/models/litert-community/
+         * gemma-4-E2B-it-litert-lm/tree/6e5c4f1e...), read 2026-10-28. A new
+         * revision needs a new hash here.
+         */
+        internal const val E2B_SHA256 = "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c"
+
         /** Longest a recording waits for the model to finish loading (first-ever load: ~70 s). */
         private const val LOAD_WAIT_MS = 90_000L
+
+        /**
+         * Longest a streamed answer may run before it is stopped: 1,200 tokens
+         * (a reading's cap) took about a minute on the test phone.
+         */
+        private const val STREAM_LIMIT_MS = 180_000L
+
+        /** How long a stopped streamed answer is waited for before it is given up on. */
+        private const val STOP_WAIT_MS = 10_000L
 
         private const val TRANSCRIBE_INSTRUCTION =
             "You are a speech-to-text engine. Output only the exact words spoken, " +

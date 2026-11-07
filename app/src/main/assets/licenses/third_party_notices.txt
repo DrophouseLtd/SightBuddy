@@ -18,9 +18,15 @@ ONNX Runtime, included in sherpa-onnx, by Microsoft. MIT License.
 
 EfficientDet-Lite0, the object detection model, by Google. Apache License 2.0.
 
+ONNX Runtime's Java API, by Microsoft. MIT License.
+
+Document Corner Detector, the page-corner model, by KennethTM, from Hugging Face at revision 9eb1a68c. MIT License. It is built on MobileNetV3 from PyTorch Image Models (timm), by Ross Wightman. Apache License 2.0.
+
 Firebase Crashlytics, by Google, in the Play version only. Apache License 2.0.
 
 ML Kit Text Recognition, by Google, under the ML Kit Terms of Service.
+
+ML Kit Language Identification, by Google, under the ML Kit Terms of Service.
 
 Downloaded when you choose to
 

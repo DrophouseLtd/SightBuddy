@@ -22,11 +22,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
 import com.example.sightbuddy.core.TextScriptPlayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +39,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
@@ -52,6 +56,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.sightbuddy.R
+import com.example.sightbuddy.core.LaunchFocus
+import com.example.sightbuddy.ui.moveScreenReaderFocusTo
 import com.example.sightbuddy.core.ModeNames
 import com.example.sightbuddy.features.chat.LiveText
 import com.example.sightbuddy.ui.buttonSemantics
@@ -65,6 +71,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import com.example.sightbuddy.ui.theme.Brand
@@ -138,14 +145,24 @@ fun HomeScreen(
     /** The active feature's session, oldest first. */
     conversation: List<TranscriptEntry> = emptyList(),
     pendingQuestion: String? = null,
+    /** The answer being written, shown growing in one bubble (issue #24). */
+    pendingAnswer: String? = null,
     working: Boolean = false,
     /** Something typed in the box: a question, or in Find objects an object name. */
     onSendText: (String) -> Unit = {},
-    holdToSpeak: Boolean = false,
+    /** The keyboard up (no Capture or Ask) or something typed (Ask is Send): for the volume keys. */
+    onTypingChanged: (keyboardUp: Boolean, draftTyped: Boolean) -> Unit = { _, _ -> },
     isRecording: Boolean = false,
     onModeSelected: (String) -> Unit = {},
-    onMicPressed: () -> Unit = {},
-    onMicReleased: (holdMs: Long) -> Unit = {},
+    /** At launch: the selected feature tab takes TalkBack's focus, so TalkBack starts on it. */
+    focusSelectedTab: Boolean = false,
+    /** Asked as the tab comes on screen during [focusSelectedTab]: true only the first time. */
+    requestTabFocus: () -> Boolean = { true },
+    /** The selected tab comes first in TalkBack's order, ahead of Help. */
+    selectedTabFirst: Boolean = false,
+    /** A feature an app shortcut asked for: the bar goes there, then calls [onFeatureRequestHandled]. */
+    requestedFeature: String? = null,
+    onFeatureRequestHandled: () -> Unit = {},
     onMicTapped: () -> Unit = {},
     showTextPlaybackControls: Boolean = false,
     textPlaybackEnabled: Boolean = false,
@@ -159,6 +176,8 @@ fun HomeScreen(
     /** Fired before any back/forward transport tap or hold (including when disabled). */
     onPlaybackTransportInteraction: () -> Unit = {},
     onTakePicture: (() -> Unit)? = null,
+    /** Text chat's Find page: the guided picture of a page. */
+    onFindPage: (() -> Unit)? = null,
     onBrowseObjects: (() -> Unit)? = null,
     onOpenSettings: () -> Unit = {},
     onOpenHelp: () -> Unit = {},
@@ -169,7 +188,7 @@ fun HomeScreen(
     onStepUnavailable: (forward: Boolean) -> Unit = {},
     /** Text chat's text in view, drawn over the camera while Preview is on. */
     liveText: LiveText? = null,
-    /** Preview on or off, so the camera's text is read only while it can be shown. */
+    /** Preview on or off, so the camera's text is drawn only while the camera shows. */
     onPreviewChanged: (Boolean) -> Unit = {},
     /** Preview: a setting, and the same switch on screen. */
     previewCamera: Boolean = true,
@@ -188,6 +207,10 @@ fun HomeScreen(
     onToggleMore: () -> Unit = {},
     /** Save chat in the More row; null for features without a chat. */
     onSaveChat: (() -> Unit)? = null,
+    /** Share in the More row, next to Save chat; null for features without a chat. */
+    onShareChat: (() -> Unit)? = null,
+    /** The chat messages' pop-up menus, with a screen reader on; see [MessageMenuHost]. */
+    messageMenu: MessageMenuHost? = null,
     /** The active feature's own settings, as switches in the More row. */
     featureToggles: List<BarToggle> = emptyList(),
 ) {
@@ -195,10 +218,12 @@ fun HomeScreen(
     // past the last feature carries straight on to the first instead of refusing
     // to move. Without this the setting only worked for the buttons.
     val saveChatLabel = stringResource(R.string.bar_save_chat)
+    val shareChatLabel = stringResource(R.string.bar_share_chat)
     val torchLabel = stringResource(R.string.torch_short)
     val previewLabel = stringResource(R.string.btn_preview)
     val moreItems = buildList {
         onSaveChat?.let { add(MoreItem(saveChatLabel, null, it)) }
+        onShareChat?.let { add(MoreItem(shareChatLabel, null, it)) }
         // Runtime only: never persisted, and cleared whenever the camera unbinds.
         if (torchAvailable) add(MoreItem(torchLabel, torchOn) { onToggleTorch(!torchOn) })
         add(MoreItem(previewLabel, previewCamera) { onTogglePreview(!previewCamera) })
@@ -207,7 +232,9 @@ fun HomeScreen(
     val moreRows = (moreItems.size + MORE_PER_ROW - 1) / MORE_PER_ROW
     val moreRowsHeight = if (moreOpen) (56.dp + 10.dp) * moreRows else 0.dp
     val looping = loopCarousel && pages.size > 1
-    val activeIndex = pages.indexOf(activeMode).coerceAtLeast(0)
+    // Where the pager starts: an app shortcut's feature, if it is on the bar.
+    val activeIndex = pages.indexOf(requestedFeature).takeIf { it >= 0 }
+        ?: pages.indexOf(activeMode).coerceAtLeast(0)
     val pagerState = key(looping) {
         rememberPagerState(
             initialPage = if (looping) pages.size * (LOOP_RANGE / 2) + activeIndex else activeIndex,
@@ -280,6 +307,17 @@ fun HomeScreen(
         onModeSelected(pages[realPage(pagerState.currentPage)])
     }
 
+    // An app shortcut with the app running: straight to its feature, which then
+    // opens as a tap on its tab opens it. A feature switched off stays closed.
+    LaunchedEffect(requestedFeature) {
+        val target = pages.indexOf(requestedFeature ?: return@LaunchedEffect)
+        val from = pagerState.currentPage
+        if (target >= 0 && target != realPage(from)) {
+            pagerState.scrollToPage(from + (target - realPage(from)))
+        }
+        onFeatureRequestHandled()
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         HorizontalPager(
             state = pagerState,
@@ -347,13 +385,14 @@ fun HomeScreen(
                         takesInput = takesInput,
                         llmChatEnabled = llmChatEnabled,
                         showMessages = solidLayer,
-                        liveTextShown = liveTextOn && previewCamera,
+                        liveTextShown = liveTextOn,
                         liveTextOn = liveTextOn,
                         conversation = conversation,
                         pendingQuestion = pendingQuestion,
+                        pendingAnswer = pendingAnswer,
+                        messageMenu = messageMenu,
                         working = working,
                         isRecording = isRecording,
-                        holdToSpeak = holdToSpeak,
                         highContrast = highContrast,
                         onLayerColor = if (solidLayer) onLayerColor else textColor,
                         accent = accent,
@@ -366,8 +405,10 @@ fun HomeScreen(
                         muted = muted,
                         onToggleMute = onToggleMute,
                         onSendText = onSendText,
+                        onTypingChanged = onTypingChanged,
                         onAsk = onMicTapped,
                         onTakePicture = onTakePicture,
+                        onFindPage = onFindPage,
                         onBrowseObjects = onBrowseObjects,
                         playbackRow = {
                             if (SHOW_TEXT_PLAYBACK_ROW && showTextPlaybackControls && pageTitle == ModeNames.TEXT_CHAT) {
@@ -421,8 +462,9 @@ fun HomeScreen(
                     )
                 }
 
-                // Live text, over the camera, clear of the buttons above and below.
-                if (isActive && previewCamera && pageTitle == ModeNames.TEXT_CHAT && (liveText != null || liveTextPinned != null)) {
+                // Live text, over the camera (or the plain background with Preview
+                // off), clear of the buttons above and below.
+                if (isActive && pageTitle == ModeNames.TEXT_CHAT && (liveText != null || liveTextPinned != null)) {
                     LiveTextOverlay(
                         live = liveText,
                         topReserve = LIVE_TEXT_TOP_RESERVE,
@@ -451,6 +493,9 @@ fun HomeScreen(
                     scope.launch { pagerState.animateScrollToPage(to) }
                 },
                 modifier = Modifier.align(Alignment.BottomCenter),
+                takeFocus = focusSelectedTab,
+                requestFocus = requestTabFocus,
+                selectedFirst = selectedTabFirst,
             )
         }
 
@@ -518,9 +563,9 @@ fun HomeScreen(
             )
         }
 
-        // More: a second row of the same buttons, titles only. Save chat, Torch,
-        // Preview, then the feature's own settings, the same switches as in
-        // Settings. Four to a row, like the bar above.
+        // More: a second row of the same buttons, titles only. Save chat, Share,
+        // Torch, Preview, then the feature's own settings, the same switches as
+        // in Settings. Four to a row, like the bar above.
         if (moreOpen) {
             FlowRow(
                 modifier = Modifier
@@ -636,9 +681,10 @@ private fun BoxScope.FeatureBody(
     liveTextOn: Boolean,
     conversation: List<TranscriptEntry>,
     pendingQuestion: String?,
+    pendingAnswer: String?,
+    messageMenu: MessageMenuHost?,
     working: Boolean,
     isRecording: Boolean,
-    holdToSpeak: Boolean,
     highContrast: Boolean,
     onLayerColor: Color,
     accent: Color,
@@ -652,14 +698,20 @@ private fun BoxScope.FeatureBody(
     muted: Boolean,
     onToggleMute: () -> Unit,
     onSendText: (String) -> Unit,
+    onTypingChanged: (keyboardUp: Boolean, draftTyped: Boolean) -> Unit,
     onAsk: () -> Unit,
     onTakePicture: (() -> Unit)?,
+    onFindPage: (() -> Unit)?,
     onBrowseObjects: (() -> Unit)?,
     playbackRow: @Composable () -> Unit,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val imeVisible = WindowInsets.isImeVisible
     var draft by remember(feature) { mutableStateOf("") }
+    // The volume keys follow Capture and Ask: none while the keyboard hides
+    // them, and no Ask once something typed makes that button Send.
+    val draftTyped = draft.isNotBlank()
+    SideEffect { onTypingChanged(imeVisible, draftTyped) }
     val scroll = rememberScrollState()
     val isChat = feature == ModeNames.IMAGE_CHAT || feature == ModeNames.TEXT_CHAT
     // Ask needs the AI in the chat features; Find objects can always listen.
@@ -685,6 +737,7 @@ private fun BoxScope.FeatureBody(
             ChatMessages(
                 entries = conversation,
                 pendingQuestion = pendingQuestion,
+                pendingAnswer = pendingAnswer,
                 working = working,
                 // Text chat has none while live text shows: TalkBack met it
                 // together with the live text over the camera, and lost its
@@ -704,6 +757,7 @@ private fun BoxScope.FeatureBody(
                 faint = !showMessages,
                 palette = palette,
                 scroll = scroll,
+                messageMenu = messageMenu,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
@@ -792,9 +846,19 @@ private fun BoxScope.FeatureBody(
         // The feature's own buttons; Previous and Next are laid out around them.
         val buttons = buildList {
             if (isChat && onTakePicture != null) {
+                // No "Busy" state while a picture or answer is on its way: TalkBack
+                // announced it on every press, as focus is on Capture then. Extra
+                // presses are ignored quietly (CaptureGate); the working tick tells.
                 add(BottomButton(stringResource(R.string.btn_capture)) {
                     keyboard?.hide()
                     onTakePicture()
+                })
+            }
+            if (feature == ModeNames.TEXT_CHAT && onFindPage != null) {
+                // The guided picture: Capture takes everything in view at once.
+                add(BottomButton(stringResource(R.string.btn_find_page)) {
+                    keyboard?.hide()
+                    onFindPage()
                 })
             }
             if (feature == ModeNames.FIND_OBJECTS && onBrowseObjects != null) {
@@ -807,7 +871,7 @@ private fun BoxScope.FeatureBody(
                 // focus is read out again — the button said "Ask" at the end of
                 // every recording. The recording has its own cues.
                 val sending = draft.isNotBlank()
-                val recording = isRecording && !holdToSpeak
+                val recording = isRecording
                 val askLabel = stringResource(if (sending || recording) R.string.btn_send else R.string.btn_ask)
                 val askSpoken = stringResource(if (sending) R.string.btn_send else R.string.btn_ask)
                 add(BottomButton(askLabel, primary = true, spokenLabel = askSpoken) { if (sending) sendDraft() else onAsk() })
@@ -844,6 +908,7 @@ private fun BoxScope.FeatureBody(
                                 .weight(1f)
                                 .height(height),
                             spokenLabel = button.spokenLabel,
+                            state = button.state,
                             onClick = button.onClick,
                         )
                     }
@@ -858,6 +923,9 @@ private fun BoxScope.FeatureBody(
  * most, wider when fewer are switched on). The current one is marked; tapping
  * another goes there.
  */
+/** The selected feature tab, found by this tag when it takes TalkBack's focus. */
+private const val SELECTED_FEATURE_TAB = "selected-feature-tab"
+
 @Composable
 private fun FeatureBar(
     pages: List<String>,
@@ -868,8 +936,52 @@ private fun FeatureBar(
     accent: Color,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    /** The selected tab takes TalkBack's focus, so TalkBack reads it (see LaunchFocus). */
+    takeFocus: Boolean = false,
+    /**
+     * Whether to move it now. The bar leaves the screen while the keyboard
+     * is up and returns with [takeFocus] still on; only the first moves it.
+     */
+    requestFocus: () -> Boolean = { true },
+    /**
+     * The selected tab comes first in TalkBack's order (a lower traversal index
+     * among the same siblings), so TalkBack's own first-element rule lands on it.
+     */
+    selectedFirst: Boolean = false,
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
+    LaunchedEffect(takeFocus) {
+        if (!takeFocus) return@LaunchedEffect
+        // Once the tab is laid out, and so in the accessibility tree.
+        withFrameNanos { }
+        if (!requestFocus()) return@LaunchedEffect
+        // Ends with the hold: a swipe or anything else stops it.
+        var waited = 0L
+        for (at in LaunchFocus.SCREEN_READER_FOCUS_ATTEMPTS_MS) {
+            delay(at - waited)
+            waited = at
+            view.moveScreenReaderFocusTo(SELECTED_FEATURE_TAB)
+        }
+    }
+    // A switch to another feature: TalkBack's cursor goes to the new tab too,
+    // wherever it was. Left on an element of the old page (Mute, say), TalkBack
+    // moved it to one of the new page's (Ask) and read that over the tab's
+    // "Text chat, 2 of 6" (decided 2026-10-28). On the tab already, the move
+    // does nothing.
+    val firstTab = remember { current }
+    var switched by remember { mutableStateOf(false) }
+    LaunchedEffect(current) {
+        if (!switched && current == firstTab) return@LaunchedEffect
+        switched = true
+        withFrameNanos { }
+        var waited = 0L
+        for (at in LaunchFocus.SCREEN_READER_FOCUS_ATTEMPTS_MS) {
+            delay(at - waited)
+            waited = at
+            view.moveScreenReaderFocusTo(SELECTED_FEATURE_TAB)
+        }
+    }
     // Each tab says its place in its name ("Find objects, 4 of 4. Tab"). The
     // bar is not a collection for TalkBack: declared as one, TalkBack on the
     // phones tested said no place at all; left to Compose's selectable group,
@@ -903,6 +1015,9 @@ private fun FeatureBar(
                         contentDescription = spoken
                         role = Role.Tab
                         this.selected = selected
+                        if (selected) testTag = SELECTED_FEATURE_TAB
+                        // Everything else stays at the default, 0.
+                        if (selected && selectedFirst) traversalIndex = -1f
                         onClick { onSelect(index); true }
                     }
                     .padding(horizontal = 2.dp),
@@ -940,6 +1055,8 @@ private class BottomButton(
     val primary: Boolean = false,
     /** What TalkBack calls it, when that is not [label]; see SquareButton. */
     val spokenLabel: String = label,
+    /** What it is doing, for TalkBack: "Busy". */
+    val state: String? = null,
     val onClick: () -> Unit,
 )
 

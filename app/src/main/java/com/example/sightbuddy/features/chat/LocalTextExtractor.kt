@@ -19,25 +19,13 @@ class LocalTextExtractor {
 
     /**
      * Extract text from a Bitmap, one paragraph per recognised block (see
-     * [TextSections]), or an empty string if no text was found. With [page],
-     * blocks whose middle lies to the left or right of that page are left out,
-     * so a guided capture reads the page it was aimed at and not the one beside
-     * it. Only sideways: the two pages of a spread sit side by side, and the
-     * page box can be one section of the page, so cutting above and below it
-     * lost the rest of the page. If no block is left, everything is kept.
+     * [TextSections]), or an empty string if no text was found.
      * [debugSource] names the caller for the dev overlay.
      */
-    suspend fun extractText(bitmap: Bitmap, debugSource: String = "capture", page: TextFrame? = null): String {
+    suspend fun extractText(bitmap: Bitmap, debugSource: String = "capture"): String {
         val (visionText, ms) = recognise(bitmap)
         val all = visionText?.textBlocks.orEmpty()
-        val onPage = page?.let { p ->
-            val w = bitmap.width.toFloat()
-            all.filter { block ->
-                val box = block.boundingBox ?: return@filter false
-                box.exactCenterX() / w in (p.left - PAGE_MARGIN)..(p.right + PAGE_MARGIN)
-            }
-        }?.takeIf { it.isNotEmpty() } ?: all
-        val extracted = TextSections.join(onPage.map { block -> block.lines.map { it.text } }).trim()
+        val extracted = TextSections.join(all.map { block -> block.lines.map { it.text } }).trim()
         Log.i("LocalTextExtractor", "Extracted ${extracted.length} chars")
         if (OcrDebug.enabled) {
             OcrDebug.publish(debugSource, bitmap.width, bitmap.height, ms, blocksOf(visionText, bitmap))
@@ -46,25 +34,29 @@ class LocalTextExtractor {
     }
 
     /**
-     * Every recognised block, for aiming the camera: where it sits as fractions
-     * of the frame, and how tall its lines are. Nothing is kept.
-     *
-     * Aiming reads a smaller copy of the frame, which is several times faster;
-     * [scaleToFull] is how much larger the full frame is, and sizes come back in
-     * its pixels, so they say how the text will read in the full-size capture.
+     * Every recognised block, for live text: where it sits as fractions of the
+     * frame, and how tall its lines are. Nothing is kept.
      */
-    suspend fun locateText(bitmap: Bitmap, scaleToFull: Float = 1f, debugSource: String = "aim"): Located {
+    suspend fun locateText(bitmap: Bitmap, debugSource: String = "read"): Located {
         val (visionText, ms) = recognise(bitmap)
-        val blocks = blocksOf(visionText, bitmap).map {
-            it.copy(lineHeightPx = (it.lineHeightPx * scaleToFull).toInt())
-        }
-        val width = (bitmap.width * scaleToFull).toInt()
-        val height = (bitmap.height * scaleToFull).toInt()
-        if (OcrDebug.enabled) OcrDebug.publish(debugSource, width, height, ms, blocks)
-        return Located(blocks, width, height)
+        val blocks = blocksOf(visionText, bitmap)
+        if (OcrDebug.enabled) OcrDebug.publish(debugSource, bitmap.width, bitmap.height, ms, blocks)
+        return Located(blocks, bitmap.width, bitmap.height)
     }
 
-    data class Located(val blocks: List<PageTracker.Block>, val widthPx: Int, val heightPx: Int)
+    data class Located(val blocks: List<Block>, val widthPx: Int, val heightPx: Int)
+
+    /** A recognised block of text, its box as fractions of the frame. */
+    data class Block(
+        val left: Float,
+        val top: Float,
+        val right: Float,
+        val bottom: Float,
+        val chars: Int,
+        /** Median line height, in frame pixels. */
+        val lineHeightPx: Int,
+        val text: String,
+    )
 
     /** The recognised text, or null on failure, and how long it took in ms. */
     private suspend fun recognise(bitmap: Bitmap): Pair<Text?, Long> {
@@ -80,13 +72,13 @@ class LocalTextExtractor {
         return text to System.currentTimeMillis() - startedAt
     }
 
-    private fun blocksOf(visionText: Text?, bitmap: Bitmap): List<PageTracker.Block> {
+    private fun blocksOf(visionText: Text?, bitmap: Bitmap): List<Block> {
         val w = bitmap.width.toFloat()
         val h = bitmap.height.toFloat()
         return visionText?.textBlocks.orEmpty().mapNotNull { block ->
             val box = block.boundingBox ?: return@mapNotNull null
             val heights = block.lines.mapNotNull { it.boundingBox?.height() }.sorted()
-            PageTracker.Block(
+            Block(
                 left = box.left / w,
                 top = box.top / h,
                 right = box.right / w,
@@ -98,23 +90,7 @@ class LocalTextExtractor {
         }
     }
 
-    /** The text's bounding box as fractions of the frame. */
-    data class TextFrame(
-        val left: Float,
-        val top: Float,
-        val right: Float,
-        val bottom: Float,
-        val chars: Int,
-        /** Median line height in frame pixels; 0 when not known. */
-        val lineHeightPx: Int = 0,
-    )
-
     fun close() {
         recognizer.close()
-    }
-
-    private companion object {
-        /** How far outside the aimed-at page, as a share of the frame, a block may sit. */
-        const val PAGE_MARGIN = 0.06f
     }
 }

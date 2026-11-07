@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.view.KeyEvent
 import androidx.core.content.ContextCompat
 import com.example.sightbuddy.BuildConfig
 import androidx.activity.ComponentActivity
@@ -38,6 +39,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.example.sightbuddy.core.OpenAiTransport
+import com.example.sightbuddy.core.language.MlKitLanguageIdentifier
+import com.example.sightbuddy.core.AppShortcuts
 import com.example.sightbuddy.core.BeepService
 import com.example.sightbuddy.core.CameraXManager
 import com.example.sightbuddy.core.CueBeat
@@ -58,6 +61,7 @@ import com.example.sightbuddy.R
 import com.example.sightbuddy.core.SoundFXService.SFX
 import com.example.sightbuddy.core.TextScriptPlayer
 import com.example.sightbuddy.core.TTSService
+import com.example.sightbuddy.core.VolumeKeys
 import com.example.sightbuddy.core.stt.CloudTranscriber
 import com.example.sightbuddy.core.stt.SpeechAvailability
 import com.example.sightbuddy.core.stt.SpeechEngine
@@ -72,12 +76,9 @@ import com.example.sightbuddy.features.chat.ImageChatViewModel
 import com.example.sightbuddy.features.chat.LocalTextExtractor
 import com.example.sightbuddy.features.chat.LiveTextTracker
 import com.example.sightbuddy.features.chat.LiveReadQueue
-import com.example.sightbuddy.features.chat.TextAimGuide
 import com.example.sightbuddy.features.chat.OcrDebug
-import com.example.sightbuddy.features.chat.PageTracker
 import com.example.sightbuddy.features.chat.TextSections
 import com.example.sightbuddy.features.chat.LiveText
-import com.example.sightbuddy.features.chat.PaperFinder
 import com.example.sightbuddy.ui.screens.OcrDebugOverlay
 import com.example.sightbuddy.ui.isScreenReaderOn
 import com.example.sightbuddy.features.vision.CocoFinnish
@@ -150,6 +151,15 @@ class MainActivity : ComponentActivity() {
     private lateinit var imageChatViewModel: ImageChatViewModel
     private lateinit var localTextExtractor: LocalTextExtractor
 
+    /** The app screen's controller while the screen is up; the volume keys go to it. */
+    internal var appController: AppController? = null
+    private val volumeKeys = VolumeKeys()
+
+    /** The feature the app shortcut that started the app asked for, until the screen takes it. */
+    private var shortcutFeature: String? = null
+
+    internal fun takeShortcutFeature(): String? = shortcutFeature.also { shortcutFeature = null }
+
     /**
      * Apply the chosen display language before any resource is resolved, so
      * the values-fi strings are picked up automatically.
@@ -167,12 +177,26 @@ class MainActivity : ComponentActivity() {
         settingsManager = SettingsManager(this)
         cameraXManager = CameraXManager(this)
         networkStatusManager = NetworkStatusManager(this)
-        ttsService = TTSService(this)
+        // Speak with screen reader (issue #15): asked at every line, so turning
+        // TalkBack on or off takes effect at once. In the background, or with a
+        // pop-up window over the activity (it then lacks the window focus),
+        // Android does not pass the activity's live regions to TalkBack: the
+        // app's voice speaks instead.
+        ttsService = TTSService(
+            this,
+            screenReaderChosen = { settingsManager.speakWithScreenReader.value },
+            screenReaderRunning = { isScreenReaderOn(this) },
+            appInFront = { lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && hasWindowFocus() },
+            // Text in another language is said with its own voice (issue #26).
+            languageIdentifier = MlKitLanguageIdentifier(),
+        )
         sttModelManager = SttModelManager(this, BuildConfig.STT_MODEL_BASE_URL)
         // Loaded from the UI once the user's switches are known; see SightBuddyApp.
         localGemma = LocalGemma(this)
         memoryStore = MemoryStore(this)
         runGemmaEval(intent)
+        // Not on a recreate (a language change): the shortcut was used once.
+        if (savedInstanceState == null) shortcutFeature = shortcutFeatureOf(intent)
         voiceInputService = VoiceInputService(
             this,
             sttModelManager,
@@ -181,9 +205,10 @@ class MainActivity : ComponentActivity() {
         )
         // Whisper models are downloaded only on user request (Settings or the
         // first-launch prompt) — no automatic 154 MB download.
-        hapticManager = HapticManager(this)
+        // Settings' Vibration and Sound effects, read at each use.
+        hapticManager = HapticManager(this) { settingsManager.vibration.value }
         beepService = BeepService()
-        soundFXService = SoundFXService(this)
+        soundFXService = SoundFXService(this) { settingsManager.soundEffects.value }
         // The spoken tutorial is gone, and its "already seen" flag with it.
         deleteSharedPreferences("sight_buddy_welcome")
         termsStore = TermsStore(this)
@@ -215,9 +240,10 @@ class MainActivity : ComponentActivity() {
             apiAllowed = { settingsManager.useApi.value },
             online = { networkStatusManager.isOnline.value },
             local = localGemma,
-            // Any language: Gemma gets the same prompts as OpenAI, which ask for the
-            // reply in the app language (Finnish too). It is not offered in Finnish,
-            // but someone who downloads it from Advanced gets it.
+            // Any language: Gemma gets the same prompts as OpenAI, except that it is
+            // not told to reply in the app language (issue #20; ChatPrompts): it
+            // replies in the language of the question. It is not offered in
+            // Finnish, but someone who downloads it from Advanced gets it.
             localAllowed = { settingsManager.useLocalChat.value },
         )
 
@@ -294,6 +320,53 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         runGemmaEval(intent)
+        // An app shortcut with the app running: straight to its feature. A tap
+        // on the icon also arrives here (singleTop) and changes nothing.
+        shortcutFeatureOf(intent)?.let { feature ->
+            appController?.openFeatureFromShortcut(feature) ?: run { shortcutFeature = feature }
+        }
+    }
+
+    private fun shortcutFeatureOf(intent: Intent?): String? =
+        AppShortcuts.featureOf(intent?.getStringExtra(AppShortcuts.EXTRA_FEATURE))
+
+    /**
+     * The volume keys as Capture and Ask when the setting is on; see
+     * VolumeKeys. Any other key, and a volume key with nothing to do, goes on
+     * to Android untouched: the volume changes only when these return false.
+     * (Not dispatchKeyEvent: androidx restricts overriding it.)
+     */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
+        takeVolumeKey(event, pressed = true) || super.onKeyDown(keyCode, event)
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean =
+        takeVolumeKey(event, pressed = false) || super.onKeyUp(keyCode, event)
+
+    /** True when the event was a volume key the app took. */
+    private fun takeVolumeKey(event: KeyEvent, pressed: Boolean): Boolean {
+        val key = VolumeKeys.keyOf(event.keyCode) ?: return false
+        val controller = appController ?: return false
+        val outcome = volumeKeys.onKey(
+            key,
+            pressed = pressed,
+            repeat = event.repeatCount > 0,
+            canceled = event.isCanceled,
+            action = controller.volumeKeyAction(key),
+        )
+        return when (outcome) {
+            VolumeKeys.Outcome.Pass -> false
+            VolumeKeys.Outcome.Swallow -> true
+            is VolumeKeys.Outcome.Act -> {
+                controller.onVolumeKey(outcome.action)
+                true
+            }
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // A key let go in another window never comes back here.
+        if (!hasFocus) volumeKeys.reset()
     }
 
     /**
@@ -442,6 +515,7 @@ fun SightBuddyApp(
             startupPermissionsAskedState = startupPermissionsAsked,
             termsPermissionRetriedState = termsPermissionRetried,
             initiallyInForeground = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED),
+            initialFeature = (context as? MainActivity)?.takeShortcutFeature(),
         )
     }
 
@@ -453,6 +527,18 @@ fun SightBuddyApp(
     ) { permissions -> c.onStartupPermissionsResult(permissions) }
     c.requestPermission = { askPermission.launch(it) }
     c.requestPermissions = { permissionLauncher.launch(it) }
+
+    // The activity's key events, and app shortcuts used while the app runs,
+    // reach the controller through this. It runs after the first frame, which
+    // already shows the features to anyone past onboarding, so the shortcut
+    // that started the app is handed to the controller when it is created.
+    DisposableEffect(c) {
+        val activity = context as? MainActivity
+        activity?.appController = c
+        onDispose {
+            if (activity != null && activity.appController === c) activity.appController = null
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -497,12 +583,14 @@ fun SightBuddyApp(
         LaunchedEffect(gemmaInstalled, effectiveStt, useLocalChat) { syncGemmaLoaded() }
         LaunchedEffect(sttModelsReady) { onSttModelsReadyChanged() }
         LaunchedEffect(cloudSttEnabled, apiAllowed) { syncCloudTranscriber() }
+        LaunchedEffect(llmChatEnabled) { syncImageChatAvailable() }
         LaunchedEffect(apiAllowed, cloudSttAsked, showTerms, onboardingBlocking) { offerCloudStt() }
         LaunchedEffect(ttsRate, ttsInitialized) { applySpeechRate() }
         LaunchedEffect(appInForeground, isListening, showTerms, popupOpen, showSettings, onboardingBlocking) {
             syncAppSpeech()
         }
         LaunchedEffect(popupOpen) { onPopupChanged() }
+        LaunchedEffect(appInForeground, onboardingBlocking, showSettings, popupOpen, activeMode) { holdLaunchFocus() }
         LaunchedEffect(chatWorking, popupOpen, showSettings, isListening, appInForeground) { workingTick() }
         LaunchedEffect(showSettings, showObjectPicker) { onSettingsOrPickerChanged() }
         LaunchedEffect(activeMode, startFeaturesMuted, showSettings) { applyStartMuted() }
@@ -517,6 +605,7 @@ fun SightBuddyApp(
         LaunchedEffect(isListening) { onListeningChanged() }
         LaunchedEffect(appInForeground, ttsInitialized) { onReturnToApp() }
         LaunchedEffect(Unit) { collectVoiceEvents() }
+        LaunchedEffect(ttsInitialized) { if (ttsInitialized) collectDamagedModels() }
         LaunchedEffect(pendingCaptureBitmap, pendingQuestion, micFirstActive) { pairMicFirst() }
         LaunchedEffect(showTerms, onboardingBlocking, appInForeground) { collectCommands() }
         LaunchedEffect(showTerms, onboardingBlocking, appInForeground) { expireIdleSessions() }
