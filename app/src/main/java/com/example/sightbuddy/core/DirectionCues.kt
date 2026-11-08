@@ -9,6 +9,8 @@ import com.example.sightbuddy.R
  * These were recorded samples, one set per language. Spoken cues come from the
  * string resources instead, so a new language needs only its translations.
  * Each cue cuts whatever is being said: a direction that arrives late is wrong.
+ * Through the screen reader (issue #15) it is an assertive line, cutting the
+ * screen reader the same way; see [CUES_THROUGH_SCREEN_READER].
  */
 class DirectionCues(private val context: Context, private val tts: TTSService) {
 
@@ -18,14 +20,13 @@ class DirectionCues(private val context: Context, private val tts: TTSService) {
         UP(R.string.cue_up),
         DOWN(R.string.cue_down),
         CLOSER(R.string.cue_closer),
-        FURTHER(R.string.cue_further),
         CENTRE(R.string.cue_centre),
         /** Text scanning's "centred": the picture is taken if the phone stays put. */
         HOLD_STEADY(R.string.cue_hold_steady),
     }
 
     fun say(cue: Cue) {
-        tts.speak(context.getString(cue.textRes), flush = true, utteranceId = UTTERANCE_ID)
+        tts.speak(context.getString(cue.textRes), flush = true, utteranceId = UTTERANCE_ID, cue = true)
     }
 
     private companion object {

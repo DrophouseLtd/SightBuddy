@@ -50,8 +50,6 @@ class DocumentChatViewModel(
         .build()
 
     private var lastExtractedText: String = ""
-    /** First assistant reply only — used by Text chat playback when text preview is off. */
-    private var firstAssistantResponse: String = ""
     private var activeCall: Call? = null
 
     fun cancelActiveRequest() {
@@ -76,15 +74,12 @@ class DocumentChatViewModel(
 
     fun extractedTextForPlayback(): String = lastExtractedText
 
-    fun firstAssistantResponseForPlayback(): String = firstAssistantResponse
-
-    private fun recordFirstAssistantResponse(response: String) {
-        if (firstAssistantResponse.isBlank() && response.isNotBlank()) {
-            firstAssistantResponse = response
-        }
-    }
-
-    suspend fun processDocument(bitmap: Bitmap, userPrompt: String = ""): String {
+    /**
+     * [onDelta] (issue #24): the answer as it is written, from the on-device
+     * model's thread; see [OpenAiTransport.executeChatCompletion]. The return
+     * value is the whole answer either way, and the turn is kept the same way.
+     */
+    suspend fun processDocument(bitmap: Bitmap, userPrompt: String = "", onDelta: ((String) -> Unit)? = null): String {
         _isProcessing.value = true
         return try {
             withContext(Dispatchers.IO) {
@@ -96,33 +91,24 @@ class DocumentChatViewModel(
                     return@withContext context.getString(R.string.spoken_no_text_in_image)
                 }
 
-                val systemMsg = documentChatSystemMessage(
-                    "When describing documents, start with what kind of document it is. "
-                )
-
-                val userMsg = if (userPrompt.isBlank()) {
-                    "I just scanned a document with my camera. " +
-                        "Please read and summarize the following text clearly and concisely." +
-                        // English prompt, so it carries the language requirement.
-                        OpenAiTransport.replyLanguageInstruction() + " " +
-                        "For example, say 'Here's a bill from the gas company, would you like to know the payment details?':\n\n$extractedText"
+                val onDevice = transport.answersOnDevice()
+                val prompt = if (userPrompt.isBlank()) {
+                    ChatPrompts.documentSummary(extractedText, onDevice)
                 } else {
-                    "Here is text extracted from a document I scanned:\n\n" +
-                        "\"$extractedText\"\n\n" +
-                        "My question: $userPrompt\n\n" +
-                        "Please answer clearly and concisely." +
-                        OpenAiTransport.replyLanguageInstruction()
+                    ChatPrompts.documentQuestion(extractedText, userPrompt, onDevice)
                 }
 
-                val response = callOpenAI(systemMsg, userMsg)
+                val response = callOpenAI(prompt, onDelta)
 
-                val newHistory = _chatHistory.value.toMutableList()
-                newHistory.add(ChatMessage("user", userPrompt.ifBlank { "Describe this document" }))
-                newHistory.add(ChatMessage("assistant", response))
-                _chatHistory.value = newHistory
+                // A cancelled answer belongs to a session already reset: keep no turn.
+                if (response != OpenAiTransport.CANCELLED) {
+                    val newHistory = _chatHistory.value.toMutableList()
+                    newHistory.add(ChatMessage("user", userPrompt.ifBlank { "Describe this document" }))
+                    newHistory.add(ChatMessage("assistant", response))
+                    _chatHistory.value = newHistory
+                }
 
                 _lastResponse.value = response
-                recordFirstAssistantResponse(response)
                 _isProcessing.value = false
                 response
             }
@@ -135,8 +121,9 @@ class DocumentChatViewModel(
 
     /**
      * Ask a follow-up question about the previously scanned document.
+     * [onDelta] as in [processDocument].
      */
-    suspend fun askFollowUp(userPrompt: String): String {
+    suspend fun askFollowUp(userPrompt: String, onDelta: ((String) -> Unit)? = null): String {
         if (lastExtractedText.isBlank()) {
             return context.getString(R.string.spoken_scan_document_first)
         }
@@ -152,21 +139,22 @@ class DocumentChatViewModel(
                     "${msg.role}: ${msg.text}"
                 }
 
-                val systemMsg = documentChatSystemMessage()
+                val response = callOpenAI(
+                    ChatPrompts.documentFollowUp(
+                        lastExtractedText,
+                        historyContext,
+                        userPrompt,
+                        transport.answersOnDevice(),
+                    ),
+                    onDelta,
+                )
 
-                val userMsg = "Here is text from a document I scanned:\n\n" +
-                    "\"$lastExtractedText\"\n\n" +
-                    "Previous conversation:\n$historyContext\n\n" +
-                    "My new question: $userPrompt\n\n" +
-                    "Please answer clearly and concisely." +
-                    OpenAiTransport.replyLanguageInstruction()
-
-                val response = callOpenAI(systemMsg, userMsg)
-
-                val newHistory = _chatHistory.value.toMutableList()
-                newHistory.add(ChatMessage("user", userPrompt))
-                newHistory.add(ChatMessage("assistant", response))
-                _chatHistory.value = newHistory
+                if (response != OpenAiTransport.CANCELLED) {
+                    val newHistory = _chatHistory.value.toMutableList()
+                    newHistory.add(ChatMessage("user", userPrompt))
+                    newHistory.add(ChatMessage("assistant", response))
+                    _chatHistory.value = newHistory
+                }
 
                 _lastResponse.value = response
                 _isProcessing.value = false
@@ -179,26 +167,17 @@ class DocumentChatViewModel(
         }
     }
 
-    private fun documentChatSystemMessage(extra: String = ""): String =
-        "You are a helpful assistant for a visually impaired user. " +
-            "Be clear, concise, and conversational. " +
-            extra +
-            OpenAiTransport.LLM_USER_SAFETY_INSTRUCTION + " " +
-            OpenAiTransport.LLM_MAX_WORDS_INSTRUCTION +
-            // The prompt is English whatever the app language; the answer must not be.
-            OpenAiTransport.replyLanguageInstruction()
-
-    private fun callOpenAI(systemMessage: String, userMessage: String): String {
+    private fun callOpenAI(prompt: ChatPrompts.Prompt, onDelta: ((String) -> Unit)? = null): String {
         val messages = JSONArray().apply {
-            put(JSONObject().put("role", "system").put("content", systemMessage))
-            put(JSONObject().put("role", "user").put("content", userMessage))
+            put(JSONObject().put("role", "system").put("content", prompt.system))
+            put(JSONObject().put("role", "user").put("content", prompt.user))
         }
 
         val body = JSONObject().apply {
             put("model", modelProvider())
             put("messages", messages)
-            put("max_tokens", OpenAiTransport.LLM_MAX_OUTPUT_TOKENS)
-            put("temperature", 0.7)
+            put("max_tokens", prompt.maxTokens)
+            put("temperature", prompt.temperature)
         }
 
         return OpenAiTransport.executeChatCompletion(
@@ -209,13 +188,13 @@ class DocumentChatViewModel(
             onQuotaExhausted = onQuotaExhausted,
             onInstallRestricted = onInstallRestricted,
             registerCall = { activeCall = it },
+            onDelta = onDelta,
         )
     }
 
     fun clearHistory() {
         _chatHistory.value = emptyList()
         lastExtractedText = ""
-        firstAssistantResponse = ""
         _lastResponse.value = ""
     }
 

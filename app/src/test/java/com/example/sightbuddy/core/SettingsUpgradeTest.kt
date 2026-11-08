@@ -65,7 +65,6 @@ class SettingsUpgradeTest {
         assertTrue(settings.cloudStt.value)
         assertTrue(settings.cloudSttAsked.value)
         assertTrue(settings.pitchFeedback.value)
-        assertTrue(settings.holdToSpeak.value)
         assertFalse(settings.autoCaptureEnabled.value)
         assertFalse(settings.crashReportingEnabled.value)
         assertEquals(SettingsManager.MODEL_SMART, settings.llmModel.value)
@@ -81,7 +80,9 @@ class SettingsUpgradeTest {
 
         assertFalse(prefs.contains("button_nav_enabled"))
         assertFalse(prefs.contains("feature_activation_announcements_enabled"))
-        val kept = changedIn220().keys - setOf("button_nav_enabled", "feature_activation_announcements_enabled")
+        assertFalse(prefs.contains("hold_to_speak_enabled"))
+        val kept = changedIn220().keys -
+            setOf("button_nav_enabled", "feature_activation_announcements_enabled", "hold_to_speak_enabled")
         kept.forEach { assertEquals("$it was changed", changedIn220()[it], prefs.all[it]) }
     }
 
@@ -115,11 +116,81 @@ class SettingsUpgradeTest {
         assertTrue(settings.useApi.value)
         assertTrue(settings.useLocalChat.value)
         assertEquals("whisper", settings.sttChoice.value)
-        assertTrue(settings.hapticFeedback.value)
         assertTrue(settings.cameraPreview.value)
         assertFalse(settings.liveText.value)
-        assertTrue(settings.textScanGuidance.value)
         assertFalse(settings.startFeaturesMuted.value)
+
+        // New in 2.4.0: off, so nothing about the phone goes out unasked.
+        assertFalse(settings.feedbackDetails.value)
+        // Off, too, so the volume keys stay the volume until asked.
+        assertFalse(settings.volumeKeys.value)
+        // Off: the app speaks with its own voice until the user chooses the
+        // screen reader (issue #15).
+        assertFalse(settings.speakWithScreenReader.value)
+        // On, both: the cues are heard and felt.
+        assertTrue(settings.soundEffects.value)
+        assertTrue(settings.vibration.value)
+        // On: Text chat's Ask before any page finds the page, as Find page does.
+        assertTrue(settings.askFindsPage.value)
+    }
+
+    @Test
+    fun askFindsPageIsKept() {
+        val prefs = FakePrefs(emptyMap())
+        SettingsManager(contextWith(prefs)).setAskFindsPage(false)
+
+        assertFalse(SettingsManager(contextWith(prefs)).askFindsPage.value)
+    }
+
+    /**
+     * 2.3.0's Haptic feedback gave vibration instead of sound. Sound effects
+     * and Vibration replaced it, each on its own; the old choice is not carried
+     * over, and its key is cleared.
+     */
+    @Test
+    fun hapticFeedbackFrom230IsRetiredAndBothNewSwitchesStartOn() {
+        val prefs = FakePrefs(mapOf("haptic_feedback" to false, "pitch_feedback" to true))
+        val settings = SettingsManager(contextWith(prefs))
+
+        assertFalse(prefs.contains("haptic_feedback"))
+        assertTrue(prefs.contains("pitch_feedback"))
+        assertTrue(settings.soundEffects.value)
+        assertTrue(settings.vibration.value)
+    }
+
+    /**
+     * Text scanning guidance (2.3.0) is gone: Find page is its own button in
+     * Text chat, and Capture always takes the picture at once. Its key is cleared.
+     */
+    @Test
+    fun textScanGuidanceIsRetired() {
+        val prefs = FakePrefs(mapOf("text_scan_guidance" to false, "live_text" to true))
+        SettingsManager(contextWith(prefs))
+
+        assertFalse(prefs.contains("text_scan_guidance"))
+        assertTrue(prefs.contains("live_text"))
+    }
+
+    @Test
+    fun holdToSpeakIsRetired() {
+        val prefs = FakePrefs(mapOf("hold_to_speak_enabled" to true, "auto_capture_enabled" to false))
+        SettingsManager(contextWith(prefs))
+
+        assertFalse(prefs.contains("hold_to_speak_enabled"))
+        assertTrue(prefs.contains("auto_capture_enabled"))
+    }
+
+    @Test
+    fun soundEffectsAndVibrationAreKeptSeparately() {
+        val prefs = FakePrefs(emptyMap())
+        SettingsManager(contextWith(prefs)).apply {
+            setSoundEffects(false)
+            setVibration(true)
+        }
+        val reopened = SettingsManager(contextWith(prefs))
+
+        assertFalse(reopened.soundEffects.value)
+        assertTrue(reopened.vibration.value)
     }
 
     private fun contextWith(prefs: SharedPreferences): Context = object : ContextWrapper(null) {
@@ -127,7 +198,7 @@ class SettingsUpgradeTest {
     }
 
     /** An in-memory SharedPreferences: reads and writes land at once. */
-    private class FakePrefs(initial: Map<String, Any>) : SharedPreferences {
+    internal class FakePrefs(initial: Map<String, Any>) : SharedPreferences {
         private val values = initial.toMutableMap()
 
         override fun getAll(): Map<String, *> = values.toMap()

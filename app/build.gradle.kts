@@ -124,8 +124,8 @@ android {
         applicationId = "com.drophouse.sightbuddy"
         minSdk = 30
         targetSdk = 36
-        versionCode = 14
-        versionName = "2.3.0"
+        versionCode = 20
+        versionName = "2.4.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -202,6 +202,17 @@ android {
         }
     }
 
+    // sherpa-onnx and ONNX Runtime's Java API (the page-corner model) both carry
+    // libonnxruntime.so: the same release, 1.27.0, with the same exports. One
+    // copy is kept, the first found: sherpa-onnx's, declared first below, the
+    // one speech recognition has always run on. Keep `onnxruntime` in
+    // libs.versions.toml at the release sherpa-onnx carries.
+    packaging {
+        jniLibs {
+            pickFirsts += "lib/*/libonnxruntime.so"
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -211,6 +222,13 @@ android {
         unitTests {
             isReturnDefaultValues = true
         }
+    }
+
+    // Issues present when CI started checking lint (October 2026) are listed in
+    // the baseline, so CI fails only on new ones. Fixing one drops it from the
+    // file on the next `updateLintBaseline`.
+    lint {
+        baseline = file("lint-baseline.xml")
     }
 }
 
@@ -263,14 +281,25 @@ dependencies {
     implementation(libs.androidx.camera.view)
 
     // TensorFlow Lite + Task Vision
-    implementation(libs.tensorflow.lite)
-    implementation(libs.tensorflow.lite.task.vision)
+    // The object detector (EfficientDet-Lite0). MediaPipe Tasks, not the TensorFlow
+    // Lite Task Library: that one's native code supports 4 KB memory pages only,
+    // and Google Play requires 16 KB.
+    implementation(libs.mediapipe.tasks.vision)
 
     // OkHttp
     implementation(libs.okhttp)
 
     // Google ML Kit Text Recognition
     implementation(libs.google.mlkit.text.recognition)
+
+    // Google ML Kit Language Identification, bundled (on the phone, offline):
+    // the language of text read out, so it is spoken with its own voice (#26).
+    implementation(libs.google.mlkit.language.id)
+
+    // ONNX Runtime's Java API, for Find page's page-corner model (about 14 MB
+    // in assets). Its native runtime is the same release sherpa-onnx carries,
+    // so one copy of libonnxruntime.so serves both (packaging, above).
+    implementation(libs.onnxruntime.android)
 
     // Firebase Crashlytics (prod flavor only). No Analytics — crash diagnostics
     // only, no advertising ID, no behavioural tracking.

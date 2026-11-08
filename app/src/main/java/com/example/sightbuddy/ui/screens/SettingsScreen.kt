@@ -56,6 +56,12 @@ import com.example.sightbuddy.ui.theme.actionButtonText
 import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.foundation.focusable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import com.example.sightbuddy.ui.isScreenReaderOn
+import kotlinx.coroutines.delay
 import android.content.ClipData
 import android.view.View
 import androidx.activity.compose.BackHandler
@@ -95,6 +101,8 @@ fun SettingsScreen(
     onSwitchLanguage: () -> Unit = {},
     onFeatureHideBlocked: () -> Unit = {},
     onCrashReportingChange: (Boolean) -> Unit = {},
+    onPrivacyPolicy: () -> Unit = {},
+    onTermsOfUse: () -> Unit = {},
     whisperSupported: Boolean = true,
     gemmaInstalled: Boolean = false,
     gemmaDownloadPercent: Int? = null,
@@ -119,16 +127,16 @@ fun SettingsScreen(
     val discover by settingsManager.discoverEnabled.collectAsState()
     val find by settingsManager.findEnabled.collectAsState()
     val highContrastMode by settingsManager.highContrastEnabled.collectAsState()
-    val holdToSpeak by settingsManager.holdToSpeak.collectAsState()
+    val volumeKeys by settingsManager.volumeKeys.collectAsState()
     val autoCapture by settingsManager.autoCaptureEnabled.collectAsState()
-    val textScanGuidance by settingsManager.textScanGuidance.collectAsState()
+    val askFindsPage by settingsManager.askFindsPage.collectAsState()
     val liveText by settingsManager.liveText.collectAsState()
     val llmModel by settingsManager.llmModel.collectAsState()
     val crashReporting by settingsManager.crashReportingEnabled.collectAsState()
+    val feedbackDetails by settingsManager.feedbackDetails.collectAsState()
     val ttsRate by settingsManager.ttsSpeechRate.collectAsState()
     val loopCarousel by settingsManager.loopCarousel.collectAsState()
     val pitchFeedback by settingsManager.pitchFeedback.collectAsState()
-    val hapticFeedback by settingsManager.hapticFeedback.collectAsState()
     val cameraPreview by settingsManager.cameraPreview.collectAsState()
     val startFeaturesMuted by settingsManager.startFeaturesMuted.collectAsState()
     val cloudStt by settingsManager.cloudStt.collectAsState()
@@ -142,6 +150,23 @@ fun SettingsScreen(
 
     val context = LocalContext.current
     val backLabel = stringResource(R.string.btn_back)
+
+    // The object list and the licences replace this screen while open. Closing
+    // one rebuilds it, which left TalkBack on Back at the top: the list keeps its
+    // place instead, and focus goes back to the row that opened it.
+    val listScroll = rememberScrollState()
+    val objectListFocus = remember { FocusRequester() }
+    val licencesFocus = remember { FocusRequester() }
+    var returnFocus by remember { mutableStateOf<FocusRequester?>(null) }
+    val screenReaderOn = remember { isScreenReaderOn(context) }
+    fun closeObjectList() {
+        showCocoObjectSettings = false
+        returnFocus = objectListFocus
+    }
+    fun closeLicences() {
+        showLicences = false
+        returnFocus = licencesFocus
+    }
 
     val brand = currentBrand()
     val textColor = if (highContrast) {
@@ -161,8 +186,8 @@ fun SettingsScreen(
     // the object sub-list returns to the settings list; the settings list closes.
     BackHandler {
         when {
-            showCocoObjectSettings -> showCocoObjectSettings = false
-            showLicences -> showLicences = false
+            showCocoObjectSettings -> closeObjectList()
+            showLicences -> closeLicences()
             else -> onBack()
         }
     }
@@ -173,7 +198,7 @@ fun SettingsScreen(
             highContrast = highContrast,
             whiteMode = whiteMode,
             modifier = modifier,
-            onBack = { showCocoObjectSettings = false },
+            onBack = { closeObjectList() },
         )
         return
     }
@@ -185,10 +210,23 @@ fun SettingsScreen(
             headerColor = headerColor,
             highContrast = highContrast,
             whiteMode = whiteMode,
-            onBack = { showLicences = false },
+            onBack = { closeLicences() },
             modifier = modifier,
         )
         return
+    }
+
+    // Back on the list: the row exists once this frame is drawn. The wait lets
+    // the screen settle first, as TalkBack drops a focus moved mid-change.
+    // TalkBack follows input focus, so that is what is moved.
+    returnFocus?.let { target ->
+        LaunchedEffect(target) {
+            if (screenReaderOn) {
+                delay(RETURN_FOCUS_DELAY_MS)
+                runCatching { target.requestFocus() }
+            }
+            returnFocus = null
+        }
     }
 
     Box(
@@ -197,7 +235,11 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                // Its own group in TalkBack's order, after Back: left among the
+                // rest, its rows were sorted by where they sit on screen, which
+                // in a scrolled list skipped and jumped between rows.
+                .semantics { isTraversalGroup = true; traversalIndex = 0f }
+                .verticalScroll(listScroll)
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -329,7 +371,7 @@ fun SettingsScreen(
                             stringResource(R.string.help_title_image_chat),
                         ),
                         checked = imageChat,
-                        onCheckedChange = { settingsManager.setImageChat(it) },
+                        onCheckedChange = { if (!settingsManager.setImageChat(it)) onFeatureHideBlocked() },
                         labelColor = labelColor,
                         highContrast = highContrast,
                         whiteMode = whiteMode
@@ -410,17 +452,6 @@ fun SettingsScreen(
             SettingsSection(stringResource(R.string.settings_section_prefs), headerColor, buildList<SettingRow> {
                 add {
                     SettingsToggle(
-                        label = stringResource(R.string.settings_text_scan_guidance),
-                        description = stringResource(R.string.settings_text_scan_guidance_desc),
-                        checked = textScanGuidance,
-                        onCheckedChange = { settingsManager.setTextScanGuidance(it) },
-                        labelColor = labelColor,
-                        highContrast = highContrast,
-                        whiteMode = whiteMode
-                    )
-                }
-                add {
-                    SettingsToggle(
                         label = stringResource(R.string.settings_live_text),
                         description = stringResource(R.string.settings_live_text_desc),
                         checked = liveText,
@@ -437,6 +468,18 @@ fun SettingsScreen(
                             description = stringResource(R.string.settings_auto_capture_desc),
                             checked = autoCapture,
                             onCheckedChange = { settingsManager.setAutoCapture(it) },
+                            labelColor = labelColor,
+                            highContrast = highContrast,
+                            whiteMode = whiteMode
+                        )
+                    }
+                    // What Automatic capture does in Text chat, so only while it is on.
+                    if (autoCapture) add {
+                        SettingsToggle(
+                            label = stringResource(R.string.settings_ask_finds_page),
+                            description = stringResource(R.string.settings_ask_finds_page_desc),
+                            checked = askFindsPage,
+                            onCheckedChange = { settingsManager.setAskFindsPage(it) },
                             labelColor = labelColor,
                             highContrast = highContrast,
                             whiteMode = whiteMode
@@ -501,17 +544,8 @@ fun SettingsScreen(
                         whiteMode = whiteMode
                     )
                 }
-                add {
-                    SettingsToggle(
-                        label = stringResource(R.string.settings_haptic_feedback),
-                        description = stringResource(R.string.settings_haptic_feedback_desc),
-                        checked = hapticFeedback,
-                        onCheckedChange = { settingsManager.setHapticFeedback(it) },
-                        labelColor = labelColor,
-                        highContrast = highContrast,
-                        whiteMode = whiteMode
-                    )
-                }
+                add { FeedbackOutputToggle(settingsManager, vibration = false, labelColor, highContrast, whiteMode) }
+                add { FeedbackOutputToggle(settingsManager, vibration = true, labelColor, highContrast, whiteMode) }
                 add {
                     SettingsToggle(
                         label = stringResource(R.string.settings_start_features_muted),
@@ -534,15 +568,26 @@ fun SettingsScreen(
                         whiteMode = whiteMode
                     )
                 }
-                // Withdrawn; see HOLD_TO_SPEAK_ENABLED in MainActivity.
-                if (false) add {
+                add {
                     SettingsToggle(
-                        label = stringResource(R.string.settings_hold_to_speak),
-                        description = stringResource(R.string.settings_hold_to_speak_desc),
-                        checked = holdToSpeak,
-                        // Nothing to do with the voice models: this only changes how the
-                        // Ask button behaves, so it never offers a download.
-                        onCheckedChange = { settingsManager.setHoldToSpeak(it) },
+                        label = stringResource(R.string.settings_volume_keys),
+                        description = stringResource(R.string.settings_volume_keys_desc),
+                        checked = volumeKeys,
+                        onCheckedChange = { settingsManager.setVolumeKeys(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
+                add {
+                    // Collected here, not with the others: SettingsScreen is near
+                    // ART's size limit for one method, and this lambda is its own.
+                    val speakWithScreenReader by settingsManager.speakWithScreenReader.collectAsState()
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_speak_with_screen_reader),
+                        description = stringResource(R.string.settings_speak_with_screen_reader_desc),
+                        checked = speakWithScreenReader,
+                        onCheckedChange = { settingsManager.setSpeakWithScreenReader(it) },
                         labelColor = labelColor,
                         highContrast = highContrast,
                         whiteMode = whiteMode
@@ -574,6 +619,7 @@ fun SettingsScreen(
                         highContrast = highContrast,
                         whiteMode = whiteMode,
                         onClick = { showCocoObjectSettings = true },
+                        modifier = Modifier.returnFocus(objectListFocus, screenReaderOn),
                     )
                 }
             })
@@ -593,6 +639,27 @@ fun SettingsScreen(
                         whiteMode = whiteMode
                     )
                 }
+                // The same pages the terms screen links to, on the website.
+                add {
+                    SettingsNavRow(
+                        label = stringResource(R.string.terms_privacy_policy),
+                        description = stringResource(R.string.settings_opens_in_browser),
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode,
+                        onClick = onPrivacyPolicy,
+                    )
+                }
+                add {
+                    SettingsNavRow(
+                        label = stringResource(R.string.terms_of_use),
+                        description = stringResource(R.string.settings_opens_in_browser),
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode,
+                        onClick = onTermsOfUse,
+                    )
+                }
                 add {
                     SettingsNavRow(
                         label = stringResource(R.string.settings_licences),
@@ -601,6 +668,7 @@ fun SettingsScreen(
                         highContrast = highContrast,
                         whiteMode = whiteMode,
                         onClick = { showLicences = true },
+                        modifier = Modifier.returnFocus(licencesFocus, screenReaderOn),
                     )
                 }
             })
@@ -720,15 +788,29 @@ fun SettingsScreen(
                 })
             }
 
-            SettingsSection(stringResource(R.string.settings_feedback_section), headerColor, rowsOf {
-                ConfirmDialogButton(
-                    label = stringResource(R.string.settings_feedback_button),
-                    background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
-                    textColor = actionButtonText(highContrast, whiteMode, Color.Black),
-                    contentDescription = stringResource(R.string.settings_feedback_button_cd),
-                    enabled = true,
-                    onClick = onLeaveFeedback,
-                )
+            SettingsSection(stringResource(R.string.settings_feedback_section), headerColor, buildList<SettingRow> {
+                add {
+                    ConfirmDialogButton(
+                        label = stringResource(R.string.settings_feedback_button),
+                        background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
+                        textColor = actionButtonText(highContrast, whiteMode, Color.Black),
+                        contentDescription = stringResource(R.string.settings_feedback_button_cd),
+                        enabled = true,
+                        onClick = onLeaveFeedback,
+                    )
+                }
+                // Off by default; on, the email carries the details FeedbackEmail lists.
+                add {
+                    SettingsToggle(
+                        label = stringResource(R.string.settings_feedback_details),
+                        description = "",
+                        checked = feedbackDetails,
+                        onCheckedChange = { settingsManager.setFeedbackDetails(it) },
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode
+                    )
+                }
             }, spaceAfter = false)
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -1108,6 +1190,17 @@ private fun ConfirmDialogButton(
 private fun spokenRow(vararg parts: String): String =
     parts.map { it.trim().trimEnd('.') }.filter { it.isNotEmpty() }.joinToString(". ")
 
+/** Wait after a sub-screen closes before moving TalkBack back to its row. */
+private const val RETURN_FOCUS_DELAY_MS = 350L
+
+/**
+ * Lets [target] move TalkBack onto a row that opens a sub-screen, once it is
+ * closed. A clickable row cannot take focus in touch mode, so this makes it
+ * focusable, only while a screen reader runs: nothing changes for anyone else.
+ */
+private fun Modifier.returnFocus(target: FocusRequester, screenReaderOn: Boolean): Modifier =
+    focusRequester(target).focusable(enabled = screenReaderOn)
+
 /**
  * A row that opens something or steps a value along. [action] is what a double
  * tap does, said by TalkBack as its own hint ("Double-tap to switch to Finnish"),
@@ -1121,12 +1214,13 @@ private fun SettingsNavRow(
     highContrast: Boolean,
     whiteMode: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     contentDescription: String? = null,
     action: String? = null,
 ) {
     val spoken = spokenRow(contentDescription ?: spokenRow(label, description), LocalRowPosition.current)
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 10.dp)
             .clickable(onClickLabel = action) { onClick() }
@@ -1305,6 +1399,35 @@ private fun SettingsExpandRow(
     }
 }
 
+/**
+ * Sound effects, or Vibration: two switches, each on its own (see
+ * FeedbackOutputs). A function of its own, reading its own setting, to keep
+ * SettingsScreen's body under the method-size limit.
+ */
+@Composable
+private fun FeedbackOutputToggle(
+    settingsManager: SettingsManager,
+    vibration: Boolean,
+    labelColor: Color,
+    highContrast: Boolean,
+    whiteMode: Boolean,
+) {
+    val on by (if (vibration) settingsManager.vibration else settingsManager.soundEffects).collectAsState()
+    SettingsToggle(
+        label = stringResource(if (vibration) R.string.settings_vibration else R.string.settings_sound_effects),
+        description = stringResource(
+            if (vibration) R.string.settings_vibration_desc else R.string.settings_sound_effects_desc
+        ),
+        checked = on,
+        onCheckedChange = {
+            if (vibration) settingsManager.setVibration(it) else settingsManager.setSoundEffects(it)
+        },
+        labelColor = labelColor,
+        highContrast = highContrast,
+        whiteMode = whiteMode
+    )
+}
+
 @Composable
 private fun SettingsToggle(
     label: String,
@@ -1318,7 +1441,7 @@ private fun SettingsToggle(
     // The whole row is the switch: one focus stop, and a double tap anywhere on
     // it toggles. A real switch, as in Android's own settings: TalkBack says
     // "On" or "Off" where the user's TalkBack settings put the state, then the
-    // title, description and place ("Off. Haptic feedback. … 3 of 6. Switch"),
+    // title, description and place ("Off. Vibration. … 3 of 6. Switch"),
     // and after a toggle only the new state. The description stays fixed, so a
     // toggle is not read out in full again.
     val spoken = spokenRow(label, description, LocalRowPosition.current)
@@ -1342,7 +1465,8 @@ private fun SettingsToggle(
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Medium
             )
-            Text(
+            // A switch whose title says it all has no description, and no blank line for one.
+            if (description.isNotEmpty()) Text(
                 text = description,
                 color = labelColor.copy(alpha = 0.7f),
                 fontSize = 14.sp

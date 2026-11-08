@@ -1,6 +1,8 @@
 package com.example.sightbuddy
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -36,31 +38,43 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.sightbuddy.BuildConfig
 import com.example.sightbuddy.R
 import com.example.sightbuddy.core.ApiKeyStore
+import com.example.sightbuddy.core.AppShortcuts
 import com.example.sightbuddy.core.AppWork
 import com.example.sightbuddy.core.BeepService
 import com.example.sightbuddy.core.CameraXManager
 import com.example.sightbuddy.core.CueBeat
 import com.example.sightbuddy.core.DirectionCues
+import com.example.sightbuddy.core.deviceCues
+import com.example.sightbuddy.core.FeedbackDetails
+import com.example.sightbuddy.core.FeedbackEmail
+import com.example.sightbuddy.core.Cues
 import com.example.sightbuddy.core.HapticManager
 import com.example.sightbuddy.core.LanguageStore
+import com.example.sightbuddy.core.LaunchFocus
 import com.example.sightbuddy.core.ModeNames
 import com.example.sightbuddy.core.ModelDownloadService
 import com.example.sightbuddy.core.ModelSetup
+import com.example.sightbuddy.core.NoticeDelivery
 import com.example.sightbuddy.core.NetworkStatusManager
 import com.example.sightbuddy.core.OpenAiTransport
 import com.example.sightbuddy.core.PitchToneService
 import com.example.sightbuddy.core.PrivateLog
 import com.example.sightbuddy.core.SettingsManager
 import com.example.sightbuddy.core.SoundFXService
-import com.example.sightbuddy.core.SoundFXService.SFX
 import com.example.sightbuddy.core.TTSService
 import com.example.sightbuddy.core.TermsStore
+import com.example.sightbuddy.core.UpdateNotice
+import com.example.sightbuddy.core.UpdateNoticeStore
 import com.example.sightbuddy.core.TextScriptPlayer
+import com.example.sightbuddy.core.VolumeKeys
 import com.example.sightbuddy.core.createCrashReporter
 import com.example.sightbuddy.core.hints.FeatureHelpLibrary
 import com.example.sightbuddy.core.hints.HelpContent
@@ -70,20 +84,32 @@ import com.example.sightbuddy.core.stt.SpeechEngine
 import com.example.sightbuddy.core.stt.SttChoice
 import com.example.sightbuddy.core.stt.SttModelManager
 import com.example.sightbuddy.core.stt.VoiceInputService
+import com.example.sightbuddy.features.chat.CaptureGate
+import com.example.sightbuddy.features.chat.ChatKeywords
 import com.example.sightbuddy.features.chat.ChatSession
+import com.example.sightbuddy.core.language.MissingVoiceHint
+import com.example.sightbuddy.features.chat.AnswerSpeaker
+import com.example.sightbuddy.features.chat.ChatWorking
+import com.example.sightbuddy.core.llm.StreamLog
+import com.example.sightbuddy.features.chat.ChatText
 import com.example.sightbuddy.features.chat.DocumentChatViewModel
 import com.example.sightbuddy.features.chat.ImageChatViewModel
 import com.example.sightbuddy.features.chat.LiveReadQueue
 import com.example.sightbuddy.features.chat.LiveText
+import com.example.sightbuddy.features.chat.LiveTextGate
 import com.example.sightbuddy.features.chat.LiveTextTracker
 import com.example.sightbuddy.features.chat.LocalTextExtractor
+import com.example.sightbuddy.features.chat.MessageMenu
 import com.example.sightbuddy.features.chat.OcrDebug
-import com.example.sightbuddy.features.chat.PageTracker
-import com.example.sightbuddy.features.chat.PaperFinder
-import com.example.sightbuddy.features.chat.TextAimGuide
+import com.example.sightbuddy.features.chat.PageCornerGuide
+import com.example.sightbuddy.features.chat.PageCornerModel
+import com.example.sightbuddy.features.chat.PageCorners
+import com.example.sightbuddy.features.chat.PageLock
 import com.example.sightbuddy.features.chat.TextSections
 import com.example.sightbuddy.features.vision.CocoFinnish
 import com.example.sightbuddy.features.vision.ColorIdAnalyzer
+import com.example.sightbuddy.features.vision.DetectionRules
+import com.example.sightbuddy.features.vision.DiscoverConfirm
 import com.example.sightbuddy.features.vision.LightLevelAnalyzer
 import com.example.sightbuddy.features.vision.ObjectCommandResolver
 import com.example.sightbuddy.features.vision.TFLiteObjectAnalyzer
@@ -109,6 +135,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
@@ -120,15 +147,23 @@ import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.os.Build
+import android.os.SystemClock
 import android.text.format.Formatter
 import androidx.camera.core.ImageProxy
+import com.example.sightbuddy.core.Memory
 import com.example.sightbuddy.core.MemoryEntry
 import com.example.sightbuddy.core.MemoryNames
 import com.example.sightbuddy.core.MemoryStore
 import com.example.sightbuddy.core.llm.LocalGemma
 import java.text.DateFormat
 import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.job
 
 /** Support inbox shown and linked from Settings. */
 private const val FEEDBACK_EMAIL = "contact@drophouse.uk"
@@ -146,18 +181,6 @@ private const val MIC_TAP_DEBOUNCE_MS = 500L
  */
 private const val MIC_RESTART_GUARD_MS = 2_000L
 
-/**
- * Whether hold-to-speak is offered at all.
- *
- * Withdrawn rather than deleted. It never sat well with the platform recogniser,
- * which ends recordings on its own timing, so holding the button decided nothing
- * and the two fought each other. Settings is crowded enough that a switch which
- * only works on some paths costs more than it gives. The gesture handling is
- * untouched behind this, so bringing it back is this line plus the advice for a
- * press too short to speak into, which was removed with it.
- */
-private const val HOLD_TO_SPEAK_ENABLED = false
-
 /** How recently the app must have asked for a stop to call the stop the user's. */
 private const val USER_STOP_WINDOW_MS = 1_000L
 
@@ -168,30 +191,27 @@ private const val CAPTURE_ENCODE_TIMEOUT_MS = 4_000L
 private const val SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000L
 private const val SESSION_CHECK_INTERVAL_MS = 15_000L
 
-/**
- * Longer side of the copy of the frame text guidance reads, out of Text chat's
- * 1920: about 70% of the pixels. Half (960) read several times faster, but
- * magazine text at arm's length was then too small to be found at all: 9
- * blocks a frame where the full frame had 70 to 110; 1280 still missed some.
- * Capture reads the full frame.
- */
-private const val AIM_FRAME_LONG_SIDE = 1600
-
-/** A page box smaller than this share of the frame is part of a page: Capture reads everything. */
-private const val MIN_CAPTURE_PAGE_AREA = 0.15f
-
 /** Utterance ids of the live text's reading start with this, one per box. */
 private const val LIVE_TEXT_READING_ID = "LIVE_TEXT_READING"
 
 /** A block with fewer letters than this is not worth showing as live text. */
 private const val LIVE_TEXT_MIN_LETTERS = 2
 
+/** How long a new answer waits for the one it replaces to stop (issue #24). */
+private const val PREVIOUS_ANSWER_STOP_MS = 3_000L
+
+/** How often the missing-voice hint checks whether the reading has ended (issue #26). */
+private const val MISSING_VOICE_CHECK_MS = 500L
+
 /** The working tick: how long an answer may take before it starts, and its beat. */
 private const val WORKING_TICK_DELAY_MS = 700L
 private const val WORKING_TICK_INTERVAL_MS = 1400L
 
-/** How recent the guide's page must be for Capture to read only that page. */
-private const val AIMED_PAGE_FRESH_MS = 2_000L
+/** How long a capture waits for its full-size photo before reading the frame instead. */
+private const val STILL_TIMEOUT_MS = 3_000L
+
+/** How long Capture waits for the photo stream to be bound before taking its picture anyway. */
+private const val STILL_BIND_TIMEOUT_MS = 2_000L
 
 
 /**
@@ -283,6 +303,12 @@ class AppController(
     startupPermissionsAskedState: MutableState<Boolean>,
     termsPermissionRetriedState: MutableState<Boolean>,
     initiallyInForeground: Boolean,
+    /**
+     * The feature an app shortcut started the app on. Known here, before the
+     * first frame: for anyone past onboarding the features (and the pager's
+     * first page) are drawn in that very frame.
+     */
+    initialFeature: String? = null,
 ) {
     /** Android's permission dialog for one permission; set by the composable. */
     var requestPermission: (String) -> Unit = {}
@@ -376,7 +402,7 @@ class AppController(
     // app stays on the system recogniser: no download prompt, no Settings row.
     var showHelp by mutableStateOf(false)
     var helpContent by mutableStateOf<HelpContent?>(null)
-    /** Text chat's text in view, shown over the camera while Preview is on. */
+    /** Text chat's text in view: read out, and shown over the camera while Preview is on. */
     var liveText by mutableStateOf<LiveText?>(null)
     val lastSpokenLine get() = ttsService.lastSpoken.value
     val liveTextTracker = LiveTextTracker()
@@ -424,11 +450,25 @@ class AppController(
      * Opens the mail app addressed to the support inbox. If the device has no
      * mail app the address is spoken instead — a silent no-op would leave a
      * blind user with no idea what happened. Settings also shows it as text.
+     *
+     * The body carries the app's and the phone's details only if the user has
+     * allowed it in Settings; see [FeedbackEmail].
      */
     fun openFeedbackEmail() {
+        val body = FeedbackEmail.body(
+            allowed = settingsManager.feedbackDetails.value,
+            details = ::feedbackDetails,
+            say = { id, args -> if (args.isEmpty()) context.getString(id) else context.getString(id, *args) },
+        )
         try {
-            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$FEEDBACK_EMAIL")).apply {
+            // Sent as ACTION_SEND found through a mailto selector: only mail apps
+            // take it, and they read the subject and body from the extras, which
+            // some mail apps ignore on ACTION_SENDTO.
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                putExtra(Intent.EXTRA_EMAIL, arrayOf(FEEDBACK_EMAIL))
                 putExtra(Intent.EXTRA_SUBJECT, "Sight Buddy feedback")
+                if (body.isNotEmpty()) putExtra(Intent.EXTRA_TEXT, body)
+                selector = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"))
             }
             context.startActivity(intent)
         } catch (e: Exception) {
@@ -440,6 +480,34 @@ class AppController(
             )
         }
     }
+
+    /** What a feedback email may carry, read now; only the facts [FeedbackDetails] lists. */
+    private fun feedbackDetails() = FeedbackDetails(
+        appVersion = BuildConfig.VERSION_NAME,
+        appBuild = BuildConfig.VERSION_CODE,
+        androidVersion = Build.VERSION.RELEASE,
+        androidSdk = Build.VERSION.SDK_INT,
+        phone = Build.MANUFACTURER.replaceFirstChar { it.uppercase() } + " " + Build.MODEL,
+        screenReaderOn = isScreenReaderOn(context),
+        appLanguage = context.getString(
+            if (languageStore.isFinnish()) R.string.language_name_finnish else R.string.language_name_english
+        ),
+        featuresShown = pages.map { ModeNames.display(context, it) },
+        cameraPreview = settingsManager.cameraPreview.value,
+        liveText = settingsManager.liveText.value,
+        soundEffects = settingsManager.soundEffects.value,
+        vibration = settingsManager.vibration.value,
+        pitchFeedback = settingsManager.pitchFeedback.value,
+        speechRate = SettingsManager.ttsRateLabel(context, settingsManager.ttsSpeechRate.value),
+        // What actually runs: the cloud when chosen and allowed, else the choice
+        // as it falls back to what is installed.
+        speechRecognition = context.getString(
+            if (speech.engine == SpeechEngine.CLOUD) R.string.settings_cloud_stt else effectiveStt.labelRes
+        ),
+        // On only when it can answer: the switch on and the model on the phone.
+        onDeviceChat = localAiReady,
+        apiKeySaved = apiKeyPresent,
+    )
 
     var findObjectTarget by mutableStateOf("")
     var showObjectPicker by mutableStateOf(false)
@@ -457,6 +525,16 @@ class AppController(
     var pendingQuestion by mutableStateOf<String?>(null) // null = unresolved, "" = describe
     // A question on its way to the AI, shown in the chat until its answer lands.
     var chatPendingQuestion by mutableStateOf<String?>(null)
+    // The answer being written, shown growing in one bubble a sentence at a
+    // time until it is done (issue #24); null when no answer is streaming.
+    var chatPendingAnswer by mutableStateOf<String?>(null)
+    // The answer's first sentence is here and being said: it is no longer
+    // waited for, though the model is still writing the rest (issue #24).
+    var answerSpeaking by mutableStateOf(false)
+        private set
+    // The answer being spoken, by number; a newer one silences the older.
+    private var answerNumber = 0
+    private var answerJob: Job? = null
     // "Let me take a picture": said, and kept in the chat, whenever the app takes
     // the picture itself. One per session, since only a session's first picture
     // is ever automatic.
@@ -491,8 +569,6 @@ class AppController(
     // Independent scope for the mic-first request so consuming the trigger state
     // (which recomposes the pairing effect) cannot cancel the in-flight call.
     val micFirstScope get() = scope
-    // Hold-mode: a press rejected because auto-capture is off must not act on release.
-    var micCaptureBlocked by mutableStateOf(false)
     // Tap-mode debounce: ignore a second Ask tap fired within this window.
     var lastMicTapMs by mutableStateOf(0L)
 
@@ -570,7 +646,6 @@ class AppController(
     // The active feature's own settings, as switches in the More row. The same
     // settings as in Settings, so the two always agree.
     val autoCaptureOn get() = settingsManager.autoCaptureEnabled.value
-    val textGuidanceOn get() = settingsManager.textScanGuidance.value
     val textPreviewOn get() = settingsManager.textPreviewEnabled.value
     val liveTextOn get() = settingsManager.liveText.value
     val pitchOn get() = settingsManager.pitchFeedback.value
@@ -590,6 +665,15 @@ class AppController(
         (sttModelDownloadState as? SttModelManager.DownloadState.Downloading)?.percent
     var showSetupDialog by mutableStateOf(false)
     var showMemories by mutableStateOf(false)
+    /**
+     * The chat message whose pop-up menu is open (issue #21), by its place in the
+     * chat as shown; null for none. A pop-up like the others: see [popupOpen].
+     */
+    var messageMenuAt by mutableStateOf<Int?>(null)
+        private set
+    /** The message TalkBack is to be sent back to now that its menu has closed; see [MessageMenu.focusBack]. */
+    var messageFocusBackTo by mutableStateOf<Int?>(null)
+        private set
     var moreOpen by mutableStateOf(false)
     var showSttModelsDialog by mutableStateOf(false)
     var showGemmaDialog by mutableStateOf(false)
@@ -735,7 +819,7 @@ class AppController(
         // A capture in flight counts as having one: a picture is on its way, so the
         // mic should open for a question rather than refuse.
         "Image chat" -> !imageScanned && !captureInFlight
-        "Text chat" -> !textScanned
+        "Text chat" -> CaptureGate.textNeedsPicture(textScanned, readingPage = documentChatProcessing)
         else -> false
     }
 
@@ -745,6 +829,7 @@ class AppController(
         micFirstActive = false
         micFirstMode = null
         captureForQuestion = false
+        questionPictureGuided = false
         pendingQuestion = null
         chatPendingQuestion = null
         pendingCaptureBitmap?.recycle()
@@ -771,16 +856,57 @@ class AppController(
      * itself, so an automatic capture is never a surprise.
      */
     /**
-     * The guidance's picture: for the question waiting on it, if one is, and
-     * otherwise read out as Capture always has.
+     * Find page's picture, taken by the guidance: read as the page it found,
+     * cropped to it.
      */
     fun captureGuidedText() {
+        // A question waiting on Find page's guidance (Ask finds the page): its picture.
         if (micFirstActive && micFirstMode == ModeNames.TEXT_CHAT) {
+            questionPictureGuided = true
             captureForQuestion = true
-            soundFXService.playAlongside(SFX.CAMERA_CLICK)
-        } else {
-            triggerScan = true
+            return
         }
+        captureGuided = true
+        triggerScan = true
+    }
+
+    /** The question's picture was taken by Find page's guidance: read as its page. */
+    private var questionPictureGuided = false
+
+    /**
+     * Whether the picture asked for is Find page's, read as its page. Capture's
+     * is read whole: everything in view, nothing cut.
+     */
+    private var captureGuided = false
+
+    /**
+     * Text chat's photo stream is bound, or asked for. A bound photo stream
+     * keeps the camera working harder and the phone warm, and halves the
+     * frames' size, so it is bound only while a capture is coming.
+     */
+    private var stillsWanted = false
+
+    /** Binds Text chat's photo stream for a capture coming, or lets it go. */
+    private fun wantStills(on: Boolean) {
+        if (stillsWanted == on) return
+        stillsWanted = on
+        if (activeMode == ModeNames.TEXT_CHAT) {
+            cameraXManager.setAnalysisResolution(CameraXManager.TEXT_ANALYSIS_SIZE, stills = on)
+        }
+    }
+
+    /** A capture is coming in Text chat: guidance, a picture asked for, or a question to take one for. */
+    private fun stillsNeeded(): Boolean =
+        textGuideActive || textGuideStarting || triggerScan || captureForQuestion || micFirstActive
+
+    /** Find page's tone is playing. */
+    private var pageToneOn = false
+
+    /** Stops Find page's tone, if it plays. */
+    private fun stopPageTone() {
+        if (!pageToneOn) return
+        pageToneOn = false
+        cues.stopGuidance()
     }
 
     /**
@@ -805,7 +931,7 @@ class AppController(
     }
 
     /**
-     * Starts Text chat's aim guidance: "Looking for text", kept in the chat like
+     * Starts Find page's aim guidance: "Looking for text", kept in the chat like
      * Image chat's "Let me take a picture", and only once it has been said (and
      * a moment after) do the guidance cues begin, so the two never overlap.
      */
@@ -828,6 +954,7 @@ class AppController(
         textGuideToken += 1
         textGuideStarting = false
         textGuideActive = false
+        stopPageTone()
     }
 
     /** Snap the frame for an armed mic-first question and await the pairing. */
@@ -837,19 +964,20 @@ class AppController(
         micFirstActive = true
         micFirstMode = mode
         voiceInputService.stopListening()
+        // Text chat's picture is a photo: bound while "Let me take a picture" is said.
+        if (mode == ModeNames.TEXT_CHAT) wantStills(true)
+        // Ask finds the page: Find page's guidance takes the question's picture
+        // (captureGuidedText), with no time limit, as Find page has none.
+        if (mode == ModeNames.TEXT_CHAT && settingsManager.askFindsPage.value) {
+            startTextGuidance()
+            return
+        }
 
         // The token guards against an older attempt firing on a newer one after
         // the user retries.
         micFirstAttempt += 1
         val attempt = micFirstAttempt
 
-        // Text chat asked before any text was scanned: rather than a blind
-        // picture, guide the camera onto the text, and the guidance takes the
-        // picture for the question once the text is centred.
-        if (mode == ModeNames.TEXT_CHAT && settingsManager.textScanGuidance.value) {
-            startTextGuidance()
-            return
-        }
         fun stillThisAttempt() = attempt == micFirstAttempt && micFirstActive
 
         // "Let me take a picture", a second's pause to hold still, then the shutter.
@@ -857,8 +985,15 @@ class AppController(
             micFirstScope.launch {
                 delay(AUTO_CAPTURE_PAUSE_MS)
                 if (!stillThisAttempt()) return@launch
+                val textChat = mode == ModeNames.TEXT_CHAT
+                // Text chat's photo stream may still be binding if the note was short;
+                // its shutter sounds once the photo is taken (capturedPicture).
+                if (textChat) {
+                    cameraXManager.awaitBound(STILL_BIND_TIMEOUT_MS)
+                    if (!stillThisAttempt()) return@launch
+                }
                 captureForQuestion = true
-                soundFXService.playAlongside(SFX.CAMERA_CLICK)
+                if (!textChat) cues.give(Cues.Cue.SHUTTER, alongside = true)
 
                 // Watchdog, from the moment the frame is asked for.
                 delay(MIC_FIRST_CAPTURE_TIMEOUT_MS)
@@ -908,6 +1043,68 @@ class AppController(
      */
     var showChoiceRespectedDialog by mutableStateOf(false)
 
+    private val updateNoticeStore = UpdateNoticeStore(context)
+
+    /** After an update: the on-device AI's first load can take a few minutes. Once per version. */
+    var showUpdateNotice by mutableStateOf(
+        UpdateNotice.shouldShow(
+            lastSeenVersion = updateNoticeStore.lastSeenVersion,
+            currentVersion = BuildConfig.VERSION_CODE,
+            updated = updateNoticeStore.updated,
+            aiInstalled = localGemma.installed,
+        ).also { show -> if (!show) updateNoticeStore.lastSeenVersion = BuildConfig.VERSION_CODE },
+    )
+        private set
+
+    fun dismissUpdateNotice() {
+        showUpdateNotice = false
+        updateNoticeStore.lastSeenVersion = BuildConfig.VERSION_CODE
+    }
+
+    /**
+     * The one-time hint (issue #26): the language, as a code, of text that
+     * was read with no voice of its own on the phone; null when not shown.
+     * Shown once ever ([MissingVoiceHint]), and only once that reading is
+     * over, with a feature in front: the pop-up must not cut it.
+     */
+    var missingVoiceLanguage by mutableStateOf<String?>(null)
+
+    private val missingVoiceHint = MissingVoiceHint(
+        shown = { settingsManager.missingVoiceHintShown() },
+        markShown = { settingsManager.markMissingVoiceHintShown() },
+    )
+
+    /** Waits for the reading to end, then shows the hint; while the hint waits. */
+    private var missingVoiceWatch: Job? = null
+
+    init {
+        // Called as such a line is said, on whichever thread said it.
+        ttsService.onVoiceMissing = { languages ->
+            scope.launch {
+                missingVoiceHint.voiceMissing(languages)
+                if (missingVoiceHint.waiting && missingVoiceWatch?.isActive != true) {
+                    missingVoiceWatch = scope.launch { showMissingVoiceHintWhenQuiet() }
+                }
+            }
+        }
+    }
+
+    /** Checks every [MISSING_VOICE_CHECK_MS] until the hint has been shown. */
+    private suspend fun showMissingVoiceHintWhenQuiet() {
+        while (missingVoiceHint.waiting) {
+            delay(MISSING_VOICE_CHECK_MS)
+            val speechOver = MissingVoiceHint.readingOver(
+                speaking = ttsService.isSpeaking(),
+                answerWriting = answerJob?.isActive == true,
+                pageReading = textScriptPlayer.currentState == TextScriptPlayer.State.PLAYING,
+                listening = isListening,
+                answerOnItsWay = chatWorking,
+            )
+            missingVoiceHint.toShow(speechOver, featureInFront = featuresInFront)
+                ?.let { missingVoiceLanguage = it }
+        }
+    }
+
     /**
      * Who is offered OpenAI transcription.
      *
@@ -953,7 +1150,11 @@ class AppController(
     val whiteMode get() = settingsManager.whiteModeEnabled.value
     val loopCarousel get() = settingsManager.loopCarousel.value
     val pitchFeedback get() = settingsManager.pitchFeedback.value
-    val hapticFeedback get() = settingsManager.hapticFeedback.value
+    // Every sound and vibration the app makes, through Settings' Sound effects
+    // and Vibration. Nothing plays a sample or vibrates except through it.
+    val cues = deviceCues(settingsManager, soundFXService, hapticManager, pitchToneService) {
+        voiceInputService.usesSystemEarcons()
+    }
     val cameraPreviewSetting get() = settingsManager.cameraPreview.value
     val hiddenCocoObjects get() = settingsManager.hiddenCocoObjects.value
     val visibleCocoObjects get() = run {
@@ -975,7 +1176,7 @@ class AppController(
     var offlineNoticeShown by mutableStateOf(false)
 
     fun cutAllTtsFeedback() {
-        voiceInputService.stopListening()
+        voiceInputService.cancelListening()
         textScriptPlayer.interrupt()
         ttsService.stop()
     }
@@ -1008,7 +1209,7 @@ class AppController(
 
     /**
      * Play the mic-on cue, then open the mic. The cue is a wordless earcon, so it
-     * serves every language; VoiceInputService waits it out before recording.
+     * serves every language. The mic opens at once, without waiting it out.
      */
     // Mic feedback differs by who owns the recording.
     //
@@ -1025,13 +1226,8 @@ class AppController(
         ttsService.takeMicrophoneFloor(
             VoiceInputService.MAX_RECORDING_MS + MIC_FLOOR_GRACE_MS
         )
-        if (hapticFeedback) {
-            hapticManager.tap()
-        } else {
-            soundFXService.play(
-                if (voiceInputService.usesSystemEarcons()) SFX.RECORDING_PERK else SFX.LISTENING
-            )
-        }
+        // Heard, felt, or both: Settings' Sound effects and Vibration.
+        cues.give(Cues.Cue.RECORDING_START)
         voiceInputService.startListening()
     }
 
@@ -1052,13 +1248,7 @@ class AppController(
     }
 
     fun cueStopListening() {
-        if (hapticFeedback) {
-            hapticManager.tap()
-        } else {
-            soundFXService.play(
-                if (voiceInputService.usesSystemEarcons()) SFX.RECORDING_PERK_STOP else SFX.STOP_LISTENING
-            )
-        }
+        cues.give(Cues.Cue.RECORDING_STOP)
     }
 
     fun pauseForBackground() {
@@ -1067,7 +1257,8 @@ class AppController(
         pitchToneService.stop()
         hapticManager.stopPulse()
         ttsService.releaseMicrophoneFloor()
-        voiceInputService.stopListening()
+        voiceInputService.cancelListening()
+        voiceInputService.discardPendingTranscript()
         cutAllAudio()
         cancelMicFirst()
         // Drop a capture that was queued but never consumed. Without this it fires
@@ -1103,8 +1294,6 @@ class AppController(
 
     val ttsInitialized get() = ttsService.isInitialized.value
     val isListening get() = voiceInputService.isListening.value
-    val holdToSpeakSetting get() = settingsManager.holdToSpeak.value
-    val holdToSpeak get() = holdToSpeakSetting && HOLD_TO_SPEAK_ENABLED
     val autoCaptureSetting get() = settingsManager.autoCaptureEnabled.value
     // Works on every path now. It used to be restricted to recognisers the app
     // controls, because the frame was snapped by the gesture that ended the
@@ -1123,9 +1312,16 @@ class AppController(
 
     // Any pop-up over the features. While one is open the features are silent and
     // the camera stops, so nothing (live text, detections) competes with it.
-    val popupOpen get() = showHelp || showMemories || showSetupDialog || showSttModelsDialog || showGemmaDialog ||
-        showGemmaDownloadDialog || showLanguageDialog || showCloudSttDialog ||
-        showChoiceRespectedDialog || showObjectPicker
+    val popupOpen get() = screenPopupOpen || showObjectPicker || messageMenuAt != null
+
+    /**
+     * The pop-ups that cover the feature screen. Not a message's own menu or
+     * the Find objects picker: they belong to the feature in front, so closing
+     * one does not move TalkBack to the tab (see LaunchFocus.featureScreenInFront).
+     */
+    private val screenPopupOpen get() = showHelp || showMemories || showSetupDialog ||
+        showSttModelsDialog || showGemmaDialog || showGemmaDownloadDialog || showLanguageDialog ||
+        showCloudSttDialog || showChoiceRespectedDialog || showUpdateNotice || missingVoiceLanguage != null
 
     suspend fun syncAppSpeech() {
         // Settings is included: feature output must never leak over it. Settings'
@@ -1138,24 +1334,103 @@ class AppController(
         // would cancel SpeechRecognizer immediately after startListening().
         if (!appInForeground || showTerms || popupOpen || showSettings) {
             cutAllTtsFeedback()
+            // The camera stops under these, so no frame would stop Find page's tone.
+            stopPageTone()
         }
     }
 
     suspend fun onPopupChanged() {
         if (popupOpen) {
             cutAllTtsFeedback()
+            stopPageTone()
         }
     }
 
+    /** A feature is on screen with nothing over it: no onboarding, Settings or pop-up. */
+    val featuresInFront get() =
+        appInForeground && !onboardingBlocking && !showSettings && !popupOpen && activeMode != null
+
+    val launchFocus = LaunchFocus()
+
+    /** True while the feature bar's selected tab holds the focus it takes at launch. */
+    var focusFeatureTab by mutableStateOf(false)
+
+    private val featureScreenInFront get() = LaunchFocus.featureScreenInFront(
+        appInForeground = appInForeground,
+        onboardingBlocking = onboardingBlocking,
+        settingsOpen = showSettings,
+        featureShowing = activeMode != null,
+        screenPopupOpen = screenPopupOpen,
+    )
+
+    /**
+     * The selected tab comes first in TalkBack's order whenever the feature
+     * screen is about to be met: from the first frame, and while it is away, so
+     * it is first again when it comes back. Any change of state (a swipe,
+     * Settings, a pop-up, the background) ends it; a touch does not.
+     */
+    var featureTabFirst by mutableStateOf(true)
+
+    /**
+     * Each time the feature screen comes in front (launch, back from the
+     * background, Settings or a pop-up closed), the selected feature tab takes
+     * TalkBack's focus (see LaunchFocus), until anything changes. A swipe moves
+     * nothing: TalkBack reads the new tab itself.
+     */
+    suspend fun holdLaunchFocus() {
+        val inFront = featureScreenInFront
+        val arrived = launchFocus.take(inFront)
+        if (!inFront) {
+            featureTabFirst = true
+            return
+        }
+        if (!arrived) {
+            featureTabFirst = false
+            return
+        }
+        featureTabFirst = true
+        focusFeatureTab = true
+        try {
+            awaitCancellation()
+        } finally {
+            focusFeatureTab = false
+        }
+    }
+
+    /** The tab, coming on screen during the hold, asks whether to take the focus: once. */
+    fun requestLaunchFocus(): Boolean = launchFocus.request()
+
     // The chat is working on an answer: a photo or a question on its way.
-    val chatWorking get() = (activeMode == ModeNames.IMAGE_CHAT || activeMode == ModeNames.TEXT_CHAT) &&
-        (captureInFlight ||
-            (chatPendingQuestion != null && chatPendingQuestion != SPEAKING_PLACEHOLDER) ||
-            if (activeMode == ModeNames.IMAGE_CHAT) imageChatProcessing else documentChatProcessing)
+    val chatWorking get() = ChatWorking.working(
+        inChat = activeMode == ModeNames.IMAGE_CHAT || activeMode == ModeNames.TEXT_CHAT,
+        pictureInFlight = captureInFlight,
+        questionWaiting = chatPendingQuestion != null && chatPendingQuestion != SPEAKING_PLACEHOLDER,
+        processing = if (activeMode == ModeNames.IMAGE_CHAT) imageChatProcessing else documentChatProcessing,
+        answerSpeaking = answerSpeaking,
+        aiming = textGuideStarting || textGuideActive,
+        takingPicture = activeMode == ModeNames.TEXT_CHAT && (captureForQuestion || triggerScan || photoInProgress),
+    )
+
+    /** Text chat's photo is being taken: until its shutter, nothing is worked on. */
+    var photoInProgress by mutableStateOf(false)
+        private set
+
+    /**
+     * Image chat has a picture or an answer on its way: Capture is ignored (see
+     * [CaptureGate]), and tells TalkBack it is busy.
+     */
+    val imageChatBusy get() = CaptureGate.imageChatBusy(
+        pictureAsked = triggerScan,
+        pictureInFlight = captureInFlight,
+        answering = imageChatProcessing,
+        questionWaiting = chatPendingQuestion != null && chatPendingQuestion != SPEAKING_PLACEHOLDER,
+        answerSpeaking = answerSpeaking,
+    )
 
     // A soft tick while it works, as Seeing AI and Envision do, so a wait of
     // several seconds is not silence. Not for a quick answer: it starts after
-    // 0.7 s. Never over a pop-up or Settings, and not while recording.
+    // 0.7 s. Never over a pop-up or Settings, not while recording, and never
+    // over speech (ChatWorking.tickBeat).
     suspend fun workingTick() {
         if (!chatWorking || popupOpen || showSettings || isListening || !appInForeground) {
             soundFXService.stopLoop()
@@ -1168,7 +1443,9 @@ class AppController(
             // there and take this tick out, rather than running both.
             soundFXService.startLoop(SoundFXService.Loop.LOADING)
             while (true) {
-                soundFXService.playAlongside(SoundFXService.SFX.WORKING)
+                if (ChatWorking.tickBeat(working = chatWorking, speaking = ttsService.isSpeaking())) {
+                    cues.give(Cues.Cue.TICK)
+                }
                 delay(WORKING_TICK_INTERVAL_MS)
             }
         } finally {
@@ -1199,13 +1476,24 @@ class AppController(
         hapticManager.stopPulse()
     }
 
+    /** The chat starts over, and a message menu open on it goes with it (the places would not match). */
+    private fun clearChat() {
+        chat.clear()
+        chatsCleared++
+        messageMenuAt = null
+        messageFocusBackTo = null
+    }
+
+    /** How many times the chat has started over: a message's place is only good within one. */
+    private var chatsCleared = 0
+
     fun clearCapturedFrame() {
         // A feature's spoken line goes with it.
         ttsService.clearLastSpoken()
         ttsMuted = false
         ttsService.muted = false
         stopTextGuidance()
-        chat.clear()
+        clearChat()
         autoCaptureNote = null
         imageScanned = false
         textScanned = false
@@ -1267,8 +1555,152 @@ class AppController(
         }
     }
 
+    /**
+     * Share in the More row: the active feature's chat, as Save chat would keep
+     * it, to Android's share sheet. With nothing to keep, it says so, as Save
+     * chat does.
+     */
+    fun shareCurrentChat() {
+        val mode = activeMode ?: return
+        val text = chat.forSharing(::transcriptLabel)
+        if (text.isEmpty()) {
+            systemMessage(context.getString(R.string.memories_nothing_to_share), force = true)
+            return
+        }
+        // The share sheet only pauses the app, so speech and the working tick
+        // would otherwise run on under TalkBack reading the sheet.
+        cutAllAudio()
+        shareChatText(ModeNames.display(context, mode), text)
+    }
+
+    /** Share on a saved chat in Memories: the same text as the chat had on screen. */
+    fun shareMemory(memory: Memory) {
+        val text = ChatText.ofSaved(memory.entries, ::transcriptLabel)
+        if (text.isEmpty()) {
+            // Not written into the chat behind Memories: it is not that chat's.
+            ttsService.speak(context.getString(R.string.memories_nothing_to_share), flush = true, force = true)
+            return
+        }
+        shareChatText(memory.name, text)
+    }
+
+    /**
+     * A press and hold on the chat message at [index] opens its menu (issue
+     * #21). It is a pop-up like the others ([popupOpen]): the voice and the
+     * working tick stop, and the features stay silent until it closes.
+     */
+    fun openMessageMenu(index: Int) {
+        cutAllAudio()
+        messageFocusBackTo = null
+        messageMenuAt = index
+    }
+
+    /**
+     * The menu of the message at [index] closes with no choice made: Back or a
+     * touch outside ([focusBack], and TalkBack goes back to the message), or the
+     * message itself going (a new picture, the screen reader switched off),
+     * with nothing to go back to.
+     */
+    fun closeMessageMenu(index: Int, focusBack: Boolean) {
+        if (messageMenuAt != index) return
+        messageMenuAt = null
+        if (focusBack) handFocusBack(index, MessageMenu.focusBack(choice = null))
+    }
+
+    /**
+     * A choice in the pop-up menu of [entry], the message at [index]
+     * ([MessageMenu]): Copy and Share take that message's text alone; Save chat
+     * is the More row's. Save chat's confirmation and Share's sheet leave the
+     * focus where it is ([MessageMenu.focusBack]).
+     */
+    fun chooseFromMessageMenu(index: Int, entry: TranscriptEntry, item: MessageMenu.Item) {
+        if (messageMenuAt != index) return
+        messageMenuAt = null
+        when (item) {
+            MessageMenu.Item.COPY -> copyMessage(entry, index)
+            MessageMenu.Item.SHARE -> shareMessage(entry)
+            MessageMenu.Item.SAVE_CHAT -> saveCurrentChat()
+        }
+    }
+
+    /** The message at [index] has TalkBack again, or is gone: nothing is owed to it. */
+    fun messageFocusReturned(index: Int) {
+        if (messageFocusBackTo == index) messageFocusBackTo = null
+    }
+
+    private fun copyMessage(entry: TranscriptEntry, at: Int) {
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        val copied = clipboard != null && try {
+            val clip = ClipData.newPlainText(transcriptLabel(entry.kind), MessageMenu.textOf(entry))
+            clipboard.setPrimaryClip(clip)
+            true
+        } catch (e: RuntimeException) {
+            Log.w("SightBuddyApp", "Could not copy a message", e)
+            false
+        }
+        val notice = MessageMenu.copyNotice(copied, Build.VERSION.SDK_INT)
+        val words = when (notice) {
+            MessageMenu.Notice.COPIED -> context.getString(R.string.message_menu_copied)
+            MessageMenu.Notice.COPY_FAILED -> context.getString(R.string.message_menu_copy_failed)
+            null -> null
+        }
+        handFocusBack(at, MessageMenu.focusBack(MessageMenu.Item.COPY, spoken = words != null), words)
+    }
+
+    /**
+     * Says [words] (if any) in the app's voice, which moves nothing, and sends
+     * TalkBack back to the message at [at] as [how] says. A line cut short never
+     * reports done; the focus is then left where it is.
+     */
+    private fun handFocusBack(at: Int, how: MessageMenu.FocusBack, words: String? = null) {
+        val afterSpeech = how == MessageMenu.FocusBack.AFTER_SPEECH
+        // Not if another menu has opened meanwhile, or the chat started over.
+        val chatThen = chatsCleared
+        val onDone: (() -> Unit)? = if (afterSpeech) {
+            { scope.launch { if (messageMenuAt == null && chatsCleared == chatThen) messageFocusBackTo = at } }
+        } else null
+        val queued = words != null && ttsService.speak(words, flush = true, force = true, onDone = onDone)
+        // Nothing could be said (the voice not ready): nothing to wait for.
+        if (how == MessageMenu.FocusBack.NOW || (afterSpeech && !queued)) messageFocusBackTo = at
+    }
+
+    private fun shareMessage(entry: TranscriptEntry) {
+        val mode = activeMode ?: return
+        // As for the whole chat: nothing runs on under TalkBack reading the sheet.
+        cutAllAudio()
+        shareChatText(ModeNames.display(context, mode), MessageMenu.textOf(entry))
+    }
+
+    /** The one way the app shares: Android's share sheet, plain text. [title] becomes a mail's subject. */
+    private fun shareChatText(title: String, text: String) {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+            putExtra(Intent.EXTRA_SUBJECT, title)
+            putExtra(Intent.EXTRA_TITLE, title)
+        }
+        try {
+            context.startActivity(Intent.createChooser(send, null))
+        } catch (e: Exception) {
+            Log.w("SightBuddyApp", "Could not open the share sheet", e)
+            // Said, not only logged: a blind user would otherwise hear nothing.
+            ttsService.speak(context.getString(R.string.share_failed), flush = true, force = true)
+        }
+    }
+
+    /** A message's label, as the chat shows it above the message. */
+    private fun transcriptLabel(kind: TranscriptEntry.Kind): String = context.getString(
+        when (kind) {
+            TranscriptEntry.Kind.SCANNED_TEXT -> R.string.transcript_scanned_text
+            TranscriptEntry.Kind.QUESTION -> R.string.transcript_question
+            TranscriptEntry.Kind.ANSWER -> R.string.transcript_answer
+            TranscriptEntry.Kind.SYSTEM -> R.string.transcript_system
+        }
+    )
+
     fun endSessionForSettings() {
         cutAllAudio()
+        voiceInputService.discardPendingTranscript()
         pitchToneService.stop()
         hapticManager.stopPulse()
         cancelMicFirst()
@@ -1312,15 +1744,18 @@ class AppController(
         !appInForeground || showSettings || showTerms ||
             popupOpen || onboardingBlocking
 
-    val pages get() = run {
-        buildList {
-            if (llmChatEnabled && imageChatEnabled) add("Image chat")
-            if (textChatEnabled) add("Text chat")
-            if (discoverEnabled) add("Discover objects")
-            if (findEnabled) add("Find objects")
-            if (scanLightEnabled) add("Scan Light")
-            if (scanColourEnabled) add("Scan Colour")
-        }
+    val pages get() = settingsManager.shownFeatures(imageChatAvailable = llmChatEnabled)
+
+    /**
+     * Tells the feature guard whether Image chat can be shown, so it counts
+     * towards "at least one feature" only then. Launched on [llmChatEnabled].
+     */
+    fun syncImageChatAvailable() = settingsManager.setImageChatAvailable(llmChatEnabled)
+
+    init {
+        // Before the first frame too: Image chat left alone in an earlier run,
+        // with its AI gone since, would otherwise leave nothing to show.
+        syncImageChatAvailable()
     }
 
 
@@ -1403,13 +1838,17 @@ class AppController(
     // cut it off is not mistaken for a request to start another.
     var recordingEndedAtMs by mutableStateOf(0L)
     var wasListening by mutableStateOf(false)
-    // Set when a press was swallowed, so its release is swallowed with it.
-    var micPressSwallowed by mutableStateOf(false)
     suspend fun onListeningChanged() {
         if (!isListening) soundFXService.stopLoop()
         if (wasListening && !isListening) {
             val endedByUser = System.currentTimeMillis() - userStopAtMs < USER_STOP_WINDOW_MS
             recordingEndedAtMs = if (endedByUser) 0L else System.currentTimeMillis()
+            // The mic is closed, so the floor has nothing left to protect. A
+            // transcript or an outcome event releases it too, but a recording can
+            // end with neither (a platform error), and the floor would then mute
+            // the app for up to a minute. Clearing the old transcript at the start
+            // of each recording used to release it by accident.
+            ttsService.releaseMicrophoneFloor()
             // A mic-first question snaps its frame here too, for the same reason.
             // It used to be snapped by the gesture that stopped the recording, but
             // the platform recogniser usually stops first, so that gesture never
@@ -1473,6 +1912,35 @@ class AppController(
         }
     }
 
+    /**
+     * A model on the phone that failed its SHA-256 check before loading has been
+     * deleted: say so once, as other model notices are said. The flag stays set
+     * until the voice has taken the line: not while a recording holds the
+     * microphone (the line would be dropped), and not before the voice is ready.
+     */
+    suspend fun collectDamagedModels() = coroutineScope {
+        launch {
+            localGemma.removedAsDamaged.collect { removed ->
+                if (!removed) return@collect
+                sayDamagedNotice(context.getString(R.string.spoken_gemma_damaged))
+                localGemma.damagedNoticeSaid()
+            }
+        }
+        launch {
+            sttModelManager.removedAsDamaged.collect { removed ->
+                if (!removed) return@collect
+                sayDamagedNotice(context.getString(R.string.spoken_models_damaged))
+                sttModelManager.damagedNoticeSaid()
+            }
+        }
+    }
+
+    /** [confirmation], said once the microphone is free and tried again until the voice takes it. */
+    private suspend fun sayDamagedNotice(text: String) = NoticeDelivery.deliver(
+        micHasFloor = { ttsService.micHasFloor() },
+        speak = { ttsService.speak(text, flush = false, force = true, caption = false) },
+    )
+
     // Voice input outcome feedback: auto-stop sounds and "nothing heard" prompts.
     suspend fun collectVoiceEvents() {
         voiceInputService.events.collect { event ->
@@ -1522,28 +1990,48 @@ class AppController(
                 when (mode) {
                     "Image chat" -> {
                         imageChatViewModel.resetSession()
-                        val response = withContext(Dispatchers.Default) {
-                            imageChatViewModel.processImage(bmp, q)
-                        }
-                        imageScanned = true
-                        touchSessionActivity()
                         chat.user(q)
-                        chat.model(response)
-                        if (featureStillActive("Image chat")) ttsService.speak(response, flush = true)
+                        // Before the answer, not after: a question asked while it is
+                        // still being said is about this picture, not "Capture first".
+                        imageScanned = true
+                        streamAnswer(
+                            "Image chat",
+                            interruptReader = false,
+                            cancelRequest = imageChatViewModel::cancelActiveRequest,
+                        ) { onDelta -> imageChatViewModel.processImage(bmp, q, onDelta) }
+                        touchSessionActivity()
                     }
-                    "Text chat" -> {
+                    "Text chat" -> if (ChatKeywords.match(q) == ChatKeywords.Keyword.READ_ORIGINAL) {
+                        // "Read original" before any scan: this picture's text, as captured, no AI.
                         documentChatViewModel.resetSession()
                         clearTextPlayback()
-                        val response = withContext(Dispatchers.Default) {
-                            documentChatViewModel.processDocument(bmp, q)
-                        }
-                        // Only "scanned" if OCR actually found text — otherwise the
-                        // next Ask would do a follow-up against an empty document.
+                        val page = withContext(Dispatchers.Default) { localTextExtractor.extractText(bmp) }
+                        documentChatViewModel.setExtractedText(page)
                         textScanned = documentChatViewModel.hasCachedDocument()
                         touchSessionActivity()
                         chat.user(q)
-                        chat.model(response)
-                        if (featureStillActive("Text chat")) speakOutsidePlayer(response)
+                        if (page.isBlank()) {
+                            if (featureStillActive("Text chat")) {
+                                systemMessage(context.getString(R.string.spoken_no_text_detected))
+                            }
+                        } else if (featureStillActive("Text chat")) {
+                            readOriginal(page)
+                        } else {
+                            chat.scanned(page)
+                        }
+                    } else {
+                        documentChatViewModel.resetSession()
+                        clearTextPlayback()
+                        chat.user(q)
+                        streamAnswer(
+                            "Text chat",
+                            interruptReader = true,
+                            cancelRequest = documentChatViewModel::cancelActiveRequest,
+                        ) { onDelta -> documentChatViewModel.processDocument(bmp, q, onDelta) }
+                        // Only "scanned" if OCR actually found text: otherwise the
+                        // next Ask would do a follow-up against an empty document.
+                        textScanned = documentChatViewModel.hasCachedDocument()
+                        touchSessionActivity()
                     }
                 }
             } finally {
@@ -1555,18 +2043,149 @@ class AppController(
     }
 
     /**
-     * Text chat aims the camera for the user before there is any text: nothing
-     * scanned yet, automatic capture on, and nothing else going on (a recording,
-     * a question, the reader speaking).
+     * Find page aims the camera for the user: its guidance is on, and nothing
+     * else is going on (a recording, a question, the reader speaking).
      */
     fun textAimGuidanceWanted(): Boolean =
         textGuideActive &&
             featureStillActive(ModeNames.TEXT_CHAT) &&
-            // A question asked before scanning waits on this guidance for its picture.
+            // A question waits on it when Ask finds the page.
             (!micFirstActive || micFirstMode == ModeNames.TEXT_CHAT) &&
             !isListening &&
             !documentChatViewModel.isProcessing.value &&
             textScriptPlayer.currentState != TextScriptPlayer.State.PLAYING
+
+    /** The page-corner model, loaded the first time Text chat wants it. */
+    val pageCornerModel: PageCornerModel get() = PageCornerModel.get(context)
+
+    /**
+     * Find page guides by the page's corners and reads the page cropped out,
+     * unless the model could not be loaded or gave up: then Find page takes
+     * the picture at once, read whole, like Capture.
+     */
+    fun pageCornersOn(): Boolean = !pageCornerModel.failed
+
+    /**
+     * The page's corners in the steady aim frame after which the guide took
+     * the picture, and when: the capture's crop falls back on them. A manual
+     * Capture has none.
+     */
+    private var steadyPage: PageCorners.Corners? = null
+    private var steadyPageAtMs = 0L
+
+    /** The steady corners, if the guide took the picture just now; used once. */
+    private fun takeSteadyPage(): PageCorners.Corners? {
+        val page = steadyPage?.takeIf { System.currentTimeMillis() - steadyPageAtMs <= PageCornerGuide.STEADY_PAGE_FRESH_MS }
+        steadyPage = null
+        return page
+    }
+
+    /**
+     * Reads the captured [frame] with [read], cropped to its page first when
+     * [crop] (Find page's picture) and [pageCornersOn]; [read] is told whether
+     * it was, since a cropped page has nothing beside it to leave out. Logs the
+     * crop, the reading's time and [chars] of what it gave. Blocking: off the
+     * main thread.
+     */
+    private suspend fun readCaptured(
+        frame: Bitmap,
+        crop: Boolean,
+        chars: (String) -> Int = { it.length },
+        read: suspend (image: Bitmap, cropped: Boolean) -> String,
+    ): String {
+        if (!crop || !pageCornersOn()) {
+            steadyPage = null
+            return read(frame, false)
+        }
+        val crop = pageCornerModel.cropToPage(frame, takeSteadyPage())
+        debugCrop(crop)
+        val page = crop.page
+        val startedAt = SystemClock.elapsedRealtime()
+        return try {
+            read(page ?: frame, page != null).also { text ->
+                Log.i(
+                    PageCornerModel.TAG,
+                    "capture ${describe(crop, frame)} readMs=${SystemClock.elapsedRealtime() - startedAt} chars=${chars(text)}",
+                )
+            }
+        } finally {
+            page?.recycle()
+        }
+    }
+
+    /**
+     * Text chat's captured picture: a full-size photo, whose letters are about
+     * twice as large in pixels as in the analysis [frame], or the frame itself
+     * when the photo fails, takes too long or finds no memory. The shutter
+     * sounds once the picture is taken, so the phone is held until then.
+     * The photo stream is not let go here: that rebinds the camera, whose new
+     * frames cancel the frame loop's work, the reading of this very picture
+     * (the phone, 2026-10-31: read, answered, then dropped without a word).
+     * The frame loop lets it go once the work is done. Blocking: off the main
+     * thread.
+     */
+    private suspend fun capturedPicture(frame: ImageProxy): Bitmap {
+        val startedAt = SystemClock.elapsedRealtime()
+        withContext(Dispatchers.Main) { photoInProgress = true }
+        val still = try {
+            withTimeoutOrNull(STILL_TIMEOUT_MS) { cameraXManager.takeStill() }
+        } finally {
+            withContext(NonCancellable + Dispatchers.Main) { photoInProgress = false }
+        }
+        withContext(Dispatchers.Main) { cues.give(Cues.Cue.SHUTTER) }
+        val photo = still?.let {
+            try {
+                imageProxyToBitmap(it).also { bitmap ->
+                    Log.i(PageCornerModel.TAG, "photo ${bitmap.width}x${bitmap.height} in ${SystemClock.elapsedRealtime() - startedAt} ms")
+                }
+            } catch (e: OutOfMemoryError) {
+                Log.w(PageCornerModel.TAG, "No memory for the photo; reading the frame", e)
+                null
+            } catch (e: Exception) {
+                Log.w(PageCornerModel.TAG, "Photo unreadable; reading the frame", e)
+                null
+            } finally {
+                it.close()
+            }
+        }
+        return photo
+            ?: imageProxyToBitmap(frame).also { Log.i(PageCornerModel.TAG, "no photo; frame ${it.width}x${it.height}") }
+    }
+
+    /**
+     * Find page's picture for a question: the page cut out and flattened, or
+     * the whole [picture] when the model finds none. Blocking: off the main thread.
+     */
+    private fun pageOf(picture: Bitmap): Bitmap {
+        if (!pageCornersOn()) return picture
+        val crop = pageCornerModel.cropToPage(picture, takeSteadyPage())
+        debugCrop(crop)
+        Log.i(PageCornerModel.TAG, "capture for a question ${describe(crop, picture)}")
+        return crop.page?.also { picture.recycle() } ?: picture
+    }
+
+    /** A capture's crop, for the dev overlay's session log. */
+    private fun debugCrop(crop: PageCornerModel.Crop) {
+        if (!OcrDebug.enabled) return
+        val found = crop.found ?: return
+        val corners = crop.own ?: found.corners
+        val warp = crop.size?.let { "warp ${it.width}x${it.height} ${crop.source.name.lowercase()}" } ?: "whole frame"
+        OcrDebug.corners("capture", warp, corners, found.frameMs, PageCorners.areaShare(corners))
+    }
+
+    /**
+     * What a capture's crop found, for the log: whose corners it used (`own`,
+     * `steady` or `none`), the picture's own corners of the page, and the size
+     * of what is read, the flattened page or the whole [frame].
+     */
+    private fun describe(crop: PageCornerModel.Crop, frame: Bitmap): String {
+        val found = crop.found ?: return "used=none corners=no model read=whole frame ${frame.width}x${frame.height}"
+        val c = crop.own ?: found.corners
+        val seen = if (c.allSeen()) "all seen" else "${c.seenCount()} seen"
+        val read = crop.size?.let { "page ${it.width}x${it.height}" } ?: "whole frame ${frame.width}x${frame.height}"
+        return "used=${crop.source.name.lowercase()} corners=$seen ${PageCorners.summary(c)} " +
+            "model input ${c.widthPx}x${c.heightPx} frameMs=${found.frameMs} modelMs=${found.modelMs} read=$read"
+    }
 
     /**
      * Text chat reads text it sees by itself whenever it is otherwise idle: not
@@ -1583,17 +2202,25 @@ class AppController(
             textScriptPlayer.currentState != TextScriptPlayer.State.PLAYING
 
     /**
-     * Live text over the camera: with Preview and the Live text setting on, and
-     * only until the chat has started. Once there is a page, a question or a
-     * note, the chat's messages are what is on screen, and live text would get
-     * in their way.
+     * Live text: with the Live text setting on, and only until the chat has
+     * started. Once there is a page, a question or a note, the chat's messages
+     * are what is on screen, and live text would get in their way. It is read
+     * out and drawn with Preview on or off.
      */
-    fun liveTextWanted(): Boolean =
-        instantTextWanted() && cameraPreviewOn && liveTextOn &&
-            !textScanned &&
-            documentChatViewModel.chatHistory.value.isEmpty() &&
-            chat.isEmpty() &&
-            playbackTranscript.isBlank()
+    fun liveTextGate(): LiveTextGate = LiveTextGate(
+        idle = instantTextWanted(),
+        settingOn = liveTextOn,
+        chatStarted = textScanned ||
+            documentChatViewModel.chatHistory.value.isNotEmpty() ||
+            !chat.isEmpty() ||
+            playbackTranscript.isNotBlank(),
+    )
+
+    /** The text in view is read out. */
+    fun liveTextWanted(): Boolean = liveTextGate().reads
+
+    /** The text in view is drawn, over the camera or the plain background, as boxes that can be pinned. */
+    fun liveTextDrawn(): Boolean = liveTextGate().draws
 
     /**
      * Says a box of live text: after anything already speaking ([flush] false),
@@ -1713,6 +2340,109 @@ class AppController(
     }
 
     /**
+     * "Read original" in Text chat (issue #13): the scan exactly as it was
+     * captured, put in the chat and read by the page reader, with no AI. Asked
+     * again, it is written again, after the question.
+     */
+    fun readOriginal(page: String) {
+        chat.scanned(page)
+        loadTextPlaybackScript(page)
+    }
+
+    /**
+     * Speaks an AI answer as it is written (issue #24), then writes it whole
+     * into the chat in the bubble's place (in the same frame, so a screen
+     * reader's focus on the bubble stays), and returns it.
+     * [produce] runs the request, handing each new piece of text to its
+     * `onDelta` from the model's thread; the pieces come here on the main
+     * thread, where [AnswerSpeaker] says each complete sentence (the first
+     * cuts what was being said, and the page reader when [interruptReader]),
+     * and the bubble [chatPendingAnswer] grows by whole sentences.
+     *
+     * Only while the user is still in this [mode]'s chat and this is the
+     * latest answer: a newer answer stops this one's request
+     * ([cancelRequest]) and says nothing more of it. So does this coroutine
+     * being cancelled (a newer spoken question): the blocking model call
+     * would otherwise run on to its end before anything else could start.
+     */
+    private suspend fun streamAnswer(
+        mode: String,
+        interruptReader: Boolean,
+        cancelRequest: () -> Unit,
+        produce: suspend (onDelta: (String) -> Unit) -> String,
+    ): String = coroutineScope {
+        // An answer still being said is replaced: its request stops first, so
+        // the model is free for this one, and it says nothing more.
+        answerJob?.takeIf { it.isActive }?.let { previous ->
+            cancelRequest()
+            answerNumber++
+            withTimeoutOrNull(PREVIOUS_ANSWER_STOP_MS) { previous.join() }
+        }
+        val number = ++answerNumber
+        answerJob = coroutineContext.job
+        // What the replaced answer left: this one is waited for again.
+        answerSpeaking = false
+        chatPendingAnswer = null
+        val chatAtStart = chatsCleared
+        fun current() = number == answerNumber
+        fun stillHere() = current() && chatsCleared == chatAtStart && featureStillActive(mode)
+        val speaker = AnswerSpeaker(
+            stillHere = ::stillHere,
+            say = { sentence, first ->
+                if (first && interruptReader) textScriptPlayer.interrupt()
+                ttsService.speak(sentence, flush = first)
+            },
+            now = SystemClock::elapsedRealtime,
+            onFirstSentence = { if (current()) answerSpeaking = true },
+        )
+        try {
+            val deltas = Channel<String>(Channel.UNLIMITED)
+            val shown = launch {
+                for (delta in deltas) {
+                    speaker.add(delta)
+                    if (stillHere()) chatPendingAnswer = speaker.shown.ifEmpty { null }
+                }
+            }
+            val work = async(Dispatchers.Default) {
+                try {
+                    produce { delta -> deltas.trySend(delta) }
+                } finally {
+                    deltas.close()
+                }
+            }
+            val answer = try {
+                work.await()
+            } catch (e: CancellationException) {
+                cancelRequest()
+                throw e
+            }
+            shown.join()
+            // The model failed, or ran out of time, after writing part of it:
+            // the failure is said after what was said, and what was said is
+            // kept as the app's words, not as an answer (left out of Save chat
+            // and Share; the history the AI is told keeps the failure).
+            val failedPartWay = speaker.streamedAny && answer == context.getString(R.string.error_local_failed)
+            speaker.finish(answer, failedPartWay)
+            // Unless cancelled, or the chat has started over meanwhile.
+            if (answer != OpenAiTransport.CANCELLED && chatsCleared == chatAtStart) {
+                if (failedPartWay) {
+                    chat.system(listOf(speaker.shown, answer).filter { it.isNotBlank() }.joinToString("\n\n"))
+                } else {
+                    chat.model(answer)
+                }
+            }
+            answer
+        } finally {
+            StreamLog.i { "$mode: ${speaker.logLine()}" }
+            if (current()) {
+                answerSpeaking = false
+                chatPendingAnswer = null
+                answerJob = null
+            }
+        }
+    }
+
+    /**
      * A question about the picture or text in the current chat session, however
      * it arrived: spoken, or typed in the chat window.
      */
@@ -1733,10 +2463,15 @@ class AppController(
             if (system) chat.system(text) else chat.model(text)
             ttsService.speak(text, flush = flush)
         }
-        fun replyOutsidePlayer(text: String) {
+        /** An AI answer, spoken as it is written (issue #24), then kept whole. */
+        suspend fun streamReply(
+            mode: String,
+            interruptReader: Boolean,
+            cancelRequest: () -> Unit,
+            produce: suspend (onDelta: (String) -> Unit) -> String,
+        ) {
             writeQuestion()
-            chat.model(text)
-            speakOutsidePlayer(text)
+            streamAnswer(mode, interruptReader, cancelRequest, produce)
         }
         try {
             when (activeMode) {
@@ -1746,8 +2481,9 @@ class AppController(
                         return
                     }
                     if (imageScanned) {
-                        val response = imageChatViewModel.askFollowUp(command)
-                        if (featureStillActive("Image chat")) reply(response, flush = true)
+                        streamReply("Image chat", false, imageChatViewModel::cancelActiveRequest) { onDelta ->
+                            imageChatViewModel.askFollowUp(command, onDelta)
+                        }
                         touchSessionActivity()
                     } else if (captureInFlight) {
                         // The picture is still being described. Asking something
@@ -1769,9 +2505,8 @@ class AppController(
                             )
                         } else {
                             imageChatViewModel.cancelActiveRequest()
-                            val response = imageChatViewModel.askFollowUp(command)
-                            if (featureStillActive("Image chat")) {
-                                reply(response, flush = true)
+                            streamReply("Image chat", false, imageChatViewModel::cancelActiveRequest) { onDelta ->
+                                imageChatViewModel.askFollowUp(command, onDelta)
                             }
                             touchSessionActivity()
                         }
@@ -1780,14 +2515,43 @@ class AppController(
                     }
                 }
                 "Text chat" -> {
+                    // "Read original" needs no AI: the scan is read as it was captured.
+                    if (textScanned && ChatKeywords.match(command) == ChatKeywords.Keyword.READ_ORIGINAL) {
+                        if (featureStillActive("Text chat")) {
+                            writeQuestion()
+                            readOriginal(documentChatViewModel.extractedTextForPlayback())
+                        }
+                        touchSessionActivity()
+                        return
+                    }
                     if (!llmChatEnabled) {
                         reply(context.getString(R.string.spoken_llm_off), flush = true, system = true)
                         return
                     }
                     if (textScanned) {
-                        val response = documentChatViewModel.askFollowUp(command)
-                        if (featureStillActive("Text chat")) replyOutsidePlayer(response)
+                        streamReply("Text chat", true, documentChatViewModel::cancelActiveRequest) { onDelta ->
+                            documentChatViewModel.askFollowUp(command, onDelta)
+                        }
                         touchSessionActivity()
+                    } else if (documentChatProcessing) {
+                        // The page just captured is still being read or summarised.
+                        // As in Image chat, the question replaces that answer: wait
+                        // for the page's text, drop the summary, and answer against
+                        // the page. It used to start a new scan instead.
+                        val ready = withTimeoutOrNull(CAPTURE_ENCODE_TIMEOUT_MS) {
+                            while (!documentChatViewModel.hasCachedDocument() && documentChatProcessing) delay(50)
+                            documentChatViewModel.hasCachedDocument()
+                        }
+                        if (ready != true) {
+                            reply(context.getString(R.string.spoken_capture_text_first), flush = true, system = true)
+                        } else {
+                            documentChatViewModel.cancelActiveRequest()
+                            textScanned = true
+                            streamReply("Text chat", true, documentChatViewModel::cancelActiveRequest) { onDelta ->
+                                documentChatViewModel.askFollowUp(command, onDelta)
+                            }
+                            touchSessionActivity()
+                        }
                     } else {
                         reply(context.getString(R.string.spoken_capture_text_first), flush = true, system = true)
                     }
@@ -1796,6 +2560,24 @@ class AppController(
         } finally {
             chatPendingQuestion = null
         }
+    }
+
+    /**
+     * Ask with no picture to ask about and Automatic capture off, so Ask does
+     * not take one itself. Says so ("Please capture the text first." in Text
+     * chat), and nothing is recorded or taken. True when it did.
+     */
+    fun askNeedsCaptureFirst(mode: String?): Boolean {
+        if (mode == null || !modeNeedsCapture(mode)) return false
+        if (autoCaptureEnabled) return false
+        cutAllAudio()
+        ttsService.speak(
+            context.getString(
+                if (mode == ModeNames.TEXT_CHAT) R.string.spoken_capture_text_first else R.string.spoken_capture_first,
+            ),
+            flush = true,
+        )
+        return true
     }
 
     /** The Ask button, wherever it is pressed. */
@@ -1816,31 +2598,56 @@ class AppController(
         } else if (tapAccepted && activeMode in micModes) {
             if (isListening) {
                 stopListeningByUser()
+            } else if (askNeedsCaptureFirst(activeMode)) {
+                // Said to capture first; nothing is recorded.
             } else if (!ensurePermission(Manifest.permission.RECORD_AUDIO)) {
                 // Asked; the user presses Ask again once it is allowed.
             } else if (modeNeedsCapture(activeMode ?: "") && !ensurePermission(Manifest.permission.CAMERA)) {
                 // A chat question takes a picture.
             } else {
                 val mode = activeMode
-                if (mode != null && modeNeedsCapture(mode) && !autoCaptureEnabled) {
-                    cutAllAudio()
-                    ttsService.speak(
-                        if (mode == ModeNames.TEXT_CHAT) {
-                            context.getString(R.string.spoken_capture_text_first)
-                        } else {
-                            context.getString(R.string.spoken_capture_first)
-                        },
-                        flush = true,
-                    )
-                } else {
-                    cutAllAudio()
-                    if (mode != null && modeNeedsCapture(mode)) armMicFirst(mode)
-                    cueThenListen()
-                    if (mode == ModeNames.IMAGE_CHAT || mode == ModeNames.TEXT_CHAT) {
-                        chatPendingQuestion = SPEAKING_PLACEHOLDER
-                    }
+                cutAllAudio()
+                if (mode != null && modeNeedsCapture(mode)) armMicFirst(mode)
+                cueThenListen()
+                if (mode == ModeNames.IMAGE_CHAT || mode == ModeNames.TEXT_CHAT) {
+                    chatPendingQuestion = SPEAKING_PLACEHOLDER
                 }
             }
+        }
+    }
+
+    /** The keyboard is up, which hides Capture and Ask; reported by the screen. */
+    private var keyboardUp = false
+
+    /** Something is typed in the text box, which makes the Ask button Send. */
+    private var draftTyped = false
+
+    /** The screen's text box: what it does to the buttons the volume keys stand for. */
+    fun onTypingChanged(keyboardUp: Boolean, draftTyped: Boolean) {
+        this.keyboardUp = keyboardUp
+        this.draftTyped = draftTyped
+    }
+
+    /**
+     * What a volume key does now (Settings, off by default): up is Capture and
+     * down is Ask, while that button is on screen, with nothing over it.
+     */
+    fun volumeKeyAction(key: VolumeKeys.Key): VolumeKeys.Action? {
+        val shown = VolumeKeys.buttonsOnScreen(activeMode, llmChatEnabled, keyboardUp, draftTyped)
+        return VolumeKeys.actionFor(
+            key = key,
+            enabled = settingsManager.volumeKeys.value,
+            inFront = featuresInFront,
+            hasCapture = shown.capture,
+            hasAsk = shown.ask,
+        )
+    }
+
+    /** A volume key let go: exactly the button it stands for. */
+    fun onVolumeKey(action: VolumeKeys.Action) {
+        when (action) {
+            VolumeKeys.Action.CAPTURE -> onChatCapture()
+            VolumeKeys.Action.ASK -> onAskTapped()
         }
     }
 
@@ -1850,6 +2657,8 @@ class AppController(
         if (activeMode != mode && !hasCameraPermission) ensurePermission(Manifest.permission.CAMERA)
         if (activeMode != mode) {
             cutAllAudio()
+            // A question still being transcribed belongs to the feature left.
+            voiceInputService.discardPendingTranscript()
             cancelMicFirst()
             imageChatViewModel.cancelActiveRequest()
             documentChatViewModel.cancelActiveRequest()
@@ -1875,24 +2684,139 @@ class AppController(
 
     }
 
-    /** Capture in Image chat or Text chat: a new picture starts a new session. */
+    /**
+     * A feature an app shortcut asked for. The feature bar goes there as a tap
+     * on its tab does (HomeScreen), then clears it.
+     */
+    var requestedFeature by mutableStateOf(initialFeature)
+
+    /**
+     * An app shortcut chose [mode], at launch or with the app running. The
+     * screens and the feature's own pop-ups over the features close, so the
+     * feature shows; offers waiting for an answer (a download, the language)
+     * stay over it.
+     */
+    fun openFeatureFromShortcut(mode: String) {
+        if (showHelp) closeHelp()
+        showObjectPicker = false
+        showMemories = false
+        showSettings = false
+        requestedFeature = mode
+    }
+
+    fun onFeatureRequestHandled() {
+        requestedFeature = null
+    }
+
+    /** The shortcuts the launcher has, so an unchanged list is not sent again. */
+    private var publishedShortcuts: List<String>? = null
+
+    /**
+     * The launcher's long-press menu: the first features on the bar (see
+     * AppShortcuts), named in the app's language. Called whenever the features
+     * show, so one switched off in Settings leaves the menu.
+     */
+    fun publishShortcuts(pages: List<String>) {
+        val offered = AppShortcuts.offered(pages, ShortcutManagerCompat.getMaxShortcutCountPerActivity(context))
+        if (offered == publishedShortcuts) return
+        val shortcuts = offered.mapIndexed { rank, mode ->
+            ShortcutInfoCompat.Builder(context, AppShortcuts.id(mode))
+                .setShortLabel(ModeNames.display(context, mode))
+                .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
+                .setIntent(
+                    Intent(Intent.ACTION_VIEW, null, context, MainActivity::class.java)
+                        .putExtra(AppShortcuts.EXTRA_FEATURE, mode)
+                        // Running already: back to that screen, not a second one.
+                        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                )
+                .setRank(rank)
+                .build()
+        }
+        // Refused while the launcher limits updates: the next time the features show tries again.
+        val published = runCatching { ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts) }
+            .getOrDefault(false)
+        if (published) publishedShortcuts = offered
+    }
+
+    /**
+     * Capture in Image chat or Text chat: a new picture, at once, starting a new
+     * session. In Text chat it reads everything in view; while Find page is
+     * guiding, it takes the picture now, whole, and the guidance stops.
+     */
     fun onChatCapture() {
+        val now = SystemClock.elapsedRealtime()
+        if (CaptureGate.debounced(now, lastCapturePressMs)) return
+        lastCapturePressMs = now
+        val press = CaptureGate.press(
+            activeMode,
+            imageChatBusy = imageChatBusy,
+            textGuiding = textGuideActive || textGuideStarting,
+            textPictureComing = triggerScan || photoInProgress || captureForQuestion,
+        )
+        // Image chat with a picture or an answer on its way: the press would
+        // cancel it and start again. The button says it is busy instead. Text
+        // chat with its picture on its way: the press would take a second one.
+        if (press == CaptureGate.Press.IGNORED) return
         if (!ensurePermission(Manifest.permission.CAMERA)) return
-        if (!(activeMode == ModeNames.TEXT_CHAT && (textGuideActive || textGuideStarting))) chat.clear()
-        // Text chat: the first press starts the aim guidance, which takes the
-        // picture itself once the text is centred; a second press while it is
-        // guiding takes it at once.
-        if (activeMode == ModeNames.TEXT_CHAT && (textGuideActive || textGuideStarting)) {
+        if (press == CaptureGate.Press.TAKE_NOW) {
             stopTextGuidance()
             cutAllAudio()
-            captureGuidedText()
+            captureGuided = false
+            // Guiding for a question: the picture, whole, is that question's.
+            if (micFirstActive && micFirstMode == ModeNames.TEXT_CHAT) {
+                captureForQuestion = true
+                return
+            }
+            triggerScan = true
             return
         }
+        startNewChatSession()
+        captureGuided = false
+        triggerScan = true
+    }
+
+    /** When Capture was last pressed, for [CaptureGate.debounced]; null before any press. */
+    private var lastCapturePressMs: Long? = null
+
+    /**
+     * Text chat's picture for [triggerScan]: Find page's (or Capture pressed
+     * while it guides, the photo stream bound already) a full-size photo, its
+     * shutter when the photo is taken (capturedPicture). Capture's, the live
+     * frame in hand (1440x1920), its shutter at once: no wait for the camera
+     * to switch to photos, so the sound is the picture (decided 2026-10-31).
+     * Blocking: off the main thread.
+     */
+    private suspend fun textPicture(frame: ImageProxy, guided: Boolean): Bitmap {
+        if (guided || stillsWanted) return capturedPicture(frame)
+        withContext(Dispatchers.Main) { cues.give(Cues.Cue.SHUTTER) }
+        return imageProxyToBitmap(frame).also { Log.i(PageCornerModel.TAG, "capture from the live frame ${it.width}x${it.height}") }
+    }
+
+    /**
+     * Find page in Text chat: a new session, and the guidance finds the page
+     * and takes its picture. Pressed again while it guides, nothing happens.
+     */
+    fun onFindPage() {
+        if (activeMode != ModeNames.TEXT_CHAT) return
+        if (CaptureGate.findPage(guiding = textGuideActive || textGuideStarting) == CaptureGate.Press.IGNORED) return
+        if (!ensurePermission(Manifest.permission.CAMERA)) return
+        startNewChatSession()
+        // Bound while "Looking for text" is said, ready for the picture.
+        wantStills(true)
+        startTextGuidance()
+    }
+
+    /** A new picture starts a new chat: what was said, asked or read before is let go. */
+    private fun startNewChatSession() {
+        clearChat()
         autoCaptureNote = null
         // A new picture starts a new session, so whatever is being
         // said about the old one is cut rather than left to finish
         // over the top of the new answer.
         cutAllAudio()
+        // The chat starts over: a question still being transcribed belonged to
+        // the old one, so it is dropped too (decided 2026-10-24).
+        voiceInputService.discardPendingTranscript()
         cancelMicFirst()
         when (activeMode) {
             "Image chat" -> {
@@ -1905,14 +2829,8 @@ class AppController(
                 textScanned = false
                 clearTextPlayback()
                 touchSessionActivity()
-                // With the guidance switched off, Capture takes the picture at once.
-                if (settingsManager.textScanGuidance.value) {
-                    startTextGuidance()
-                    return
-                }
             }
         }
-        triggerScan = true
     }
 
     // Voice command handler — only after permissions and welcome are done
@@ -1920,7 +2838,7 @@ class AppController(
         if (!appInForeground || showTerms || onboardingBlocking) {
             return
         }
-        voiceInputService.recognizedText.collectLatest { command ->
+        voiceInputService.transcripts.collectLatest { command ->
             ttsService.releaseMicrophoneFloor()
             if (!appInForeground) return@collectLatest
             if (command.isNotEmpty()) {
@@ -1969,9 +2887,13 @@ class AppController(
             return
         }
 
+        // Text chat reads its captures from a full-size photo, whose stream is
+        // bound only while a capture is coming (wantStills).
+        val textChat = activeMode == ModeNames.TEXT_CHAT
+        if (!textChat) stillsWanted = false
         cameraXManager.setAnalysisResolution(
-            if (activeMode == ModeNames.TEXT_CHAT) CameraXManager.TEXT_ANALYSIS_SIZE
-            else CameraXManager.DEFAULT_ANALYSIS_SIZE
+            if (textChat) CameraXManager.TEXT_ANALYSIS_SIZE else CameraXManager.DEFAULT_ANALYSIS_SIZE,
+            stills = textChat && stillsWanted,
         )
 
         when (activeMode) {
@@ -2020,6 +2942,9 @@ class AppController(
 
             "Discover objects" -> {
                 cameraXManager.throttleIntervalMs = 300L
+                // A name is said only once seen in several frames in a row, at
+                // Discover's own scores (issue #14); Find objects is untouched.
+                val discoverConfirm = DiscoverConfirm()
                 cameraXManager.frameFlow.collectLatest { proxy ->
                     try {
                         val (detections) = withContext(Dispatchers.Default) {
@@ -2028,9 +2953,8 @@ class AppController(
                             bitmap.recycle()
                             Pair(dets, null)
                         }
-                        if (detections.isNotEmpty()) {
-                            val topDetection = detections.maxByOrNull { it.confidence }!!
-                            ttsService.speakWithCooldown(CocoFinnish.displayName(topDetection.label))
+                        discoverConfirm.next(detections.map { it.label to it.confidence })?.let {
+                            ttsService.speakWithCooldown(CocoFinnish.displayName(it))
                         }
                     } catch (e: CancellationException) {
                         // Leaving the feature cancels its work: not a failure.
@@ -2060,9 +2984,7 @@ class AppController(
                                 val bitmap = imageProxyToBitmap(proxy)
                                 val detections = objectAnalyzer.analyze(bitmap)
                                 bitmap.recycle()
-                                detections.find {
-                                    it.label.equals(findObjectTarget, ignoreCase = true)
-                                }
+                                DetectionRules.findTarget(detections, findObjectTarget) { it.label }
                             }
                             if (result != null) {
                                 if (!hadObject) hadObject = true
@@ -2085,19 +3007,16 @@ class AppController(
 
                                 if (pitchFeedback) {
                                     // A held note that climbs the scale as the object
-                                    // approaches the middle. Nothing is said, so the
-                                    // user can sweep the phone and hear it rise.
+                                    // approaches the middle, and a pulse that
+                                    // quickens, as Sound effects and Vibration say;
+                                    // never silent (FeedbackOutputs.pitchGuidance).
+                                    // Nothing is said, so the user can sweep the
+                                    // phone and hear it rise.
                                     cueBeat.reset()
-                                    if (hapticFeedback) {
-                                        // The same climb, felt: the pulse quickens
-                                        // as the object nears the middle.
-                                        hapticManager.proximityPulse(proximity)
-                                    } else {
-                                        pitchToneService.start(
-                                            pitchToneService.stepFor(proximity)
-                                        )
-                                    }
+                                    cues.guide(proximity)
                                 } else {
+                                    // Pitch feedback switched off while it ran.
+                                    cues.stopGuidance()
                                     val cue = when (direction) {
                                         "left"   -> DirectionCues.Cue.LEFT
                                         "right"  -> DirectionCues.Cue.RIGHT
@@ -2144,29 +3063,32 @@ class AppController(
                             triggerScan = false
                             questionSupersededCapture = false
                             captureInFlight = true
-                            soundFXService.play(SFX.CAMERA_CLICK)
-                            val response = try {
-                                withContext(Dispatchers.Default) {
-                                    val bitmap = imageProxyToBitmap(proxy)
-                                    val text = imageChatViewModel.processImage(bitmap)
+                            cues.give(Cues.Cue.SHUTTER)
+                            try {
+                                val bitmap = withContext(Dispatchers.Default) { imageProxyToBitmap(proxy) }
+                                try {
+                                    // A question asked before the description began waits
+                                    // for this picture, which processImage keeps: then it
+                                    // runs unsaid, as the description would talk over the
+                                    // answer. One asked during it replaces it (streamAnswer).
+                                    if (questionSupersededCapture) {
+                                        withContext(Dispatchers.Default) { imageChatViewModel.processImage(bitmap) }
+                                    } else {
+                                        // Spoken as it is written, like an answer (issue #24).
+                                        streamAnswer(
+                                            "Image chat",
+                                            interruptReader = false,
+                                            cancelRequest = imageChatViewModel::cancelActiveRequest,
+                                        ) { onDelta -> imageChatViewModel.processImage(bitmap, onDelta = onDelta) }
+                                    }
+                                } finally {
                                     bitmap.recycle()
-                                    text
                                 }
                             } finally {
                                 captureInFlight = false
                             }
                             imageScanned = true
-                            // A question asked while this was running has already been
-                            // answered against the same picture, so the general
-                            // description is stale and would talk over that answer.
-                            if (questionSupersededCapture) {
-                                questionSupersededCapture = false
-                            } else {
-                                chat.model(response)
-                                if (featureStillActive("Image chat")) {
-                                    ttsService.speak(response, flush = true)
-                                }
-                            }
+                            questionSupersededCapture = false
                         }
                     } catch (e: CancellationException) {
                         // Leaving the feature cancels its work: not a failure.
@@ -2184,83 +3106,129 @@ class AppController(
                 // only if frames are not held back as well.
                 cameraXManager.throttleIntervalMs = 200L
                 OcrDebug.newSession()
-                val guide = TextAimGuide()
-                val pageTracker = PageTracker()
+                val cornerGuide = PageCornerGuide()
+                val pageLock = PageLock()
+                // Loaded now, so the first frame of guidance does not wait for it.
+                if (pageCornersOn()) scope.launch(Dispatchers.Default) { pageCornerModel.warmUp() }
                 var guiding = false
-                // The page the guide last steered by, so Capture reads that page.
-                var aimedPage: LocalTextExtractor.TextFrame? = null
-                var aimedPageAtMs = 0L
                 clearLiveText()
+
+                // Says a step of the guidance.
+                fun sayAimStep(step: PageCornerGuide.Step) {
+                    when (step) {
+                        PageCornerGuide.Step.Silent -> Unit
+                        PageCornerGuide.Step.NoText ->
+                            systemMessage(context.getString(R.string.spoken_no_text_visible), flush = false)
+                        is PageCornerGuide.Step.Cue -> directionCues.say(
+                            when (step.direction) {
+                                PageCornerGuide.Direction.CLOSER -> DirectionCues.Cue.CLOSER
+                                PageCornerGuide.Direction.CENTRE -> DirectionCues.Cue.HOLD_STEADY
+                            }
+                        )
+                        PageCornerGuide.Step.Capture -> {
+                            textGuideActive = false
+                            captureGuidedText()
+                        }
+                    }
+                }
+
                 cameraXManager.frameFlow.collectLatest { proxy ->
+                    // No capture coming (any just taken is read by now): the photo stream goes.
+                    if (stillsWanted && !stillsNeeded()) wantStills(false)
                     // Each run of the guidance starts from nothing.
-                    val wanted = !triggerScan && !captureForQuestion && textAimGuidanceWanted()
+                    val wanted = !triggerScan && textAimGuidanceWanted()
+                    // The tone plays only while the guidance does, and not under a pop-up.
+                    if (!wanted || popupOpen || !pageCornersOn()) stopPageTone()
                     if (wanted && !guiding) {
-                        guide.reset()
-                        pageTracker.reset()
+                        cornerGuide.reset()
+                        pageLock.reset()
                     }
                     guiding = wanted
                     try {
                         if (captureForQuestion) {
+                            // Ask before any page, with Automatic capture: the whole
+                            // view, or the page Find page's guidance found, kept for
+                            // the pairing to read and answer from.
                             captureForQuestion = false
-                            guide.reset()
-                            pendingCaptureBitmap = withContext(Dispatchers.Default) {
-                                imageProxyToBitmap(proxy)
+                            val guided = questionPictureGuided
+                            questionPictureGuided = false
+                            stopTextGuidance()
+                            cornerGuide.reset()
+                            pageLock.reset()
+                            clearLiveText()
+                            try {
+                                pendingCaptureBitmap = withContext(Dispatchers.Default) {
+                                    val picture = capturedPicture(proxy)
+                                    if (guided) pageOf(picture) else picture
+                                }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                // Said, not left hanging: a guided question has no watchdog,
+                                // as the guidance has no time limit.
+                                Log.e("SightBuddyApp", "Picture for a question failed", e)
+                                val unanswered = chatPendingQuestion
+                                cancelMicFirst()
+                                autoCaptureNote = null
+                                if (!unanswered.isNullOrBlank() && unanswered != SPEAKING_PLACEHOLDER) chat.user(unanswered)
+                                systemMessage(context.getString(R.string.spoken_capture_failed))
                             }
+                        } else if (!triggerScan && textAimGuidanceWanted() && !pageCornersOn()) {
+                            // No model to guide by: the picture at once, read whole.
+                            textGuideActive = false
+                            captureGuidedText()
                         } else if (!triggerScan && textAimGuidanceWanted()) {
                             clearLiveText()
-                            // Aim guidance: say where the text is until it sits in
-                            // the middle, then take the picture after a steady hold.
-                            val (located, paper) = withContext(Dispatchers.Default) {
-                                val bitmap = imageProxyToBitmap(proxy, maxLongSide = AIM_FRAME_LONG_SIDE)
-                                val scaleToFull = maxOf(proxy.width, proxy.height).toFloat() / maxOf(bitmap.width, bitmap.height)
+                            // Find page by the page's four corners: nothing is read
+                            // while aiming, only the page's outline found. No
+                            // directions: a tone rises as more of the page is found.
+                            val found = withContext(Dispatchers.Default) {
+                                val bitmap = imageProxyToBitmap(proxy, maxLongSide = PageCorners.SOURCE_LONG_SIDE)
                                 try {
                                     OcrDebug.maybeSaveFrame(bitmap)
-                                    localTextExtractor.locateText(bitmap, scaleToFull) to findPaper(bitmap)
+                                    pageCornerModel.detect(bitmap)
                                 } finally {
                                     bitmap.recycle()
                                 }
                             }
-                            // Re-checked: a question may have started while reading.
-                            if (textAimGuidanceWanted()) {
+                            // Null when the model could not run; after a few in a row it
+                            // gives up, and the next frame takes the picture at once.
+                            if (found != null && textAimGuidanceWanted()) {
                                 val now = System.currentTimeMillis()
-                                val track = pageTracker.update(located.blocks, located.widthPx, located.heightPx, now)
-                                // The sheet of paper first; the text pages when there is none.
-                                val aim = PaperFinder.choose(track.target, paper, located.widthPx.toFloat() / located.heightPx, located.blocks)
-                                aim.target?.let { target ->
-                                    // Capture leaves out what lies beside this page. A small
-                                    // text page is likely part of one: then nothing is left out.
-                                    aimedPage = target.takeIf { aim.paperUsed || areaOf(it) >= MIN_CAPTURE_PAGE_AREA }
-                                    aimedPageAtMs = now
+                                // One page of an open book, not whichever is best this frame.
+                                val page = pageLock.update(found.candidates, now)
+                                // One page of an open book seen whole, as the picture will be cropped.
+                                val step = cornerGuide.next(PageCorners.oneOfSpread(page), now)
+                                if (step == PageCornerGuide.Step.Capture) {
+                                    steadyPage = page
+                                    steadyPageAtMs = now
                                 }
-                                val step = guide.next(aim.target, now)
-                                OcrDebug.guide(step.toString(), track, paper, aim.paperUsed, aim.target)
-                                when (step) {
-                                    TextAimGuide.Step.Silent -> Unit
-                                    TextAimGuide.Step.NoText ->
-                                        systemMessage(context.getString(R.string.spoken_no_text_visible), flush = false)
-                                    is TextAimGuide.Step.Cue -> directionCues.say(
-                                        when (step.direction) {
-                                            TextAimGuide.Direction.LEFT -> DirectionCues.Cue.LEFT
-                                            TextAimGuide.Direction.RIGHT -> DirectionCues.Cue.RIGHT
-                                            TextAimGuide.Direction.UP -> DirectionCues.Cue.UP
-                                            TextAimGuide.Direction.DOWN -> DirectionCues.Cue.DOWN
-                                            TextAimGuide.Direction.CLOSER -> DirectionCues.Cue.CLOSER
-                                            TextAimGuide.Direction.FURTHER -> DirectionCues.Cue.FURTHER
-                                            TextAimGuide.Direction.CENTRE -> DirectionCues.Cue.HOLD_STEADY
-                                        }
-                                    )
-                                    TextAimGuide.Step.Capture -> {
-                                        textGuideActive = false
-                                        captureGuidedText()
-                                    }
+                                Log.i(
+                                    PageCornerModel.TAG,
+                                    "aim frameMs=${found.frameMs} modelMs=${found.modelMs} best ${PageCorners.summary(found.corners)} " +
+                                        "lock=${pageLock.mode} page ${PageCorners.summary(page)} seen ${PageCorners.positions(page)} " +
+                                        "tone=${"%.2f".format(Locale.US, cornerGuide.found)} step=$step",
+                                )
+                                if (step != PageCornerGuide.Step.Capture && !popupOpen) {
+                                    cues.guide(cornerGuide.found)
+                                    pageToneOn = true
+                                } else {
+                                    stopPageTone()
                                 }
+                                if (OcrDebug.enabled) {
+                                    OcrDebug.corners("aim", step.toString(), page, found.frameMs, PageCorners.areaShare(page))
+                                }
+                                sayAimStep(step)
                             }
                         } else if (!triggerScan && liveTextWanted()) {
-                            // With Preview on, the text in view is shown over the camera
-                            // where it sits, like Google Lens, to read with TalkBack or
-                            // copy, and read out once each time it changes. It changes
-                            // only for new text, so a selection or TalkBack's place is
-                            // not lost as the hand moves.
+                            // The text in view is read out once each time it changes,
+                            // Preview on or off. With Preview on it is also shown over
+                            // the camera where it sits, like Google Lens, to read with
+                            // TalkBack or copy. It changes only for new text, so a
+                            // selection or TalkBack's place is not lost as the hand moves.
+                            // A box pinned before Preview went off is let go: nothing is
+                            // drawn now to let go of it by, and the reading would wait.
+                            if (pinnedLiveText != null && !liveTextDrawn()) resumeLiveText()
                             val located = withContext(Dispatchers.Default) {
                                 val bitmap = imageProxyToBitmap(proxy)
                                 try { localTextExtractor.locateText(bitmap, debugSource = "read") } finally { bitmap.recycle() }
@@ -2289,20 +3257,25 @@ class AppController(
                                 }
                             }
                         } else if (triggerScan) {
-                            guide.reset()
+                            cornerGuide.reset()
+                            pageLock.reset()
+                            stopPageTone()
                             triggerScan = false
+                            // Find page's picture reads its page; Capture's, everything in view.
+                            val guided = captureGuided
+                            captureGuided = false
                             clearLiveText()
-                            soundFXService.play(SFX.CAMERA_CLICK)
 
-                            // Only a page seen just now: the phone has not moved since.
-                            val page = aimedPage?.takeIf { System.currentTimeMillis() - aimedPageAtMs < AIMED_PAGE_FRESH_MS }
-                            aimedPage = null
                             if (effectiveTextPreviewEnabled) {
                                 val extractedText = withContext(Dispatchers.Default) {
-                                    val bitmap = imageProxyToBitmap(proxy)
-                                    val text = localTextExtractor.extractText(bitmap, page = page)
-                                    bitmap.recycle()
-                                    text
+                                    val bitmap = textPicture(proxy, guided)
+                                    try {
+                                        readCaptured(bitmap, crop = guided) { image, _ ->
+                                            localTextExtractor.extractText(image)
+                                        }
+                                    } finally {
+                                        bitmap.recycle()
+                                    }
                                 }
                                 if (extractedText.isBlank()) {
                                     if (featureStillActive("Text chat")) {
@@ -2320,19 +3293,27 @@ class AppController(
                                     }
                                 }
                             } else {
-                                val response = withContext(Dispatchers.Default) {
-                                    val bitmap = imageProxyToBitmap(proxy)
-                                    val text = documentChatViewModel.processDocument(bitmap)
+                                val bitmap = withContext(Dispatchers.Default) { textPicture(proxy, guided) }
+                                try {
+                                    // Spoken as it is written, like an answer (issue #24),
+                                    // and written into the chat whole at the end.
+                                    val response = streamAnswer(
+                                        "Text chat",
+                                        interruptReader = true,
+                                        cancelRequest = documentChatViewModel::cancelActiveRequest,
+                                    ) { onDelta ->
+                                        readCaptured(
+                                            bitmap,
+                                            crop = guided,
+                                            chars = { documentChatViewModel.extractedTextForPlayback().length },
+                                        ) { image, _ -> documentChatViewModel.processDocument(image, onDelta = onDelta) }
+                                    }
+                                    // Cancelled by a new Capture: the new session is left alone.
+                                    if (response != OpenAiTransport.CANCELLED) {
+                                        textScanned = documentChatViewModel.hasCachedDocument()
+                                    }
+                                } finally {
                                     bitmap.recycle()
-                                    text
-                                }
-                                textScanned = documentChatViewModel.hasCachedDocument()
-                                chat.model(response)
-                                if (featureStillActive("Text chat")) {
-                                    loadTextPlaybackScript(
-                                        documentChatViewModel.firstAssistantResponseForPlayback()
-                                            .ifBlank { response },
-                                    )
                                 }
                             }
                         }
@@ -2343,6 +3324,9 @@ class AppController(
                         Log.e("SightBuddyApp", "Text chat failed", e)
                     } finally {
                         closeFrame(proxy)
+                        // After the work, never during it: letting go rebinds the camera,
+                        // and its new frames would cancel this block (capturedPicture).
+                        if (stillsWanted && !stillsNeeded()) wantStills(false)
                     }
                 }
             }
@@ -2354,23 +3338,6 @@ class AppController(
         }
     }
 }
-
-/** The sheet of paper in [bitmap], looked for in a tiny grey copy of it. */
-private fun findPaper(bitmap: Bitmap): PaperFinder.Paper? {
-    val small = Bitmap.createScaledBitmap(bitmap, PaperFinder.WIDTH, PaperFinder.HEIGHT, true)
-    val pixels = IntArray(PaperFinder.WIDTH * PaperFinder.HEIGHT)
-    small.getPixels(pixels, 0, PaperFinder.WIDTH, 0, 0, PaperFinder.WIDTH, PaperFinder.HEIGHT)
-    if (small != bitmap) small.recycle()
-    val luma = IntArray(pixels.size) { i ->
-        val p = pixels[i]
-        (((p shr 16) and 0xFF) * 299 + ((p shr 8) and 0xFF) * 587 + (p and 0xFF) * 114) / 1000
-    }
-    return PaperFinder.find(luma, PaperFinder.WIDTH, PaperFinder.HEIGHT)
-}
-
-/** Share of the frame [f] covers. */
-private fun areaOf(f: LocalTextExtractor.TextFrame): Float =
-    (f.right - f.left).coerceAtLeast(0f) * (f.bottom - f.top).coerceAtLeast(0f)
 
 /**
  * Convert an ImageProxy (YUV_420_888) to a correctly-rotated Bitmap. CameraX's

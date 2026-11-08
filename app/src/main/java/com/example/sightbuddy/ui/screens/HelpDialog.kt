@@ -14,15 +14,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,14 +34,7 @@ import com.example.sightbuddy.ui.DialogWindowTitle
 import com.example.sightbuddy.ui.buttonSemantics
 import com.example.sightbuddy.ui.theme.actionButtonBackground
 import com.example.sightbuddy.ui.theme.actionButtonText
-import kotlinx.coroutines.launch
 import com.example.sightbuddy.core.hints.HelpSection
-
-private enum class HelpPane {
-    INSTRUCTIONS,
-    FEEDBACK_FORM,
-    FEEDBACK_THANKS,
-}
 
 @Composable
 fun HelpDialog(
@@ -60,7 +46,6 @@ fun HelpDialog(
     highContrast: Boolean,
     whiteMode: Boolean,
     onClose: () -> Unit,
-    onSubmitFeedback: suspend (String) -> Boolean,
 ) {
     val scrim = Color.Black.copy(alpha = 0.72f)
     // Brand colours, except in high contrast, which keeps black and white.
@@ -74,38 +59,12 @@ fun HelpDialog(
         else -> brand.ink
     }
     val titleColor = if (highContrast) textColor else brand.label
-    val mutedColor = textColor.copy(alpha = 0.75f)
-    val fieldBorder = if (darkTheme) Color.Gray else Color(0xFF9E9E9E)
 
     val closeLabel = stringResource(R.string.help_close)
     val closeCd = stringResource(R.string.help_close_cd)
-    val leaveFeedbackLabel = stringResource(R.string.help_leave_feedback)
-    val leaveFeedbackCd = stringResource(R.string.help_leave_feedback_cd)
-    val privacyNotice = stringResource(R.string.feedback_privacy_notice)
-    val feedbackHint = stringResource(R.string.feedback_field_hint)
-    val submitLabel = stringResource(R.string.feedback_submit)
-    val submitCd = stringResource(R.string.feedback_submit_cd)
-    val backLabel = stringResource(R.string.feedback_back_to_help)
-    val thanksTitle = stringResource(R.string.feedback_thanks_title)
-    val thanksBody = stringResource(R.string.feedback_thanks_body)
-    val submitFailed = stringResource(R.string.feedback_submit_failed)
-
-    var pane by remember { mutableStateOf(HelpPane.INSTRUCTIONS) }
-    var feedbackText by remember { mutableStateOf("") }
-    var isSubmitting by remember { mutableStateOf(false) }
-    var submitError by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    fun resetAndClose() {
-        pane = HelpPane.INSTRUCTIONS
-        feedbackText = ""
-        isSubmitting = false
-        submitError = false
-        onClose()
-    }
 
     Dialog(
-        onDismissRequest = { resetAndClose() },
+        onDismissRequest = { onClose() },
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         DialogWindowTitle(title)
@@ -123,160 +82,54 @@ fun HelpDialog(
                     .background(cardBg)
                     .padding(horizontal = 24.dp, vertical = 28.dp),
             ) {
-                when (pane) {
-                    HelpPane.INSTRUCTIONS -> {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = titleColor,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        // Short parts under sub-headings, each paragraph on its own,
-                        // so TalkBack can move heading to heading.
-                        val parts = sections.ifEmpty {
-                            listOf(HelpSection(null, body))
-                        }
-                        Column(
-                            modifier = Modifier
-                                .heightIn(max = 420.dp)
-                                .verticalScroll(rememberScrollState()),
-                        ) {
-                            parts.forEachIndexed { index, part ->
-                                if (index > 0) Spacer(modifier = Modifier.height(18.dp))
-                                part.heading?.let { heading ->
-                                    Text(
-                                        text = heading,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = textColor,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.semantics { heading() },
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                }
-                                part.text.split("\n\n").forEachIndexed { p, paragraph ->
-                                    if (p > 0) Spacer(modifier = Modifier.height(10.dp))
-                                    Text(
-                                        text = paragraph.trim(),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = textColor.copy(alpha = 0.92f),
-                                        lineHeight = 26.sp,
-                                    )
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(24.dp))
-                        HelpActionButton(
-                            label = closeLabel,
-                            background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
-                            textColor = actionButtonText(highContrast, whiteMode, Color.Black),
-                            contentDescription = closeCd,
-                            onClick = { resetAndClose() },
-                        )
-                        // Feedback flow removed with the backend (v2.0.0, fully local app).
-                    }
-
-                    HelpPane.FEEDBACK_FORM -> {
-                        Text(
-                            text = leaveFeedbackLabel,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = textColor,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = privacyNotice,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = mutedColor,
-                            lineHeight = 20.sp,
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        OutlinedTextField(
-                            value = feedbackText,
-                            onValueChange = { feedbackText = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 120.dp, max = 200.dp)
-                                .semantics { contentDescription = feedbackHint },
-                            placeholder = {
-                                Text(feedbackHint, color = mutedColor)
-                            },
-                            enabled = !isSubmitting,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = textColor,
-                                unfocusedTextColor = textColor,
-                                cursorColor = textColor,
-                                focusedBorderColor = if (highContrast) textColor else Color(0xFF3DBAD0),
-                                unfocusedBorderColor = fieldBorder,
-                            ),
-                        )
-                        if (submitError) {
-                            Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = titleColor,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                // Short parts under sub-headings, each paragraph on its own,
+                // so TalkBack can move heading to heading.
+                val parts = sections.ifEmpty {
+                    listOf(HelpSection(null, body))
+                }
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    parts.forEachIndexed { index, part ->
+                        if (index > 0) Spacer(modifier = Modifier.height(18.dp))
+                        part.heading?.let { heading ->
                             Text(
-                                text = submitFailed,
-                                color = Color(0xFFE57373),
-                                style = MaterialTheme.typography.bodySmall,
+                                text = heading,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = textColor,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.semantics { heading() },
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                        part.text.split("\n\n").forEachIndexed { p, paragraph ->
+                            if (p > 0) Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = paragraph.trim(),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = textColor.copy(alpha = 0.92f),
+                                lineHeight = 26.sp,
                             )
                         }
-                        Spacer(modifier = Modifier.height(20.dp))
-                        HelpActionButton(
-                            label = if (isSubmitting) "…" else submitLabel,
-                            background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
-                            textColor = actionButtonText(highContrast, whiteMode, Color.Black),
-                            contentDescription = submitCd,
-                            onClick = {
-                                val text = feedbackText.trim()
-                                if (text.isEmpty() || isSubmitting) return@HelpActionButton
-                                scope.launch {
-                                    isSubmitting = true
-                                    submitError = false
-                                    val ok = onSubmitFeedback(text)
-                                    isSubmitting = false
-                                    if (ok) {
-                                        pane = HelpPane.FEEDBACK_THANKS
-                                    } else {
-                                        submitError = true
-                                    }
-                                }
-                            },
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        HelpActionButton(
-                            label = backLabel,
-                            background = if (darkTheme) Color(0xFF424242) else Color(0xFFE0E0E0),
-                            textColor = textColor,
-                            contentDescription = backLabel,
-                            onClick = {
-                                submitError = false
-                                pane = HelpPane.INSTRUCTIONS
-                            },
-                        )
-                    }
-
-                    HelpPane.FEEDBACK_THANKS -> {
-                        Text(
-                            text = thanksTitle,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = textColor,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = thanksBody,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = textColor.copy(alpha = 0.92f),
-                            lineHeight = 26.sp,
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        HelpActionButton(
-                            label = closeLabel,
-                            background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
-                            textColor = actionButtonText(highContrast, whiteMode, Color.Black),
-                            contentDescription = closeCd,
-                            onClick = { resetAndClose() },
-                        )
                     }
                 }
+                Spacer(modifier = Modifier.height(24.dp))
+                HelpActionButton(
+                    label = closeLabel,
+                    background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
+                    textColor = actionButtonText(highContrast, whiteMode, Color.Black),
+                    contentDescription = closeCd,
+                    onClick = { onClose() },
+                )
             }
         }
     }

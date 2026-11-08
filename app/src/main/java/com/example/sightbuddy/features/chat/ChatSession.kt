@@ -1,6 +1,7 @@
 package com.example.sightbuddy.features.chat
 
 import androidx.compose.runtime.mutableStateListOf
+import com.example.sightbuddy.core.MemoryEntry
 import com.example.sightbuddy.ui.screens.TranscriptEntry
 
 /**
@@ -48,6 +49,9 @@ class ChatSession {
     fun forSaving(): List<TranscriptEntry> =
         entries.filterNot { it.kind == TranscriptEntry.Kind.SYSTEM }
 
+    /** What Share sends: [forSaving]'s messages as text; see [ChatText]. */
+    fun forSharing(label: (TranscriptEntry.Kind) -> String): String = ChatText.of(forSaving(), label)
+
     fun isEmpty(): Boolean = entries.isEmpty()
 
     /** A new picture, another feature, or a session left too long: start over. */
@@ -57,4 +61,27 @@ class ChatSession {
         val trimmed = text.trim()
         if (trimmed.isNotEmpty()) entries.add(TranscriptEntry(kind, trimmed))
     }
+}
+
+/**
+ * A chat as plain text, for Android's share sheet: the current chat and a saved
+ * one come out the same. Oldest first, each message under the label it has on
+ * screen ("You asked:", "Answer:", "Scanned text:"), a blank line between. The
+ * app's own words are left out, as they are when a chat is saved.
+ */
+object ChatText {
+
+    fun of(entries: List<TranscriptEntry>, label: (TranscriptEntry.Kind) -> String): String =
+        entries
+            .filterNot { it.kind == TranscriptEntry.Kind.SYSTEM }
+            .joinToString("\n\n") { "${label(it.kind)}:\n${it.text}" }
+
+    /** A chat from Memories; a kind this version does not know is left out. */
+    fun ofSaved(entries: List<MemoryEntry>, label: (TranscriptEntry.Kind) -> String): String =
+        of(
+            entries.mapNotNull { e ->
+                TranscriptEntry.Kind.entries.firstOrNull { it.name == e.kind }?.let { TranscriptEntry(it, e.text) }
+            },
+            label,
+        )
 }

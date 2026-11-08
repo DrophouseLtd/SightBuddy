@@ -40,6 +40,22 @@ import com.example.sightbuddy.R
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.onLongClick
+import com.example.sightbuddy.features.chat.MessageMenu
+import com.example.sightbuddy.ui.rememberLanguageTagged
+import com.example.sightbuddy.ui.rememberScreenReaderOn
+import kotlinx.coroutines.delay
 
 /** One message in a feature's history: scanned text, the user's words, or a reply. */
 data class TranscriptEntry(val kind: Kind, val text: String) {
@@ -59,13 +75,16 @@ data class TranscriptEntry(val kind: Kind, val text: String) {
 
 /**
  * The session's messages, newest at the bottom and scrolled into view. Each one
- * is its own block of selectable text, so the screen reader can step through it
- * word by word or letter by letter to spell out a name the voice said.
+ * is its own block of text, so the screen reader can step through it word by
+ * word or letter by letter to spell out a name the voice said. A long press
+ * selects it; with a screen reader on, it opens the message's menu instead
+ * ([messageMenu]).
  */
 @Composable
 fun ChatMessages(
     entries: List<TranscriptEntry>,
     pendingQuestion: String?,
+    pendingAnswer: String?,
     working: Boolean,
     emptyText: String?,
     textColor: Color,
@@ -79,6 +98,11 @@ fun ChatMessages(
     palette: BrandPalette? = null,
     /** Scroll to the newest message as messages arrive (off for reading a saved chat). */
     followLatest: Boolean = true,
+    /**
+     * The messages' pop-up menus, offered while a screen reader runs (issue #21,
+     * [MessageMenu]). Null: no menu, as in a saved chat.
+     */
+    messageMenu: MessageMenuHost? = null,
 ) {
     val scannedLabel = stringResource(R.string.transcript_scanned_text)
     val questionLabel = stringResource(R.string.transcript_question)
@@ -100,7 +124,22 @@ fun ChatMessages(
         entries
     }
 
-    LaunchedEffect(shown.size, working) {
+    // The answer being written grows in one bubble, a sentence at a time,
+    // until it is done (issue #24); the finished answer takes its place.
+    val withAnswer = if (pendingAnswer != null) {
+        shown + TranscriptEntry(TranscriptEntry.Kind.ANSWER, pendingAnswer)
+    } else {
+        shown
+    }
+
+    val screenReaderOn = rememberScreenReaderOn()
+
+    // Followed as it grows, too, but not with a screen reader: each scroll
+    // makes TalkBack play its scroll tone, which sounded like a tick through
+    // the whole reading (phone, 2026-10-27). Then only a new message, and the
+    // finished answer, scroll the list.
+    val growth = if (screenReaderOn) null else pendingAnswer?.length
+    LaunchedEffect(withAnswer.size, working, growth) {
         if (!followLatest) return@LaunchedEffect
         withFrameNanos { }
         scroll.animateScrollTo(scroll.maxValue)
@@ -112,7 +151,7 @@ fun ChatMessages(
     ) {
         // An empty chat opens with a message like any other, which gives way to
         // the conversation once there is one.
-        if (shown.isEmpty() && !working && emptyText != null) {
+        if (withAnswer.isEmpty() && !working && emptyText != null) {
             MessageBubble(
                 label = answerLabel,
                 text = emptyText,
@@ -124,7 +163,8 @@ fun ChatMessages(
                 palette = palette,
             )
         }
-        shown.forEach { entry ->
+        withAnswer.forEachIndexed { index, entry ->
+            val items = if (messageMenu != null) MessageMenu.items(entry.kind, screenReaderOn) else emptyList()
             MessageBubble(
                 label = labelOf(entry.kind),
                 text = entry.text,
@@ -134,6 +174,7 @@ fun ChatMessages(
                 accent = accent,
                 faint = faint,
                 palette = palette,
+                menu = if (messageMenu != null && items.isNotEmpty()) messageMenu.slot(index, entry, items) else null,
             )
         }
         if (working) {
@@ -157,6 +198,8 @@ private fun MessageBubble(
     accent: Color,
     faint: Boolean = false,
     palette: BrandPalette? = null,
+    /** The message's pop-up menu; null for none, and then the text is selectable. */
+    menu: MessageMenuSlot? = null,
 ) {
     // Messaging-app shape: the corner nearest the speaker's side is tighter.
     val shape = if (palette != null && !faint && !highContrast) {
@@ -210,17 +253,136 @@ private fun MessageBubble(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.semantics { heading() },
             )
-            SelectionContainer {
-                Text(
-                    text = text,
-                    color = ink,
-                    fontSize = 18.sp,
-                    lineHeight = 26.sp,
-                )
+            if (menu == null) {
+                SelectionContainer { MessageText(text, ink) }
+            } else {
+                MessageTextWithMenu(text, ink, menu)
             }
         }
     }
 }
+
+/**
+ * A message's text, tagged with the languages in it once they are found
+ * (issue #26), so TalkBack reads Arabic or Chinese with its own voice.
+ */
+@Composable
+private fun MessageText(text: String, ink: Color, modifier: Modifier = Modifier) {
+    Text(
+        text = rememberLanguageTagged(text),
+        color = ink,
+        fontSize = 18.sp,
+        lineHeight = 26.sp,
+        modifier = modifier,
+    )
+}
+
+/**
+ * The chat's message menus, as AppController keeps them (issue #21): the menu
+ * is a pop-up for the whole app ([com.example.sightbuddy.AppController.popupOpen]),
+ * so its state is the controller's, not the message's. Messages are known by
+ * their place in the chat as shown.
+ */
+class MessageMenuHost(
+    /** The message whose menu is open. */
+    val openAt: Int?,
+    /** The message TalkBack is to be sent back to. */
+    val focusBackTo: Int?,
+    val onOpen: (index: Int) -> Unit,
+    /** Back or a touch outside (focusBack true), or the message going (false). */
+    val onClose: (index: Int, focusBack: Boolean) -> Unit,
+    val onChoose: (index: Int, entry: TranscriptEntry, item: MessageMenu.Item) -> Unit,
+    val onFocusReturned: (index: Int) -> Unit,
+) {
+    internal fun slot(index: Int, entry: TranscriptEntry, items: List<MessageMenu.Item>) = MessageMenuSlot(
+        items = items,
+        open = openAt == index,
+        focusBack = focusBackTo == index,
+        onOpen = { onOpen(index) },
+        onClose = { focusBack -> onClose(index, focusBack) },
+        onChoose = { item -> onChoose(index, entry, item) },
+        onFocusReturned = { onFocusReturned(index) },
+    )
+}
+
+/** One message's part of [MessageMenuHost]. */
+internal class MessageMenuSlot(
+    val items: List<MessageMenu.Item>,
+    val open: Boolean,
+    val focusBack: Boolean,
+    val onOpen: () -> Unit,
+    val onClose: (focusBack: Boolean) -> Unit,
+    val onChoose: (MessageMenu.Item) -> Unit,
+    val onFocusReturned: () -> Unit,
+)
+
+/**
+ * A message with its pop-up menu, while a screen reader runs (issue #21). A
+ * press and hold (TalkBack: double-tap and hold) opens it: the same
+ * DropdownMenu as a memory's ⋮, read "Copy, 1 of 3". A choice or Back closes
+ * it; after Back, and after Copy once anything said about it has been said,
+ * focus goes back to the message ([MessageMenu.focusBack]).
+ *
+ * The text is not selectable here: the menu takes the long press that selected
+ * it. The hold is TalkBack's standard long click, not a custom action, and the
+ * message stays one plain text node, so TalkBack's reading controls
+ * (characters, words, lines) work on it as on any text.
+ */
+@Composable
+private fun MessageTextWithMenu(text: String, ink: Color, menu: MessageMenuSlot) {
+    val focus = remember { FocusRequester() }
+    val openLabel = stringResource(R.string.message_menu_open)
+    val copyLabel = stringResource(R.string.message_menu_copy)
+    val shareLabel = stringResource(R.string.message_menu_share)
+    val saveChatLabel = stringResource(R.string.bar_save_chat)
+    fun labelOf(item: MessageMenu.Item) = when (item) {
+        MessageMenu.Item.COPY -> copyLabel
+        MessageMenu.Item.SHARE -> shareLabel
+        MessageMenu.Item.SAVE_CHAT -> saveChatLabel
+    }
+    val current by rememberUpdatedState(menu)
+
+    // The message going with its menu open (a new picture, the screen reader
+    // switched off) must not leave the app silenced behind a menu that is gone.
+    DisposableEffect(Unit) {
+        onDispose {
+            if (current.open) current.onClose(false)
+            if (current.focusBack) current.onFocusReturned()
+        }
+    }
+
+    // As in Settings: TalkBack follows the input focus, and drops a focus moved
+    // while the pop-up is still going, hence the wait.
+    if (menu.focusBack) {
+        LaunchedEffect(Unit) {
+            delay(MENU_RETURN_FOCUS_DELAY_MS)
+            runCatching { focus.requestFocus() }
+            current.onFocusReturned()
+        }
+    }
+
+    Box {
+        MessageText(
+            text = text,
+            ink = ink,
+            modifier = Modifier
+                .focusRequester(focus)
+                .focusable()
+                .semantics { onLongClick(label = openLabel) { current.onOpen(); true } }
+                // For a screen reader that passes the hold on as a touch instead.
+                .pointerInput(Unit) { detectTapGestures(onLongPress = { current.onOpen() }) },
+        )
+        DropdownMenu(expanded = menu.open, onDismissRequest = { menu.onClose(true) }) {
+            com.example.sightbuddy.ui.AppLanguageForScreenReader()
+            menu.items.forEach { item ->
+                DropdownMenuItem(text = { Text(labelOf(item)) }, onClick = { menu.onChoose(item) })
+            }
+        }
+    }
+}
+
+/** Settings' wait before moving TalkBack back to a row (RETURN_FOCUS_DELAY_MS). */
+private const val MENU_RETURN_FOCUS_DELAY_MS = 350L
 
 /** A bottom-row button: square-cornered, reads only its label. */
 @Composable

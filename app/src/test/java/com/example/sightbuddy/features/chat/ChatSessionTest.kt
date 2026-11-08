@@ -1,5 +1,6 @@
 package com.example.sightbuddy.features.chat
 
+import com.example.sightbuddy.core.MemoryEntry
 import com.example.sightbuddy.ui.screens.TranscriptEntry.Kind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -36,6 +37,60 @@ class ChatSessionTest {
             listOf(Kind.QUESTION, Kind.ANSWER, Kind.SCANNED_TEXT),
             chat.forSaving().map { it.kind },
         )
+    }
+
+    private val labels = mapOf(
+        Kind.QUESTION to "You asked",
+        Kind.ANSWER to "Answer",
+        Kind.SCANNED_TEXT to "Scanned text",
+        Kind.SYSTEM to "Sight Buddy",
+    )
+
+    /** Share sends what Save chat keeps: in order, each message under its label. */
+    @Test
+    fun sharingSendsTheSavedChatAsText() {
+        val chat = ChatSession()
+        chat.system("Let me take a picture.")
+        chat.user("What is this?")
+        chat.model("A tin of tomatoes.")
+        chat.system("Sorry, could you please repeat.")
+        chat.scanned("PEELED TOMATOES\n400 g")
+
+        assertEquals(
+            "You asked:\nWhat is this?\n\n" +
+                "Answer:\nA tin of tomatoes.\n\n" +
+                "Scanned text:\nPEELED TOMATOES\n400 g",
+            chat.forSharing { labels.getValue(it) },
+        )
+    }
+
+    /** A chat from Memories is shared as the same text, without the app's words. */
+    @Test
+    fun aSavedChatSharesAsTheSameText() {
+        val saved = listOf(
+            MemoryEntry("SCANNED_TEXT", "Dear Sir or Madam,\nThank you."),
+            MemoryEntry("SYSTEM", "No text was detected."),
+            MemoryEntry("QUESTION", "Who is it from?"),
+            MemoryEntry("A_KIND_FROM_ANOTHER_VERSION", "Anything"),
+            MemoryEntry("ANSWER", "The bank."),
+        )
+
+        assertEquals(
+            "Scanned text:\nDear Sir or Madam,\nThank you.\n\n" +
+                "You asked:\nWho is it from?\n\n" +
+                "Answer:\nThe bank.",
+            ChatText.ofSaved(saved) { labels.getValue(it) },
+        )
+    }
+
+    /** Nothing but the app's own words is nothing to share. */
+    @Test
+    fun aChatWithOnlyTheAppsWordsHasNothingToShare() {
+        val chat = ChatSession()
+        assertEquals("", chat.forSharing { labels.getValue(it) })
+        chat.system("Looking for text.")
+        assertEquals("", chat.forSharing { labels.getValue(it) })
+        assertEquals("", ChatText.ofSaved(listOf(MemoryEntry("SYSTEM", "Note"))) { labels.getValue(it) })
     }
 
     /** The aim guidance says the same line while the camera hunts for a page. */

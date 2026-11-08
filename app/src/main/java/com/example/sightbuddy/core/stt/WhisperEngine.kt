@@ -56,18 +56,18 @@ class WhisperEngine private constructor(
         const val VAD_WINDOW = 512
 
         /** Blocking load; call from a background dispatcher. Null on failure. */
-        fun load(models: SttModelManager): WhisperEngine? = try {
+        fun load(files: SttModelManager.WhisperFiles): WhisperEngine? = try {
             val recognizer = OfflineRecognizer(
                 config = OfflineRecognizerConfig(
                     featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
                     modelConfig = OfflineModelConfig(
                         whisper = OfflineWhisperModelConfig(
-                            encoder = models.encoderFile().absolutePath,
-                            decoder = models.decoderFile().absolutePath,
+                            encoder = files.encoder.file.absolutePath,
+                            decoder = files.decoder.file.absolutePath,
                             language = "en",
                             task = "transcribe",
                         ),
-                        tokens = models.tokensFile().absolutePath,
+                        tokens = files.tokens.file.absolutePath,
                         modelType = "whisper",
                         numThreads = 4,
                         debug = false,
@@ -77,7 +77,7 @@ class WhisperEngine private constructor(
             val vad = Vad(
                 config = VadModelConfig(
                     sileroVadModelConfig = SileroVadModelConfig(
-                        model = models.vadFile().absolutePath,
+                        model = files.vad.file.absolutePath,
                         threshold = 0.5f,
                         minSilenceDuration = 0.25f,
                         minSpeechDuration = 0.25f,

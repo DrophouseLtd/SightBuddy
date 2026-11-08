@@ -1,8 +1,10 @@
 name: Build
 
-# Every pull request and every push to main: the app builds and its unit tests
-# pass. No secrets: this is the dev flavor, debug-signed, the same build a
-# clone of this repo makes.
+# Every pull request and every push to main: the app builds, its unit tests
+# pass, and lint finds nothing new (issues already present are listed in
+# app/lint-baseline.xml). No secrets: this is the dev flavor, debug-signed,
+# the same build a clone of this repo makes. A fixed bug keeps its test
+# here, so it cannot come back unnoticed.
 on:
   pull_request:
   push:
@@ -11,9 +13,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    name: Build and unit tests
+    name: Build, unit tests and lint
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -29,7 +35,29 @@ jobs:
           java-version: 17
           cache: gradle
 
-      - name: Build and test
+      # The sherpa-onnx runtime is fetched and checked against its published
+      # checksum by the build itself (downloadSherpaOnnx); cache it.
+      - uses: actions/cache@v4
+        with:
+          path: app/libs/*.aar
+          key: sherpa-${{ hashFiles('app/build.gradle.kts') }}
+
+      - name: Build, test and lint
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDevDebug testDevDebugUnitTest --no-daemon
+          ./gradlew assembleDevDebug testDevDebugUnitTest lintDevDebug --no-daemon
+
+      # Google Play refuses native code that does not support 16 KB memory
+      # pages. A library update can bring such code in; catch it here.
+      - name: Native libraries support 16 KB pages
+        run: python3 .github/scripts/check_16kb_pages.py app/build/outputs/apk/dev/debug/*.apk
+
+      - name: Keep reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            app/build/reports/tests/
+            app/build/reports/lint-results-devDebug.*
+          retention-days: 7

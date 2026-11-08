@@ -1,0 +1,25 @@
+name: Suggestion
+description: An idea that would make Sight Buddy more useful.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The task or situation, for example "read a restaurant menu" or "find my glasses".
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What happens today?
+      description: How you do it now, with Sight Buddy or another app, and what gets in the way.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: Your idea, if you have one. A description of the problem is enough on its own.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?

@@ -15,9 +15,9 @@ import org.json.JSONObject
 import android.graphics.Bitmap
 
 /**
- * Dev builds only: what the text recogniser saw in each frame and what the
- * guide made of it, for the on-screen overlay and for replaying a session
- * against [PageTracker] and [TextAimGuide].
+ * Dev builds only: what the text recogniser saw in each frame, and what the
+ * page-corner model made of it, for the on-screen overlay and for looking at
+ * a session offline.
  *
  * Every event is one JSON line, both to logcat (`adb logcat -s OcrDebug`) and,
  * since logcat's buffer only holds a minute or so, to a file per Text chat
@@ -25,8 +25,8 @@ import android.graphics.Bitmap
  *
  *   adb pull /sdcard/Android/data/com.drophouse.sightbuddy.debug/files/ocr
  *
- * A frame line has "blocks"; a guide line has "step". Block text is cut to 40
- * characters.
+ * A frame line has "blocks"; a corners line has "corners". Block text is cut
+ * to 40 characters.
  */
 object OcrDebug {
 
@@ -39,25 +39,11 @@ object OcrDebug {
         val widthPx: Int,
         val heightPx: Int,
         val ocrMs: Long,
-        val blocks: List<PageTracker.Block>,
-    )
-
-    /** What the guide made of the latest aim frame. */
-    data class Guide(
-        val step: String,
-        val track: PageTracker.Result,
-        val paper: PaperFinder.Paper? = null,
-        /** True when the guide steered by the paper rather than the text. */
-        val paperUsed: Boolean = false,
-        /** What the guide steered by: the sheet, or the text page. */
-        val target: LocalTextExtractor.TextFrame? = track.target,
+        val blocks: List<LocalTextExtractor.Block>,
     )
 
     private val _frame = MutableStateFlow<Frame?>(null)
     val frame: StateFlow<Frame?> = _frame.asStateFlow()
-
-    private val _guide = MutableStateFlow<Guide?>(null)
-    val guide: StateFlow<Guide?> = _guide.asStateFlow()
 
     private val writer = Executors.newSingleThreadExecutor()
     private var dir: File? = null
@@ -70,49 +56,41 @@ object OcrDebug {
         dir = logDir
     }
 
-    fun publish(source: String, widthPx: Int, heightPx: Int, ocrMs: Long, blocks: List<PageTracker.Block>) {
+    fun publish(source: String, widthPx: Int, heightPx: Int, ocrMs: Long, blocks: List<LocalTextExtractor.Block>) {
         if (!enabled) return
         val frame = Frame(System.currentTimeMillis(), source, widthPx, heightPx, ocrMs, blocks)
         _frame.value = frame
-        // A read or capture frame is not tracked; its boxes are drawn plain.
-        if (source != "aim") _guide.value = null
         emit(frameJson(frame))
     }
 
-    fun guide(
-        step: String,
-        track: PageTracker.Result,
-        paper: PaperFinder.Paper? = null,
-        paperUsed: Boolean = false,
-        target: LocalTextExtractor.TextFrame? = track.target,
-    ) {
+    /**
+     * The page-corner model's view of a frame: its four corners,
+     * top-left first, with how sure it is of each, the page's share of the
+     * frame, and the step taken ("aim") or the crop made ("capture"). The
+     * overlay does not draw it.
+     */
+    fun corners(source: String, step: String, corners: PageCorners.Corners, frameMs: Long, area: Float) {
         if (!enabled) return
-        _guide.value = Guide(step, track, paper, paperUsed, target)
-        val json = JSONObject()
-            .put("t", System.currentTimeMillis())
-            .put("step", step)
-            .put("held", track.held)
-            .put("kept", JSONArray(track.kept.sorted()))
-            .put("chosen", JSONArray(track.chosen.sorted()))
-        target?.let {
-            json.put("target", JSONArray().put(round(it.left)).put(round(it.top)).put(round(it.right)).put(round(it.bottom)))
-            json.put("targetLineH", it.lineHeightPx)
+        val points = JSONArray()
+        corners.corners.forEach { c ->
+            points.put(JSONArray().put(round(c.x)).put(round(c.y)).put(round(c.confidence)))
         }
-        track.target?.let {
-            json.put("textTarget", JSONArray().put(round(it.left)).put(round(it.top)).put(round(it.right)).put(round(it.bottom)))
-        }
-        paper?.let {
-            json.put("paper", JSONArray().put(round(it.left)).put(round(it.top)).put(round(it.right)).put(round(it.bottom)))
-            json.put("paperShare", round(it.share)).put("paperSolidity", round(it.solidity)).put("paperUsed", paperUsed)
-        }
-        emit(json.toString())
+        emit(
+            JSONObject()
+                .put("t", System.currentTimeMillis())
+                .put("src", source)
+                .put("corners", points)
+                .put("area", round(area))
+                .put("ms", frameMs)
+                .put("step", step)
+                .toString()
+        )
     }
 
     /** Starts a new session: the overlay empties and a new file is begun. */
     fun newSession() {
         if (!enabled) return
         _frame.value = null
-        _guide.value = null
         val logDir = dir ?: return
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
         file = File(logDir, "ocr-$stamp.jsonl")

@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *  - runs until the user stops it, or [MAX_RECORDING_MS] is reached
  *  - hard cap of [MAX_RECORDING_MS] per utterance
  *
- * Exposes the same flow surface as the old service ([recognizedText],
+ * Exposes the same flow surface as the old service ([transcripts],
  * [isListening], [lastError]) plus [events] for result/empty notifications.
  */
 class VoiceInputService(
@@ -125,8 +125,22 @@ class VoiceInputService(
         runCatching { manager.abandonAudioFocusRequest(request) }
     }
 
-    private val _recognizedText = MutableStateFlow("")
-    val recognizedText = _recognizedText.asStateFlow()
+    private val _transcripts = Transcripts()
+
+    /** Each finished transcript, once; see [Transcripts]. */
+    val transcripts = _transcripts.flow
+
+    /**
+     * Whether the recording in progress may deliver its transcript (issue #25).
+     * A recording ended by the user's own stop is transcribed; one ended by
+     * anything else (a feature switch, Settings, the background, a pop-up) is
+     * discarded.
+     */
+    private val recordingGate = RecordingGate()
+
+    /** Silero VAD for the Gemma path, loaded lazily from the Whisper download. */
+    @Volatile
+    private var gemmaVad: SileroVad? = null
 
     private val _lastError = MutableStateFlow(0)
     val lastError = _lastError.asStateFlow()
@@ -157,7 +171,10 @@ class VoiceInputService(
     init {
         // Mirror the fallback recognizer's flows so callers observe one surface.
         scope.launch {
-            legacy.recognizedText.collect { if (it.isNotEmpty()) _recognizedText.value = it }
+            legacy.transcripts.collect {
+                // A recording cancelled by anything but the user's stop is dropped.
+                if (!recordingGate.discardsTranscript()) _transcripts.deliver(it)
+            }
         }
         scope.launch {
             legacy.lastError.collect { err ->
@@ -199,7 +216,11 @@ class VoiceInputService(
         if (Locale.getDefault().language != "en") return
         if (!models.isReady() || !engineLoadStarted.compareAndSet(false, true)) return
         scope.launch {
-            val loaded = WhisperEngine.load(models)
+            // Only files that have matched their SHA-256 are handed out: files from
+            // an earlier version are hashed here once. One that fails is deleted and
+            // the download is offered again; until then the system recogniser.
+            val files = withContext(Dispatchers.IO) { models.verifiedFiles() }
+            val loaded = files?.let { WhisperEngine.load(it) }
             if (loaded != null) {
                 engine = loaded
                 _whisperReady.value = true
@@ -223,11 +244,12 @@ class VoiceInputService(
     }
 
     fun startListening() {
-        _recognizedText.value = ""
         _lastError.value = 0
+        recordingGate.reset()
         takeAudioFocus()
         // Opens synchronously, on purpose. This used to be deferred so the app's
-        // "listening" earcon could finish, but the app no longer plays one, and a
+        // "listening" earcon could finish; the start cue now plays as the mic opens
+        // (it is short, and a tap when Vibration is on), without waiting, and a
         // deferred open means a stop arriving first cancels it rather than ending a
         // live session. That is what stopped follow-up questions recording at all.
         val cloud = cloudTranscriber?.takeIf { it.isConfigured() }
@@ -242,12 +264,12 @@ class VoiceInputService(
         _isListening.value = true
         recordJob = scope.launch {
             when {
-                cloud != null -> recordAndSend("Cloud") { pcm, rate ->
+                cloud != null -> recordAndSend("Cloud", gemmaPath = false) { pcm, rate ->
                     withContext(Dispatchers.IO) {
                         cloud.transcribe(pcm, rate, Locale.getDefault().language)
                     }
                 }
-                gemma != null -> recordAndSend("Gemma") { pcm, rate ->
+                gemma != null -> recordAndSend("Gemma", gemmaPath = true) { pcm, rate ->
                     gemma.transcribe(pcm, rate)
                 }
                 else -> recordAndTranscribe(eng!!)
@@ -263,6 +285,40 @@ class VoiceInputService(
         } else {
             legacy.stopListening()
         }
+    }
+
+    /**
+     * Stop a recording that was not ended by the user's own stop (a feature
+     * switch, Settings, the background, a pop-up). If it was still open, its
+     * transcript is discarded: nothing is shown in the chat, nothing is asked
+     * (issue #25). Leaving also calls [discardPendingTranscript].
+     */
+    fun cancelListening() {
+        recordingGate.cancel(open = _isListening.value)
+        if (appOwnsRecording()) {
+            releaseAudioFocus()
+            stopRequested = true
+        } else {
+            legacy.stopListening()
+        }
+    }
+
+    /**
+     * The user left the feature or the app: a transcript still on its way,
+     * from a recording open or already stopped, is dropped (issue #25).
+     */
+    fun discardPendingTranscript() {
+        recordingGate.discardPending()
+    }
+
+    /** The Silero VAD for the Gemma path, loaded once from the Whisper download. */
+    private fun gemmaVadIfAvailable(): SileroVad? {
+        gemmaVad?.let { return it }
+        // Checked against its SHA-256 first (once; it is small).
+        val file = models.verifiedVad() ?: return null
+        val loaded = SileroVad.load(file)
+        gemmaVad = loaded
+        return loaded
     }
 
     @SuppressLint("MissingPermission") // RECORD_AUDIO is granted during onboarding.
@@ -330,6 +386,9 @@ class VoiceInputService(
             _isListening.value = false
         }
 
+        // A recording cancelled by anything but the user's stop is dropped.
+        if (recordingGate.discardsTranscript()) return
+
         if (maxedOut) {
             _events.tryEmit(SttEvent.AutoStopped(noSpeech = false))
         }
@@ -352,7 +411,7 @@ class VoiceInputService(
                 finishWithError()
             } else {
                 PrivateLog.i(TAG) { "Whisper transcription: $text" }
-                _recognizedText.value = text
+                _transcripts.deliver(text)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Transcription failed", e)
@@ -366,12 +425,15 @@ class VoiceInputService(
      * Record until the user stops, or the cap, then hand the audio to
      * [transcribe] (OpenAI or on-device Gemma).
      *
-     * No voice activity detection and no auto-stop: that is the entire point of
-     * this path. The silero detector also lives in the Whisper download, which a
-     * user on this path may never have fetched.
+     * No auto-stop: that is the entire point of this path. On the Gemma path
+     * ([gemmaPath]) the Silero VAD from the Whisper download is run over the
+     * recording first when it is available, so silence is "nothing heard"
+     * rather than a made-up transcript (issue #25).
      */
+    @SuppressLint("MissingPermission") // As above; a refusal throws into the catch.
     private suspend fun recordAndSend(
         label: String,
+        gemmaPath: Boolean,
         transcribe: suspend (pcm: ShortArray, sampleRate: Int) -> String?,
     ) {
         val sampleRate = WhisperEngine.SAMPLE_RATE
@@ -419,6 +481,9 @@ class VoiceInputService(
             releaseAudioFocus()
         }
 
+        // A recording cancelled by anything but the user's stop is dropped.
+        if (recordingGate.discardsTranscript()) return
+
         // Less than a quarter second is a stray tap, not a question.
         if (total < sampleRate / 4) {
             _lastError.value = ERROR_NO_MATCH
@@ -433,6 +498,18 @@ class VoiceInputService(
             offset += part.size
         }
 
+        // Gemma has no speech check of its own: run the Silero VAD (from the
+        // Whisper download) first, when it is available, so silence is "nothing
+        // heard" rather than a made-up transcript (issue #25).
+        if (gemmaPath) {
+            val vad = gemmaVadIfAvailable()
+            if (vad != null && !vad.hasSpeech(pcm)) {
+                _lastError.value = ERROR_NO_MATCH
+                _events.tryEmit(SttEvent.Empty)
+                return
+            }
+        }
+
         _isTranscribing.value = true
         val text = try {
             transcribe(pcm, sampleRate)
@@ -443,9 +520,13 @@ class VoiceInputService(
         if (text.isNullOrBlank()) {
             _lastError.value = ERROR_NO_MATCH
             _events.tryEmit(SttEvent.Empty)
+        } else if (gemmaPath && GemmaTranscriptGate.isNotSpeech(text)) {
+            // Gemma echoed its instruction or refused: no speech was heard.
+            _lastError.value = ERROR_NO_MATCH
+            _events.tryEmit(SttEvent.Empty)
         } else {
             PrivateLog.i(TAG) { "$label transcription: $text" }
-            _recognizedText.value = text
+            _transcripts.deliver(text)
         }
     }
 

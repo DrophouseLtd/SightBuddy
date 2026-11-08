@@ -64,6 +64,23 @@ class ApiGateTest {
         assertEquals(chat.errors.chatFull, ask(chat))
     }
 
+    private val readyLocal = object : LocalAnswerer {
+        override fun isReady() = true
+        override fun complete(openAiRequestBody: JSONObject) = "local answer"
+    }
+
+    /** What the prompts are built for (issue #20) is where the answer then goes. */
+    @Test
+    fun theRouteIsKnownBeforeTheRequest() {
+        assertTrue(transport(allowed = false, local = readyLocal).answersOnDevice())
+        assertFalse(transport(allowed = true, local = readyLocal).answersOnDevice())
+        assertFalse(transport(allowed = false).answersOnDevice())
+        val offline = OpenAiTransport(apiKeyProvider = { "sk-test" }, online = { false }, local = readyLocal)
+        assertTrue(offline.answersOnDevice())
+        val switchedOff = OpenAiTransport(apiKeyProvider = { "" }, local = readyLocal, localAllowed = { false })
+        assertFalse(switchedOff.answersOnDevice())
+    }
+
     @Test
     fun switchedOff_answersOnDevice() {
         val local = object : LocalAnswerer {

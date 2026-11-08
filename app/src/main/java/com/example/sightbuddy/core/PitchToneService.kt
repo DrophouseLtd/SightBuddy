@@ -23,6 +23,9 @@ import kotlin.math.sin
  *
  * It owns its own [AudioTrack] and touches nothing else, so it cannot interfere
  * with speech or with the cue pool.
+ *
+ * Not gated by Settings' Sound effects: while Pitch feedback is on, its
+ * guidance is never silent, and [Cues] decides when the tone plays.
  */
 class PitchToneService {
 
