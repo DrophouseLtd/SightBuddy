@@ -16,8 +16,11 @@ import com.example.sightbuddy.R
  *
  * SoundPool.load() is asynchronous; samples are only playable after the
  * OnLoadCompleteListener fires for their sound ID.
+ *
+ * [allowed] is Settings' Sound effects: while it is off, nothing here makes a
+ * sound, whoever asks. Stopping always works.
  */
-class SoundFXService(context: Context) {
+class SoundFXService(context: Context, private val allowed: () -> Boolean = { true }) {
 
     private val appContext = context.applicationContext
     private val soundPool: SoundPool
@@ -86,6 +89,7 @@ class SoundFXService(context: Context) {
      */
     fun play(sfx: SFX, loop: Int = 0) {
         stop()
+        if (!allowed()) return
         val id = sounds[sfx] ?: return
         if (id !in loadedIds) {
             Log.w("SoundFXService", "$sfx (id=$id) not loaded yet, skipping")
@@ -106,6 +110,7 @@ class SoundFXService(context: Context) {
      * that can loop rather than to this one-shot.
      */
     fun playAlongside(sfx: SFX) {
+        if (!allowed()) return
         val id = sounds[sfx] ?: return
         if (id !in loadedIds) {
             Log.w("SoundFXService", "$sfx (id=$id) not loaded yet, skipping")
@@ -125,7 +130,7 @@ class SoundFXService(context: Context) {
      * Off, see [LOOPS_ENABLED].
      */
     fun startLoop(loop: Loop) {
-        if (!LOOPS_ENABLED) return
+        if (!LOOPS_ENABLED || !allowed()) return
         if (playingLoop == loop) return
         stopLoop()
         // Built by hand rather than MediaPlayer.create: the attributes have to be

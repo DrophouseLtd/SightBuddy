@@ -6,10 +6,16 @@
 -keepattributes Signature
 -keepattributes *Annotation*
 
-# ── TensorFlow Lite ──────────────────────────────────────────────────────────
--keep class org.tensorflow.lite.** { *; }
--keepclassmembers class org.tensorflow.lite.** { *; }
--dontwarn org.tensorflow.lite.**
+# ── MediaPipe Tasks (the object detector; it calls Java from native code) ────
+-keep class com.google.mediapipe.** { *; }
+-keep class com.google.protobuf.** { *; }
+# Flogger, MediaPipe's logger, finds its caller by its own class names on the
+# stack: renamed, it threw "no caller found on the stack" when the detector was
+# made, and the release build crashed at launch (2.4.2, versionCode 18).
+-keep class com.google.common.flogger.** { *; }
+-dontwarn com.google.common.flogger.**
+-dontwarn com.google.mediapipe.**
+-dontwarn com.google.protobuf.**
 
 # ── ML Kit Text Recognition ──────────────────────────────────────────────────
 -keep class com.google.mlkit.** { *; }
@@ -32,6 +38,11 @@
 # ── sherpa-onnx (JNI calls back into these classes; must survive R8) ─────────
 -keep class com.k2fsa.sherpa.onnx.** { *; }
 -dontwarn com.k2fsa.sherpa.onnx.**
+
+# ── ONNX Runtime (page-corner model) ─────────────────────────────────────────
+# Its JNI code builds and reads these classes by name; the AAR has no rules.
+-keep class ai.onnxruntime.** { *; }
+-dontwarn ai.onnxruntime.**
 
 # ── LiteRT-LM (on-device Gemma) ──────────────────────────────────────────────
 # The AAR ships no consumer rules, and its JNI code reads these classes by name

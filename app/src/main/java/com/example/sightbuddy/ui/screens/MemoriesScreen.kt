@@ -55,7 +55,8 @@ import com.example.sightbuddy.ui.theme.BrandPalette
 
 /**
  * Saved chats: a list, like Envision's library, where each chat opens to be
- * read, and can be renamed or deleted from its ⋮ menu (or TalkBack's actions).
+ * read, and can be renamed, shared or deleted from its ⋮ menu (or TalkBack's
+ * actions).
  */
 @Composable
 fun MemoriesScreen(
@@ -65,6 +66,7 @@ fun MemoriesScreen(
     whiteMode: Boolean,
     featureLabel: (String) -> String,
     onRename: (Memory, String) -> Unit,
+    onShare: (Memory) -> Unit,
     onDelete: (Memory) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -99,7 +101,14 @@ fun MemoriesScreen(
         if (shown != null) {
             MemoryReader(shown, subtitle(shown), textColor, secondary, headingColor, highContrast, palette)
         } else {
-            Column(modifier = Modifier.fillMaxSize().padding(top = 96.dp)) {
+            // Its own group in TalkBack's order, after Back, so the list keeps its
+            // order rather than being sorted by where rows sit on screen.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .semantics { isTraversalGroup = true; traversalIndex = 0f }
+                    .padding(top = 96.dp),
+            ) {
                 Text(
                     text = stringResource(R.string.memories_title),
                     style = MaterialTheme.typography.headlineSmall,
@@ -147,6 +156,7 @@ fun MemoriesScreen(
                                 secondary = secondary,
                                 onOpen = { open = memory },
                                 onRename = { renaming = memory },
+                                onShare = { onShare(memory) },
                                 onDelete = { deleting = memory },
                             )
                         }
@@ -207,7 +217,10 @@ fun MemoriesScreen(
         var name by remember(memory.id) { mutableStateOf(memory.name) }
         AlertDialog(
             onDismissRequest = { renaming = null },
-            title = { Text(stringResource(R.string.memories_rename)) },
+            title = {
+                com.example.sightbuddy.ui.AppLanguageForScreenReader()
+                Text(stringResource(R.string.memories_rename))
+            },
             text = {
                 OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true)
             },
@@ -229,7 +242,10 @@ fun MemoriesScreen(
     deleting?.let { memory ->
         AlertDialog(
             onDismissRequest = { deleting = null },
-            title = { Text(stringResource(R.string.memories_delete_confirm, memory.name)) },
+            title = {
+                com.example.sightbuddy.ui.AppLanguageForScreenReader()
+                Text(stringResource(R.string.memories_delete_confirm, memory.name))
+            },
             confirmButton = {
                 TextButton(onClick = {
                     onDelete(memory)
@@ -252,19 +268,22 @@ private fun MemoryRow(
     secondary: Color,
     onOpen: () -> Unit,
     onRename: () -> Unit,
+    onShare: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val renameLabel = stringResource(R.string.memories_rename)
+    val shareLabel = stringResource(R.string.memories_share)
     val deleteLabel = stringResource(R.string.memories_delete)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onOpen)
-            // TalkBack users reach Rename and Delete from the row's actions menu.
+            // TalkBack users reach Rename, Share and Delete from the row's actions menu.
             .semantics {
                 customActions = listOf(
                     CustomAccessibilityAction(renameLabel) { onRename(); true },
+                    CustomAccessibilityAction(shareLabel) { onShare(); true },
                     CustomAccessibilityAction(deleteLabel) { onDelete(); true },
                 )
             }
@@ -287,7 +306,9 @@ private fun MemoryRow(
                 Text("⋮", color = textColor, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                com.example.sightbuddy.ui.AppLanguageForScreenReader()
                 DropdownMenuItem(text = { Text(renameLabel) }, onClick = { menuOpen = false; onRename() })
+                DropdownMenuItem(text = { Text(shareLabel) }, onClick = { menuOpen = false; onShare() })
                 DropdownMenuItem(text = { Text(deleteLabel) }, onClick = { menuOpen = false; onDelete() })
             }
         }
@@ -311,6 +332,8 @@ private fun MemoryReader(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // As the list: its own group, after Back.
+            .semantics { isTraversalGroup = true; traversalIndex = 0f }
             .padding(start = 16.dp, end = 16.dp, top = 96.dp),
     ) {
         Text(
@@ -333,6 +356,7 @@ private fun MemoryReader(
         ChatMessages(
             entries = entries,
             pendingQuestion = null,
+            pendingAnswer = null,
             working = false,
             emptyText = null,
             textColor = textColor,

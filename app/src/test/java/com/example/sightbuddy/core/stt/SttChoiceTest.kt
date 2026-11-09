@@ -14,15 +14,17 @@ class SttChoiceTest {
     @Test
     fun theChoiceRunsWhenItsModelIsHere() {
         assertEquals(WHISPER, eff(WHISPER, whisper = true, gemma = true))
-        assertEquals(GEMMA, eff(GEMMA, whisper = true, gemma = true))
         assertEquals(ANDROID, eff(ANDROID, whisper = true, gemma = true))
     }
 
     @Test
-    fun aMissingModelFallsBackToTheOtherThenAndroid() {
-        assertEquals(GEMMA, eff(WHISPER, whisper = false, gemma = true))
-        assertEquals(WHISPER, eff(GEMMA, whisper = true, gemma = false))
-        assertEquals(ANDROID, eff(WHISPER, whisper = false, gemma = false))
+    fun gemmaSpeechIsHiddenAndAStoredChoiceOfItRunsWhisper() {
+        // Hidden 2026-10-24: slower than Whisper and it made up text from silence.
+        assertEquals(WHISPER, SttChoice.fromKey("gemma"))
+        assertEquals(WHISPER, eff(GEMMA, whisper = true, gemma = true))
+        // Never the fallback either: no Whisper means Android.
+        assertEquals(ANDROID, eff(WHISPER, whisper = false, gemma = true))
+        assertEquals(ANDROID, eff(GEMMA, whisper = false, gemma = true))
     }
 
     @Test
@@ -31,8 +33,8 @@ class SttChoiceTest {
     }
 
     @Test
-    fun settingsCyclesThroughInstalledModelsThenAndroid() {
-        assertEquals(listOf(WHISPER, GEMMA, ANDROID), SttChoice.available(whisperReady = true, gemmaInstalled = true))
-        assertEquals(listOf(GEMMA, ANDROID), SttChoice.available(whisperReady = false, gemmaInstalled = true))
+    fun settingsOffersWhisperThenAndroidNeverGemma() {
+        assertEquals(listOf(WHISPER, ANDROID), SttChoice.available(whisperReady = true, gemmaInstalled = true))
+        assertEquals(listOf(ANDROID), SttChoice.available(whisperReady = false, gemmaInstalled = true))
     }
 }

@@ -52,31 +52,6 @@ class ImageChatViewModel(
 
     private var lastImageBase64: String = ""
     private var activeCall: Call? = null
-    private val systemMsg = "You are a helpful visual assistant for a visually impaired user. " +
-        "Be clear, concise, and conversational. " +
-        "Describe what matters most first. Mention colours, weather, distances, and potential hazards when relevant. " +
-        // The user speaks their questions; speech-to-text may garble them. Guard
-        // against the model's canned "I can't access images" refusal — the photo
-        // IS attached to every request.
-        "The user's photo is attached to every message, so you can always see it. " +
-        "Never say you cannot access, view, or see images. " +
-        "Questions are transcribed from speech and may contain recognition errors. " +
-        "Interpret them charitably as being about the photo. If a question mentions " +
-        "something that is not in the image, do not just say it is absent — describe " +
-        "what you DO see and its relevant details (such as colours), since the wording " +
-        "was probably misheard. " +
-        // Follow-ups were being answered with another tour of the scene instead of
-        // the thing that was actually asked.
-        "When the user asks a question, answer that question first and directly. " +
-        "Do not re-describe the scene unless the question calls for it. " +
-        OpenAiTransport.LLM_USER_SAFETY_INSTRUCTION + " " +
-        // A camera snapshot must never be used as a mobility aid: the scene is
-        // stale by the time the answer is spoken, and errors are dangerous.
-        "Do not provide traffic, navigation, road-crossing, or mobility routing guidance. " +
-        "If the user asks about those topics, politely decline and suggest dedicated mobility aids or a sighted companion. " +
-        OpenAiTransport.LLM_MAX_WORDS_INSTRUCTION +
-        // The prompt is English whatever the app language; the answer must not be.
-        OpenAiTransport.replyLanguageInstruction()
 
     fun cancelActiveRequest() {
         activeCall?.cancel()
@@ -92,9 +67,15 @@ class ImageChatViewModel(
 
     /**
      * Encode bitmap to base64 JPEG, downscaled to keep token cost reasonable.
+     *
+     * Its long side is 1,024 px, sent with OpenAI's high detail (decided
+     * 2026-10-24). High detail looks at a photo with its short side at 768 px:
+     * a 4:3 photo at 1,024 by 768 is seen whole for the same four tiles (about
+     * 765 tokens) a 768 by 576 one costs. It was 768 with low detail, one
+     * 512 px look (85 tokens), too coarse for text in the photo.
      */
     private fun bitmapToBase64(bitmap: Bitmap): String {
-        val maxDim = 768
+        val maxDim = 1024
         val scaled = if (bitmap.width > maxDim || bitmap.height > maxDim) {
             val scale = maxDim.toFloat() / maxOf(bitmap.width, bitmap.height)
             Bitmap.createScaledBitmap(
@@ -113,7 +94,12 @@ class ImageChatViewModel(
         return Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
     }
 
-    suspend fun processImage(bitmap: Bitmap, userPrompt: String = ""): String {
+    /**
+     * [onDelta] (issue #24): the answer as it is written, from the on-device
+     * model's thread; see [OpenAiTransport.executeChatCompletion]. The return
+     * value is the whole answer either way, and the turn is kept the same way.
+     */
+    suspend fun processImage(bitmap: Bitmap, userPrompt: String = "", onDelta: ((String) -> Unit)? = null): String {
         _isProcessing.value = true
         return try {
             withContext(Dispatchers.IO) {
@@ -121,24 +107,9 @@ class ImageChatViewModel(
                 _chatHistory.value = emptyList()
                 lastImageBase64 = bitmapToBase64(bitmap)
 
-                val prompt = if (userPrompt.isBlank()) {
-                    "Describe what you see in this image clearly and concisely for a visually impaired user. " +
-                        "Start with the overall scene, then mention notable details. " +
-                        "Keep it conversational — for example: 'You're looking at a park with a few people walking. " +
-                        "The sky looks overcast, it might rain soon.'" +
-                        // This turn is English, example and all, so it has to carry
-                        // the language requirement or the answer follows it.
-                        OpenAiTransport.replyLanguageInstruction()
-                } else {
-                    userPrompt + OpenAiTransport.replyLanguageInstruction()
-                }
+                val response = callOpenAIVision(ChatPrompts.imageFirst(userPrompt, transport.answersOnDevice()), onDelta = onDelta)
 
-                val response = callOpenAIVision(userText = prompt, includeImage = true)
-
-                val newHistory = _chatHistory.value.toMutableList()
-                newHistory.add(ChatMessage("user", userPrompt.ifBlank { "Describe this image" }))
-                newHistory.add(ChatMessage("assistant", response))
-                _chatHistory.value = newHistory
+                record(userPrompt.ifBlank { "Describe this image" }, response)
 
                 _lastResponse.value = response
                 _isProcessing.value = false
@@ -151,7 +122,8 @@ class ImageChatViewModel(
         }
     }
 
-    suspend fun askFollowUp(userPrompt: String): String {
+    /** As [processImage]'s [onDelta]. */
+    suspend fun askFollowUp(userPrompt: String, onDelta: ((String) -> Unit)? = null): String {
         if (lastImageBase64.isBlank()) {
             return context.getString(R.string.spoken_capture_first)
         }
@@ -170,12 +142,9 @@ class ImageChatViewModel(
                 // details the first description didn't mention, and without the
                 // image the model can only answer from its own earlier text
                 // (and says "I can't access images" for anything else).
-                val response = callOpenAIVision(userText = userPrompt, includeImage = true)
+                val response = callOpenAIVision(ChatPrompts.imageFollowUp(userPrompt, transport.answersOnDevice()), onDelta = onDelta)
 
-                val newHistory = _chatHistory.value.toMutableList()
-                newHistory.add(ChatMessage("user", userPrompt))
-                newHistory.add(ChatMessage("assistant", response))
-                _chatHistory.value = newHistory
+                record(userPrompt, response)
 
                 _lastResponse.value = response
                 _isProcessing.value = false
@@ -188,9 +157,26 @@ class ImageChatViewModel(
         }
     }
 
-    private fun callOpenAIVision(userText: String, includeImage: Boolean): String {
+    /**
+     * Keeps a turn for the next request. A cancelled one is left out: it has no
+     * answer, and an empty one would be sent as the model's reply.
+     */
+    private fun record(question: String, response: String) {
+        if (response == OpenAiTransport.CANCELLED) return
+        _chatHistory.value = _chatHistory.value + listOf(
+            ChatMessage("user", question),
+            ChatMessage("assistant", response),
+        )
+    }
+
+    private fun callOpenAIVision(
+        prompt: ChatPrompts.Prompt,
+        includeImage: Boolean = true,
+        onDelta: ((String) -> Unit)? = null,
+    ): String {
+        val userText = prompt.user
         val messages = JSONArray().apply {
-            put(JSONObject().put("role", "system").put("content", systemMsg))
+            put(JSONObject().put("role", "system").put("content", prompt.system))
 
             _chatHistory.value.forEach { message ->
                 put(
@@ -205,7 +191,9 @@ class ImageChatViewModel(
                     put("type", "image_url")
                     put("image_url", JSONObject().apply {
                         put("url", "data:image/jpeg;base64,$lastImageBase64")
-                        put("detail", "low")
+                        // High: low detail is a 512 px look, too coarse for text in
+                        // the photo (read out when asked) or small details.
+                        put("detail", "high")
                     })
                 }
                 val textContent = JSONObject().apply {
@@ -225,8 +213,8 @@ class ImageChatViewModel(
         val body = JSONObject().apply {
             put("model", modelProvider())
             put("messages", messages)
-            put("max_tokens", OpenAiTransport.LLM_MAX_OUTPUT_TOKENS)
-            put("temperature", 0.7)
+            put("max_tokens", prompt.maxTokens)
+            put("temperature", prompt.temperature)
         }
 
         return OpenAiTransport.executeChatCompletion(
@@ -237,6 +225,7 @@ class ImageChatViewModel(
             onQuotaExhausted = onQuotaExhausted,
             onInstallRestricted = onInstallRestricted,
             registerCall = { activeCall = it },
+            onDelta = onDelta,
         )
     }
 

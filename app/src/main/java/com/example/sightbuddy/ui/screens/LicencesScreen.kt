@@ -67,7 +67,11 @@ fun LicencesScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                // Its own group in TalkBack's order, after Back, so the text keeps
+                // its order rather than being sorted by where it sits on screen.
+                .semantics { isTraversalGroup = true; traversalIndex = 0f },
             contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 96.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

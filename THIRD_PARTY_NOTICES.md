@@ -9,16 +9,23 @@ licence texts, under **Settings → Privacy → Open-source licences**.
 - AndroidX and Jetpack Compose, by Google — Apache-2.0
 - Kotlin standard library and kotlinx.coroutines, by JetBrains — Apache-2.0
 - OkHttp and Okio, by Square — Apache-2.0
-- TensorFlow Lite and the TensorFlow Lite Task Library, by Google — Apache-2.0
+- MediaPipe Tasks, which runs the object detection model, by Google — Apache-2.0;
+  it brings Flogger, by Google — Apache-2.0, and Protocol Buffers (Java lite),
+  by Google — BSD-3-Clause
 - [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM), the runtime for the
   on-device AI model, by Google — Apache-2.0
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), the runtime for
   on-device speech recognition, by the k2-fsa project — Apache-2.0
-- ONNX Runtime, included in sherpa-onnx, by Microsoft — MIT
+- ONNX Runtime, included in sherpa-onnx, and its Java API, by Microsoft — MIT
 - EfficientDet-Lite0, the object detection model, by Google — Apache-2.0
   (see [legal/EFFICIENTDET_LICENSE.txt](legal/EFFICIENTDET_LICENSE.txt))
+- [Document Corner Detector](https://huggingface.co/spaces/KennethTM/document_corner_detector),
+  the page-corner model behind Find page, by KennethTM, at revision 9eb1a68c — MIT.
+  It is built on MobileNetV3 from [PyTorch Image Models (timm)](https://github.com/huggingface/pytorch-image-models),
+  by Ross Wightman — Apache-2.0
 - Firebase Crashlytics, by Google, in the Play build only — Apache-2.0
-- ML Kit Text Recognition, by Google — under the ML Kit Terms of Service
+- ML Kit Text Recognition and ML Kit Language Identification, by Google —
+  under the ML Kit Terms of Service
 
 ## Downloaded when the user chooses to
 

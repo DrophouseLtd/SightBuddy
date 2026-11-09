@@ -8,13 +8,23 @@ import android.util.Size
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -51,17 +61,25 @@ class CameraXManager(private val context: Context) {
 
     private var preview: Preview? = null
     private var analysisResolution = DEFAULT_ANALYSIS_SIZE
+    private var stillsWanted = false
+    private var imageCapture: ImageCapture? = null
+    /** True while the camera is being bound; [awaitBound] waits for it. */
+    private val binding = MutableStateFlow(false)
     private var boundOwner: LifecycleOwner? = null
     private var boundSurfaceProvider: Preview.SurfaceProvider? = null
 
     /**
      * The size analysis frames are asked for. Text needs far more pixels than
      * the object detector: at 640 a page's body text is under 16 px a line and
-     * comes and goes from frame to frame. A change rebinds a running camera.
+     * comes and goes from frame to frame. With [stills], full-size photos can
+     * be taken too ([takeStill]); the camera then works harder and runs warm,
+     * so photos are bound only while one is coming. A change rebinds a
+     * running camera.
      */
-    fun setAnalysisResolution(size: Size) {
-        if (size == analysisResolution) return
+    fun setAnalysisResolution(size: Size, stills: Boolean = false) {
+        if (size == analysisResolution && stills == stillsWanted) return
         analysisResolution = size
+        stillsWanted = stills
         val owner = boundOwner ?: return
         val surface = boundSurfaceProvider ?: return
         if (camera != null) startCamera(owner, surface)
@@ -109,6 +127,7 @@ class CameraXManager(private val context: Context) {
     fun startCamera(lifecycleOwner: LifecycleOwner, surfaceProvider: Preview.SurfaceProvider) {
         boundOwner = lifecycleOwner
         boundSurfaceProvider = surfaceProvider
+        binding.value = true
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
 
         cameraProviderFuture.addListener({
@@ -150,22 +169,62 @@ class CameraXManager(private val context: Context) {
 
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
+            // The same 4:3 view as the analysis frames, so a page's corners found
+            // in a frame fall on the photo too.
+            imageCapture = if (stillsWanted) {
+                ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .setResolutionSelector(
+                        ResolutionSelector.Builder()
+                            .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                            .setResolutionStrategy(
+                                ResolutionStrategy(STILL_SIZE, ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER),
+                            )
+                            .build(),
+                    )
+                    .setJpegQuality(STILL_JPEG_QUALITY)
+                    .build()
+            } else {
+                null
+            }
+
             try {
                 cameraProvider?.unbindAll()
-                camera = cameraProvider?.bindToLifecycle(
-                    lifecycleOwner,
-                    cameraSelector,
-                    preview,
-                    imageAnalyzer
-                )
+                camera = try {
+                    cameraProvider?.bindToLifecycle(
+                        lifecycleOwner,
+                        cameraSelector,
+                        *listOfNotNull(preview, imageAnalyzer, imageCapture).toTypedArray(),
+                    )
+                } catch (exc: Exception) {
+                    // A camera that cannot add photos to the other two: frames only.
+                    if (imageCapture == null) throw exc
+                    Log.w("CameraXManager", "No photos alongside the frames; captures use a frame", exc)
+                    imageCapture = null
+                    cameraProvider?.unbindAll()
+                    cameraProvider?.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalyzer)
+                }
                 // Re-apply the requested torch state to the freshly bound camera.
                 setTorch(torchRequested)
-                Log.i("CameraXManager", "Camera bound successfully")
+                Log.i(
+                    "CameraXManager",
+                    "Camera bound successfully: frames ${imageAnalyzer?.resolutionInfo?.resolution}, " +
+                        "photos ${imageCapture?.resolutionInfo?.resolution ?: "none"}",
+                )
             } catch (exc: Exception) {
                 Log.e("CameraXManager", "Use case binding failed", exc)
             }
+            binding.value = false
 
         }, ContextCompat.getMainExecutor(context))
+    }
+
+    /**
+     * Waits up to [timeoutMs] for a bind under way to finish, so a photo asked
+     * for next finds its stream bound. At once when nothing is being bound.
+     */
+    suspend fun awaitBound(timeoutMs: Long) {
+        withTimeoutOrNull(timeoutMs) { binding.first { !it } }
     }
 
     /**
@@ -186,6 +245,31 @@ class CameraXManager(private val context: Context) {
         val owner = boundOwner ?: return
         val surface = boundSurfaceProvider ?: return
         startCamera(owner, surface)
+    }
+
+    /**
+     * A full-size photo, upright by its rotation, or null when photos are not
+     * bound or the camera fails; the caller closes it. Asked for when a frame
+     * has too few pixels a letter for reading a page.
+     */
+    suspend fun takeStill(): ImageProxy? {
+        val capture = imageCapture ?: return null
+        return suspendCancellableCoroutine { cont ->
+            capture.takePicture(
+                cameraExecutor,
+                object : ImageCapture.OnImageCapturedCallback() {
+                    override fun onCaptureSuccess(image: ImageProxy) {
+                        // Given up on meanwhile (its time ran out): nobody will close it.
+                        cont.resume(image) { image.close() }
+                    }
+
+                    override fun onError(exception: ImageCaptureException) {
+                        Log.w("CameraXManager", "Photo failed; the capture uses a frame", exception)
+                        if (cont.isActive) cont.resume(null)
+                    }
+                },
+            )
+        }
     }
 
     fun stopCamera() {
@@ -225,5 +309,9 @@ class CameraXManager(private val context: Context) {
         /** Portrait width x height; the camera picks the nearest size it has. */
         val DEFAULT_ANALYSIS_SIZE = Size(640, 640)
         val TEXT_ANALYSIS_SIZE = Size(1080, 1440)
+
+        /** The photo's size at most, in the sensor's landscape terms: 12 MP. */
+        val STILL_SIZE = Size(4032, 3024)
+        const val STILL_JPEG_QUALITY = 95
     }
 }

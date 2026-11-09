@@ -8,7 +8,13 @@ import android.os.VibratorManager
 import android.media.AudioAttributes
 import android.os.VibrationAttributes
 
-class HapticManager(private val context: Context) {
+/**
+ * The app's vibration. [allowed] is Settings' Vibration: while it is off, no
+ * cue here vibrates, whoever asks. Find objects' pulse is the exception:
+ * [Cues] decides it, since pitch guidance has its own rule. Stopping always
+ * works.
+ */
+class HapticManager(private val context: Context, private val allowed: () -> Boolean = { true }) {
 
     private val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -19,7 +25,7 @@ class HapticManager(private val context: Context) {
     }
 
     fun vibrateWarning() {
-        if (!vibrator.hasVibrator()) return
+        if (!allowed() || !vibrator.hasVibrator()) return
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
@@ -30,7 +36,7 @@ class HapticManager(private val context: Context) {
     }
 
     fun vibrateAlert() {
-        if (!vibrator.hasVibrator()) return
+        if (!allowed() || !vibrator.hasVibrator()) return
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val timings = longArrayOf(0, 150, 100, 150)
@@ -50,9 +56,12 @@ class HapticManager(private val context: Context) {
         return false
     }
 
-    /** One short pulse: the haptic stand-in for the recording start and stop cues. */
+    /** Whether the phone can vibrate at all; without it, pitch guidance plays its tone. */
+    val hasVibrator: Boolean get() = vibrator.hasVibrator()
+
+    /** One short, light tap: the felt recording start and stop cues and the shutter. */
     fun tap() {
-        if (!vibrator.hasVibrator()) return
+        if (!allowed() || !vibrator.hasVibrator()) return
         vibrateAsFeedback(VibrationEffect.createOneShot(TAP_MS, TAP_AMPLITUDE))
     }
 

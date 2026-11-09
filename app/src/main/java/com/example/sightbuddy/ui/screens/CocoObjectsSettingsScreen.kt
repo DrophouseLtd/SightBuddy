@@ -73,6 +73,9 @@ fun CocoObjectsSettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // Its own group in TalkBack's order, after Back, so the list keeps
+                // its order rather than being sorted by where rows sit on screen.
+                .semantics { isTraversalGroup = true; traversalIndex = 0f }
                 .padding(horizontal = 24.dp, vertical = 16.dp),
         ) {
             Text(
