@@ -1,4 +1,7 @@
 <resources>
+    <string name="language_polish">Polski</string>
+    <string name="language_name_polish">puola</string>
+    <string name="language_polish_cd">Polski. Käytä sovellusta puolaksi</string>
     <string name="app_name">Sight Buddy</string>
 
     <!-- Pakollinen kielivalinta, näytetään käyttöehtojen yhteydessä. -->

@@ -1,4 +1,7 @@
 <resources>
+    <string name="language_polish">Polski</string>
+    <string name="language_name_polish">Polish</string>
+    <string name="language_polish_cd">Polski. Use the app in Polish</string>
     <string name="app_name">Sight Buddy</string>
 
     <!-- Mandatory language choice, shown with the terms during onboarding. -->

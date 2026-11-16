@@ -2,6 +2,8 @@ package com.example.sightbuddy.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,6 +26,8 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -70,6 +74,7 @@ fun TermsAcceptanceOverlay(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 28.dp, vertical = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -88,27 +93,40 @@ fun TermsAcceptanceOverlay(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // A pair of radio buttons: TalkBack says which is selected, and
+            // Language radio buttons: TalkBack says which is selected, and
             // "Selected" as soon as one is tapped.
-            Row(modifier = Modifier.fillMaxWidth().selectableGroup()) {
+            Column(modifier = Modifier.fillMaxWidth().selectableGroup()) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    LanguageChoiceButton(
+                        label = stringResource(R.string.language_english),
+                        contentDescription = stringResource(R.string.language_english_cd),
+                        selected = languageChosen && currentLanguage == "en",
+                        fallbackBg = secondaryBg,
+                        fallbackText = textColor,
+                        onClick = { onSelectLanguage("en") },
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    LanguageChoiceButton(
+                        label = stringResource(R.string.language_finnish),
+                        contentDescription = stringResource(R.string.language_finnish_cd),
+                        selected = languageChosen && currentLanguage == "fi",
+                        fallbackBg = secondaryBg,
+                        fallbackText = textColor,
+                        onClick = { onSelectLanguage("fi") },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
                 LanguageChoiceButton(
-                    label = stringResource(R.string.language_english),
-                    contentDescription = stringResource(R.string.language_english_cd),
-                    selected = languageChosen && currentLanguage == "en",
+                    label = stringResource(R.string.language_polish),
+                    contentDescription = stringResource(R.string.language_polish_cd),
+                    selected = languageChosen && currentLanguage == "pl",
                     fallbackBg = secondaryBg,
                     fallbackText = textColor,
-                    onClick = { onSelectLanguage("en") },
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                LanguageChoiceButton(
-                    label = stringResource(R.string.language_finnish),
-                    contentDescription = stringResource(R.string.language_finnish_cd),
-                    selected = languageChosen && currentLanguage == "fi",
-                    fallbackBg = secondaryBg,
-                    fallbackText = textColor,
-                    onClick = { onSelectLanguage("fi") },
-                    modifier = Modifier.weight(1f),
+                    onClick = { onSelectLanguage("pl") },
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
 
@@ -180,6 +198,7 @@ private fun LanguageChoiceButton(
                 }
             )
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .semantics { this.contentDescription = contentDescription }
             .padding(vertical = 18.dp),
         contentAlignment = Alignment.Center,
     ) {

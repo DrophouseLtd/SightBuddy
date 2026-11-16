@@ -22,7 +22,7 @@ object CocoFinnish {
 
     /** Finnish name for a COCO label, or the label itself in any other language. */
     fun displayName(label: String): String =
-        if (isActive()) NAMES[label] ?: label else label
+        if (isActive()) NAMES[label] ?: label else CocoPolish.displayName(label)
 
     /** Finnish voice aliases, or empty when the app is not in Finnish. */
     fun aliases(): Map<String, String> = if (isActive()) ALIASES else emptyMap()
