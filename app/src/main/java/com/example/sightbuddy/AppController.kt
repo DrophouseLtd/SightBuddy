@@ -490,7 +490,11 @@ class AppController(
         phone = Build.MANUFACTURER.replaceFirstChar { it.uppercase() } + " " + Build.MODEL,
         screenReaderOn = isScreenReaderOn(context),
         appLanguage = context.getString(
-            if (languageStore.isFinnish()) R.string.language_name_finnish else R.string.language_name_english
+            when (languageStore.language()) {
+                LanguageStore.LANG_FI -> R.string.language_name_finnish
+                LanguageStore.LANG_PL -> R.string.language_name_polish
+                else -> R.string.language_name_english
+            }
         ),
         featuresShown = pages.map { ModeNames.display(context, it) },
         cameraPreview = settingsManager.cameraPreview.value,
@@ -592,7 +596,7 @@ class AppController(
     val useLocalChat get() = settingsManager.useLocalChat.value
     // Gemma answers in any language (Finnish prompts as for OpenAI); it is only
     // recommended, and used for speech, in English.
-    val english get() = !languageStore.isFinnish()
+    val english get() = languageStore.language() == LanguageStore.LANG_EN
     val localAiReady get() = gemmaInstalled && useLocalChat
     // Gemma holds about 2 GB: load it only while something will use it.
     // The phone's specs decide the recommended setup. Re-read when models come
@@ -630,7 +634,7 @@ class AppController(
         chosen = SttChoice.fromKey(sttChoiceKey),
         whisperReady = sttModelsReady,
         gemmaInstalled = gemmaInstalled,
-        english = !languageStore.isFinnish(),
+        english = languageStore.language() == LanguageStore.LANG_EN,
     )
     suspend fun syncGemmaLoaded() {
         val forSpeech = effectiveStt == SttChoice.GEMMA
@@ -653,7 +657,7 @@ class AppController(
     val cloudSttEnabled get() = settingsManager.cloudStt.value
     val speech get() = run {
         SpeechAvailability(
-            modelServesLanguage = !languageStore.isFinnish(),
+            modelServesLanguage = languageStore.language() == LanguageStore.LANG_EN,
             modelDownloaded = sttModelsReady || gemmaInstalled,
             cloudEnabled = cloudSttEnabled && apiAllowed,
             localEnabled = effectiveStt != SttChoice.ANDROID,
@@ -1030,7 +1034,11 @@ class AppController(
      */
     var modelWasReady by mutableStateOf(sttModelsReady)
     suspend fun onSttModelsReadyChanged() {
-        if (sttModelsReady && !modelWasReady && cloudSttEnabled) {
+        if (SpeechAvailability(
+                modelServesLanguage = speech.modelServesLanguage,
+                modelDownloaded = sttModelsReady,
+                cloudEnabled = cloudSttEnabled,
+            ).shouldDisableCloudOnModelReady(modelWasReady)) {
             settingsManager.setCloudStt(false)
         }
         modelWasReady = sttModelsReady

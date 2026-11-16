@@ -31,7 +31,7 @@ Answers are spoken as they are written, sentence by sentence, so you don't wait 
 
 Every surface is built accessibility-first: TalkBack labels throughout, an option to speak through TalkBack in its own voice and speed, haptics, high-contrast light and dark themes, adjustable speech rate (1× to 3×), a feature bar you can swipe or tap, and per-feature show and hide. Text in another language is read with that language's voice. What the app says is written into the conversation too, so a screen reader can read it back.
 
-The interface is in English and Finnish. When the app's language differs from the phone's, TalkBack still reads the app's words in the app's language, and with the app in Finnish the on-device AI answers in Finnish. More languages are welcome: see the [open issues](../../issues).
+The interface is in English, Finnish and Polish. When the app's language differs from the phone's, TalkBack still reads the app's words in the app's language, and the on-device AI is instructed to answer in the chosen language. Polish includes spoken cues and object names and commands. The optional on-device Whisper speech model supports English only; Finnish and Polish use the phone's speech recognizer or optional OpenAI transcription instead. More languages are welcome: see the [open issues](../../issues).
 
 ## Install
 

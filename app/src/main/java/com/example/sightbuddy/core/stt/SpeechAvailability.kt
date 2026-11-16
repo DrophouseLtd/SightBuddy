@@ -86,6 +86,10 @@ class SpeechAvailability(
     /** The user's "Use downloaded model" switch. */
     val localEnabled: Boolean = true,
 ) {
+    /** Disable cloud only when a newly ready model serves the current language. */
+    fun shouldDisableCloudOnModelReady(wasReady: Boolean): Boolean =
+        modelServesLanguage && modelDownloaded && !wasReady && cloudEnabled
+
     /** Which recogniser this device will use, assuming the model loads. */
     val engine: SpeechEngine = when {
         // Chosen deliberately and paid for, so it outranks the free options.

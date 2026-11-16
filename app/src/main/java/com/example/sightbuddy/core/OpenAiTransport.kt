@@ -145,6 +145,7 @@ class OpenAiTransport(
          */
         fun replyLanguageInstruction(): String =
             when (Locale.getDefault().language) {
+                "pl" -> " Zawsze odpowiadaj po polsku, nawet jeśli pytanie jest w innym języku. Always reply in Polish."
                 "fi" -> " Vastaa aina suomeksi, vaikka kysymys olisi muulla kielellä. Always reply in Finnish."
                 else -> " Always reply in English, even if the question is in another language."
             }
@@ -158,6 +159,9 @@ class OpenAiTransport(
          */
         fun readingLanguageInstruction(): String =
             when (Locale.getDefault().language) {
+                "pl" -> " Własne słowa pisz po polsku, nawet jeśli pytanie jest w innym języku. " +
+                    "Czytany tekst zachowaj w oryginalnym języku, chyba że użytkownik prosi o tłumaczenie. " +
+                    "Always reply in Polish in your own words; text you read out stays in its original language unless the user asks for a translation."
                 "fi" -> " Kirjoita omat sanasi aina suomeksi, vaikka kysymys olisi muulla kielellä. " +
                     "Ääneen luettava teksti pysyy alkuperäisellä kielellään, ellei käyttäjä pyydä käännöstä. " +
                     "Always reply in Finnish in your own words; text you read out stays in its original " +
