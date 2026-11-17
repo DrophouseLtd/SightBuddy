@@ -455,4 +455,19 @@ With looping off, the first and last features say when there is no feature furth
     <string name="cloud_stt_local_enable_cd">Use the paid OpenAI speech recognition instead of the free on-device model</string>
     <string name="cloud_stt_local_decline">Keep the free model</string>
     <string name="cloud_stt_local_decline_cd">Keep using the free on-device speech recognition</string>
+    <string name="chat_describe_image">Describe this image</string>
+    <string name="legal_documents_language_notice">The linked Terms of Use and Privacy Policy are provided by the authors in English.</string>
+    <string name="local_model_choice_title">On-device AI model</string>
+    <string name="local_model_e2b">Gemma E2B</string>
+    <string name="local_model_e4b">Gemma E4B (experimental)</string>
+    <string name="local_model_selected">Selected</string>
+    <string name="local_model_downloaded">Downloaded</string>
+    <string name="local_model_not_downloaded">Not downloaded</string>
+    <string name="local_model_loading">Loading</string>
+    <string name="local_model_download_confirm">Download %1$s? Download size: %2$s. This uses network data and storage. The existing model will be kept.</string>
+    <string name="local_model_busy">Wait until the current request or download finishes before switching models.</string>
+    <string name="local_model_experimental_note">E2B is the default. E4B is experimental: it needs more memory and may be slower; better answers are not guaranteed. Changing the selection does not download or delete any model. Use the model download action after selecting.</string>
+    <string name="local_model_ready">Loaded and ready</string>
+    <string name="local_model_not_loaded">Not loaded into memory</string>
+    <string name="local_model_close">Close</string>
 </resources>

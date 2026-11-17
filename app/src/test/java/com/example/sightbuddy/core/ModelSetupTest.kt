@@ -31,11 +31,10 @@ class ModelSetupTest {
     }
 
     @Test
-    fun otherLanguagesNowGetWhisperButNeverGemma() {
-        // Whisper's multilingual model serves Polish and Finnish offline, so the
-        // old "other languages get nothing" rule no longer holds for speech. Gemma
-        // is still English-only: it is not part of the recommendation elsewhere.
-        assertEquals(Tier.WHISPER, ModelSetup.tier(totalRamBytes = 12 * gb, freeBytes = 100 * gb, english = false))
+    fun otherLanguagesGetGemmaForImagesWhenHardwareFits() {
+        // Chat and image understanding are multilingual; this recommendation
+        // must not reuse the independent English-only Gemma speech gate.
+        assertEquals(Tier.FULL, ModelSetup.tier(totalRamBytes = 12 * gb, freeBytes = 100 * gb, english = false))
         assertEquals(Tier.WHISPER, ModelSetup.tier(totalRamBytes = 5_700_000_000L, freeBytes = 10 * gb, english = false))
         // The reserve still applies there: a full phone gets nothing.
         assertEquals(Tier.NONE, ModelSetup.tier(totalRamBytes = 12 * gb, freeBytes = 1_600_000_000L, english = false))

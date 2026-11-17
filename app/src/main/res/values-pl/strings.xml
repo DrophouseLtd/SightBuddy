@@ -181,8 +181,8 @@
     <string name="settings_setup_desc">Zalecane: %1$s. Pobieranie: %2$s, wolne miejsce: %3$s</string>
     <string name="setup_title">Konfiguracja początkowa</string>
     <string name="setup_body">Chcemy zapewnić najlepszą możliwą konfigurację dla Twojego telefonu. Czy chcesz pobrać najlepsze modele dla tego urządzenia, aby korzystać ze wszystkich funkcji?\n\nZalecane: %1$s.\nRozmiar pobieranych danych: %2$s.\nWolne miejsce w telefonie: %3$s.</string>
-    <string name="setup_models_full">Whisper do mowy angielskiej i AI Gemma na urządzeniu</string>
-    <string name="setup_models_whisper">Whisper do mowy angielskiej</string>
+    <string name="setup_models_full">Wielojęzyczny Whisper do rozpoznawania mowy i AI Gemma na urządzeniu</string>
+    <string name="setup_models_whisper">Wielojęzyczny Whisper do rozpoznawania mowy</string>
     <string name="setup_yes">Tak</string>
     <string name="setup_yes_cd">Tak, pobierz teraz zalecane modele</string>
     <string name="spoken_setup_downloading">Pobieranie: %1$s. Może to trochę potrwać.</string>
@@ -196,7 +196,7 @@
     <string name="settings_cycle_action">przełącz na następny</string>
     <string name="settings_action_download">pobierz</string>
     <string name="settings_action_continue_download">wznów pobieranie</string>
-    <string name="stt_choice_whisper">Whisper (język angielski)</string>
+    <string name="stt_choice_whisper">Whisper (wielojęzyczny, offline)</string>
     <string name="stt_choice_gemma">Gemma</string>
     <string name="stt_choice_android">Android</string>
     <string name="spoken_stt_choice">Rozpoznawanie mowy: %1$s</string>
@@ -380,7 +380,7 @@
     <string name="settings_cloud_stt">Rozpoznawanie mowy OpenAI</string>
     <string name="settings_cloud_stt_desc">Wysyłaj nagrania do OpenAI zamiast używać silnika systemowego. Niewielki koszt przy użyciu własnego klucza</string>
     <string name="cloud_stt_dialog_title">Włączyć rozpoznawanie mowy OpenAI?</string>
-    <string name="cloud_stt_dialog_body">Czy chcesz używać rozpoznawania mowy OpenAI, aby uzyskać najlepszą jakość obsługi? Może to poprawić działanie, ale wiąże się z niewielkim kosztem API, około ułamka pensa za minutę nagrania. Po włączeniu nagrany dźwięk jest wysyłany do OpenAI do przetworzenia zamiast do silnika systemowego. Lokalny model Whisper obsługuje tylko język angielski, nie polski.</string>
+    <string name="cloud_stt_dialog_body">Czy chcesz używać płatnego rozpoznawania mowy OpenAI? Po włączeniu nagrany dźwięk jest wysyłany do OpenAI do przetworzenia. Opłaty zależą od używanego modelu i aktualnego cennika OpenAI. Wielojęzyczny Whisper rozpoznaje mowę po polsku bez internetu po pobraniu modelu.</string>
     <string name="cloud_stt_enable">Włącz</string>
     <string name="cloud_stt_enable_cd">Włącz rozpoznawanie mowy OpenAI</string>
     <string name="cloud_stt_decline">Nie teraz</string>
@@ -395,9 +395,24 @@
     <string name="missing_voice_body">Język: %1$s. W tym telefonie nie ma odpowiedniego głosu, dlatego tekst jest odczytywany zwykłym głosem. Odpowiedni głos można dodać w ustawieniach telefonu.</string>
     <string name="missing_voice_ok">OK</string>
     <string name="cloud_stt_local_title">Bezpłatny model jest już dostępny</string>
-    <string name="cloud_stt_local_body">Telefon ma lokalny model Whisper do rozpoznawania mowy angielskiej. Nie obsługuje on języka polskiego. Czy chcesz używać płatnego rozpoznawania mowy OpenAI?</string>
+    <string name="cloud_stt_local_body">Telefon ma lokalny model Whisper obsługujący wybrany język. Zapewnia bezpłatne rozpoznawanie mowy bez internetu. Czy mimo to chcesz używać płatnego rozpoznawania mowy OpenAI?</string>
     <string name="cloud_stt_local_enable">Używaj płatnego API</string>
     <string name="cloud_stt_local_enable_cd">Używaj płatnego rozpoznawania mowy OpenAI</string>
     <string name="cloud_stt_local_decline">Zachowaj bezpłatny model</string>
     <string name="cloud_stt_local_decline_cd">Nie włączaj rozpoznawania mowy OpenAI</string>
+    <string name="chat_describe_image">Opisz ten obraz</string>
+    <string name="legal_documents_language_notice">Regulamin i polityka prywatności pod tymi odnośnikami są udostępniane przez autorów po angielsku.</string>
+    <string name="local_model_choice_title">Lokalny model AI</string>
+    <string name="local_model_e2b">Gemma E2B</string>
+    <string name="local_model_e4b">Gemma E4B (eksperymentalny)</string>
+    <string name="local_model_selected">Wybrany</string>
+    <string name="local_model_downloaded">Pobrany</string>
+    <string name="local_model_not_downloaded">Niepobrany</string>
+    <string name="local_model_loading">Ładowanie</string>
+    <string name="local_model_download_confirm">Pobrać %1$s? Rozmiar pobierania: %2$s. Operacja wykorzysta transfer sieciowy i miejsce na urządzeniu. Dotychczasowy model zostanie zachowany.</string>
+    <string name="local_model_busy">Przed zmianą modelu zaczekaj na zakończenie bieżącego żądania lub pobierania.</string>
+    <string name="local_model_experimental_note">E2B jest modelem podstawowym. E4B to wariant eksperymentalny: potrzebuje więcej pamięci i może być wolniejszy. Nie gwarantuje lepszych odpowiedzi. Wybór nie pobiera ani nie usuwa modeli. Po wyborze użyj opcji pobierania modelu.</string>
+    <string name="local_model_ready">Załadowany i gotowy</string>
+    <string name="local_model_not_loaded">Niezaładowany do pamięci</string>
+    <string name="local_model_close">Zamknij</string>
 </resources>

@@ -617,17 +617,19 @@ class AppController(
         }
     // Follows the free space, as the remembered value it replaces did: reading
     // the RAM is a call into the system.
-    private var deviceTierFor: Long? = null
+    private var deviceTierFor: Pair<Long, String>? = null
     private var deviceTierRead = ModelSetup.Tier.NONE
     val deviceTier: ModelSetup.Tier
         get() {
             val space = freeSpace
-            if (space != deviceTierFor) {
-                deviceTierFor = space
-                deviceTierRead = ModelSetup.tier(ModelSetup.totalRamBytes(context), space, english = english)
+            val key = space to localGemma.selectedModel.value.id
+            if (key != deviceTierFor) {
+                deviceTierFor = key
+                deviceTierRead = ModelSetup.tier(ModelSetup.totalRamBytes(context), space, english = english, gemmaBytes = localGemma.selectedModel.value.sizeBytes)
             }
             return deviceTierRead
         }
+    val setupDownloadBytes get() = ModelSetup.WHISPER_BYTES + if (deviceTier == ModelSetup.Tier.FULL) localGemma.selectedModel.value.sizeBytes else 0L
     val setupModelsRes get() =
         if (deviceTier == ModelSetup.Tier.FULL) R.string.setup_models_full else R.string.setup_models_whisper
     val setupOffered get() = deviceTier != ModelSetup.Tier.NONE && !sttModelsReady && !gemmaInstalled &&
@@ -698,6 +700,23 @@ class AppController(
     var showSttModelsDialog by mutableStateOf(false)
     var showGemmaDialog by mutableStateOf(false)
     var showGemmaDownloadDialog by mutableStateOf(false)
+    var showLocalModelChoice by mutableStateOf(false)
+    var modelSwitching by mutableStateOf(false)
+    var modelSwitchMessage by mutableStateOf<String?>(null)
+
+    fun selectLocalModel(id: String) {
+        if (modelSwitching) return
+        modelSwitching = true
+        scope.launch {
+            try {
+                val ok = withContext(Dispatchers.Default) { localGemma.selectModel(id) }
+                modelSwitchMessage = if (ok) null else context.getString(R.string.local_model_busy)
+                if (ok) syncGemmaLoaded()
+            } catch (failure: Exception) {
+                modelSwitchMessage = context.getString(R.string.spoken_generic_error)
+            } finally { modelSwitching = false }
+        }
+    }
     var showLanguageDialog by mutableStateOf(false)
     var sttPromptShownThisLaunch by mutableStateOf(false)
 
@@ -731,19 +750,20 @@ class AppController(
         progress = sttModelManager.downloadState.map { (it as? SttModelManager.DownloadState.Downloading)?.percent },
     ) { sttModelManager.downloadIfNeeded() }
 
-    suspend fun downloadGemmaTracked(): Boolean = ModelDownloadService.track(
+    suspend fun downloadGemmaTracked(expectedId: String = localGemma.selectedModel.value.id): Boolean = ModelDownloadService.track(
         context,
         title = context.getString(R.string.settings_gemma_model),
         progress = localGemma.downloadPercent,
-    ) { localGemma.download() }
+    ) { localGemma.download(expectedId) }
 
     /** Gemma on its own, from Settings. */
     fun startGemmaDownload() {
-        if (!checkSpace(ModelSetup.GEMMA_BYTES)) return
+        val acceptedId = localGemma.selectedModel.value.id
+        if (!checkSpace(localGemma.selectedModel.value.sizeBytes)) return
         askForDownloadNotification()
         scope.launch {
             confirmation(context.getString(R.string.spoken_gemma_downloading), flush = true)
-            val ok = AppWork.finish { downloadGemmaTracked() }
+            val ok = AppWork.finish { downloadGemmaTracked(acceptedId) }
             confirmation(
                 context.getString(
                     if (ok) R.string.spoken_gemma_installed else R.string.spoken_gemma_download_failed
@@ -772,8 +792,9 @@ class AppController(
         // What this setup will fetch. Whisper is the multilingual model (its real
         // size, as shown); Gemma only when the user accepted the full tier that
         // named it and its size — never as a side effect of wanting Whisper.
+        val acceptedId = localGemma.selectedModel.value.id
         val plan = SetupDownloadPlan.forTier(tier, gemmaAccepted = tier == ModelSetup.Tier.FULL)
-        val bytes = ModelSetup.packageBytes(tier)
+        val bytes = ModelSetup.WHISPER_BYTES + if (plan.gemma) localGemma.selectedModel.value.sizeBytes else 0L
         if (!checkSpace(bytes)) return
         askForDownloadNotification()
         scope.launch {
@@ -785,7 +806,7 @@ class AppController(
                 val whisper = downloadWhisperTracked()
                 // Usable while Gemma downloads; skipped if the screen has gone.
                 if (whisper) scope.launch { voiceInputService.loadEngineIfReady() }
-                whisper to (plan.gemma && downloadGemmaTracked())
+                whisper to (plan.gemma && downloadGemmaTracked(acceptedId))
             }
             confirmation(
                 context.getString(

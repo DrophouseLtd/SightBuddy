@@ -106,6 +106,9 @@ fun SettingsScreen(
     onPrivacyPolicy: () -> Unit = {},
     onTermsOfUse: () -> Unit = {},
     whisperSupported: Boolean = true,
+    localModelLabel: String = "",
+    localModelSizeLabel: String = "",
+    onChooseLocalModel: () -> Unit = {},
     gemmaInstalled: Boolean = false,
     gemmaDownloadPercent: Int? = null,
     onManageGemma: () -> Unit = {},
@@ -312,6 +315,14 @@ fun SettingsScreen(
                         },
                     )
                 }
+                add {
+                    SettingsNavRow(
+                        label = stringResource(R.string.local_model_choice_title),
+                        description = localModelLabel + " — " + localModelSizeLabel,
+                        labelColor = labelColor, highContrast = highContrast, whiteMode = whiteMode,
+                        onClick = onChooseLocalModel,
+                    )
+                }
                 if (gemmaInstalled || gemmaDownloadPercent != null || (gemmaDownloadable && gemmaRecommended)) add {
                     SettingsNavRow(
                         label = stringResource(R.string.settings_gemma_model),
@@ -321,7 +332,7 @@ fun SettingsScreen(
                                 stringResource(R.string.settings_stt_downloading, gemmaDownloadPercent)
                             gemmaPartialPercent > 0 ->
                                 stringResource(R.string.settings_gemma_paused, gemmaPartialPercent)
-                            else -> stringResource(R.string.settings_gemma_not_downloaded)
+                            else -> stringResource(R.string.local_model_not_downloaded) + " — " + localModelSizeLabel
                         },
                         action = when {
                             gemmaInstalled || gemmaDownloadPercent != null -> null
@@ -710,10 +721,7 @@ fun SettingsScreen(
                     if (gemmaDownloadable && !gemmaRecommended && !gemmaInstalled && gemmaDownloadPercent == null) add {
                         SettingsNavRow(
                             label = stringResource(R.string.settings_gemma_model),
-                            description = stringResource(
-                                if (gemmaRecommended) R.string.settings_gemma_not_downloaded
-                                else R.string.settings_gemma_not_recommended
-                            ),
+                            description = stringResource(R.string.local_model_not_downloaded) + " — " + localModelSizeLabel,
                             action = stringResource(R.string.settings_action_download),
                             labelColor = labelColor,
                             highContrast = highContrast,

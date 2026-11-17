@@ -28,6 +28,9 @@ class ModelGate {
         return true
     }
 
+    /** Refuses immediately when loading/inference/release already owns the engine. */
+    fun tryEnter(): Boolean = permit.tryAcquire()
+
     /** Lets the next call in; from any thread. */
     fun leave() = permit.release()
 

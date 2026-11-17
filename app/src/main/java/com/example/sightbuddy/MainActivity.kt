@@ -441,7 +441,7 @@ class MainActivity : ComponentActivity() {
         voiceInputService.shutdown()
         // Stop any answer, then free the model off the main thread: release waits
         // for the model call to end, and waiting here would freeze the screen.
-        localGemma.cancel()
+        localGemma.retire()
         Thread { localGemma.release() }.start()
         objectAnalyzer.close()
         beepService.shutdown()

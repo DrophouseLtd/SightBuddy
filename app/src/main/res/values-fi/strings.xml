@@ -434,4 +434,19 @@
     <string name="cloud_stt_local_enable_cd">Käytä maksullista OpenAI-puheentunnistusta ilmaisen laitteella toimivan mallin sijaan</string>
     <string name="cloud_stt_local_decline">Pidä ilmainen malli</string>
     <string name="cloud_stt_local_decline_cd">Jatka ilmaisella laitteella toimivalla puheentunnistuksella</string>
+    <string name="chat_describe_image">Kuvaile tämä kuva</string>
+    <string name="legal_documents_language_notice">Linkitetyt käyttöehdot ja tietosuojakäytäntö ovat tekijöiden toimittamia englanninkielisiä asiakirjoja.</string>
+    <string name="local_model_choice_title">Laitteen paikallinen tekoälymalli</string>
+    <string name="local_model_e2b">Gemma E2B</string>
+    <string name="local_model_e4b">Gemma E4B (kokeellinen)</string>
+    <string name="local_model_selected">Valittu</string>
+    <string name="local_model_downloaded">Ladattu</string>
+    <string name="local_model_not_downloaded">Ei ladattu</string>
+    <string name="local_model_loading">Ladataan</string>
+    <string name="local_model_download_confirm">Ladataanko %1$s? Latauksen koko: %2$s. Lataus käyttää verkkoyhteyttä ja tallennustilaa. Nykyinen malli säilytetään.</string>
+    <string name="local_model_busy">Odota nykyisen pyynnön tai latauksen päättymistä ennen mallin vaihtamista.</string>
+    <string name="local_model_experimental_note">E2B on oletusmalli. E4B on kokeellinen: se tarvitsee enemmän muistia ja voi olla hitaampi. Parempia vastauksia ei taata. Valinta ei lataa eikä poista malleja. Käytä lataustoimintoa valinnan jälkeen.</string>
+    <string name="local_model_ready">Ladattu muistiin ja valmis</string>
+    <string name="local_model_not_loaded">Ei ladattu muistiin</string>
+    <string name="local_model_close">Sulje</string>
 </resources>

@@ -197,6 +197,7 @@ private fun SettingsHost(
         val sttModelDownloadState by sttModelManager.downloadState.collectAsState()
         val sttModelsReady = sttModelDownloadState is SttModelManager.DownloadState.Ready
         val sttDownloadPercent = (sttModelDownloadState as? SttModelManager.DownloadState.Downloading)?.percent
+        val selectedLocalModel by localGemma.selectedModel.collectAsState()
         val gemmaInstalled by localGemma.installedState.collectAsState()
         val gemmaDownloadPercent by localGemma.downloadPercent.collectAsState()
         settingsManager.sttChoice.collectAsState().value
@@ -255,12 +256,15 @@ private fun SettingsHost(
                 setupOffered = setupOffered,
                 setupDescription = stringResource(
                     R.string.settings_setup_desc,
-                    stringResource(setupModelsRes),
-                    sizeLabel(ModelSetup.packageBytes(deviceTier)),
+                    stringResource(setupModelsRes) + if (deviceTier == ModelSetup.Tier.FULL) " — " + stringResource(if (selectedLocalModel.experimental) R.string.local_model_e4b else R.string.local_model_e2b) else "",
+                    sizeLabel(setupDownloadBytes),
                     sizeLabel(freeSpace),
                 ),
                 onRequestSetup = { showSetupDialog = true },
                 // Downloadable in any language from Advanced; recommended only in English.
+                localModelLabel = stringResource(if (selectedLocalModel.experimental) R.string.local_model_e4b else R.string.local_model_e2b),
+                localModelSizeLabel = sizeLabel(selectedLocalModel.sizeBytes),
+                onChooseLocalModel = { modelSwitchMessage = null; showLocalModelChoice = true },
                 gemmaDownloadable = true,
                 gemmaRecommended = deviceTier == ModelSetup.Tier.FULL,
                 whisperRecommended = deviceTier != ModelSetup.Tier.NONE,
@@ -582,6 +586,9 @@ private fun AppDialogs(c: AppController, highContrast: Boolean, whiteMode: Boole
         sttModelManager.downloadState.collectAsState().value
         localGemma.installedState.collectAsState().value
         localGemma.downloadPercent.collectAsState().value
+        val selectedLocalModel by localGemma.selectedModel.collectAsState()
+        val localModelReady by localGemma.ready.collectAsState()
+        val localModelLoading by localGemma.loadingState.collectAsState()
         // Voice-model download dialog — rendered at the top level so it also
         // appears over the Settings screen (where the download row lives).
         // Not over the first-run terms; an update never has them anyway.
@@ -687,8 +694,23 @@ private fun AppDialogs(c: AppController, highContrast: Boolean, whiteMode: Boole
             )
         }
 
+        if (showLocalModelChoice) {
+            com.example.sightbuddy.ui.screens.LocalModelChoiceDialog(
+                selected = selectedLocalModel,
+                installed = localGemma::isInstalled,
+                ready = localModelReady,
+                loading = localModelLoading,
+                busy = modelSwitching || gemmaDownloadPercent != null,
+                message = modelSwitchMessage,
+                onSelect = ::selectLocalModel,
+                onDismiss = { showLocalModelChoice = false },
+            )
+        }
+
         if (showGemmaDownloadDialog) {
             GemmaDownloadDialog(
+                modelName = stringResource(if (selectedLocalModel.experimental) R.string.local_model_e4b else R.string.local_model_e2b),
+                sizeLabel = sizeLabel(selectedLocalModel.sizeBytes),
                 highContrast = highContrast,
                 whiteMode = whiteMode,
                 onDownload = {
@@ -724,8 +746,8 @@ private fun AppDialogs(c: AppController, highContrast: Boolean, whiteMode: Boole
                 whiteMode = whiteMode,
                 message = stringResource(
                     R.string.setup_body,
-                    stringResource(setupModelsRes),
-                    sizeLabel(ModelSetup.packageBytes(deviceTier)),
+                    stringResource(setupModelsRes) + if (deviceTier == ModelSetup.Tier.FULL) " — " + stringResource(if (selectedLocalModel.experimental) R.string.local_model_e4b else R.string.local_model_e2b) else "",
+                    sizeLabel(setupDownloadBytes),
                     sizeLabel(freeSpace),
                 ),
                 onDownload = { startModelSetup(deviceTier) },

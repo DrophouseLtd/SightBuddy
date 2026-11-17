@@ -8,15 +8,16 @@ import com.example.sightbuddy.core.stt.SttModelSet
 
 /**
  * Which models suit this phone, judged from its specs alone (memory and free
- * storage) and the app language. No benchmark: the specs decide.
+ * storage). No benchmark: the specs decide; language does not gate image/chat AI.
  *
  * - [Tier.FULL] (tier 3): Gemma for images, chat and Find objects, plus Whisper for speech.
  * - [Tier.WHISPER] (tier 2): Whisper for speech. No on-device answers.
  * - [Tier.NONE] (tier 1): nothing to download; the platform recogniser.
  *
  * Whisper now has a multilingual model, so speech is offered in Polish and
- * Finnish as well as English. Only Gemma is English-only: it needs an English
- * phone, and it is never downloaded as a side effect of wanting Whisper.
+ * Finnish as well as English. Gemma image/chat answers are multilingual too;
+ * its independent speech path remains gated elsewhere. Gemma is downloaded
+ * only after acceptance of its own or the full-setup offer.
  */
 object ModelSetup {
 
@@ -42,13 +43,13 @@ object ModelSetup {
     const val MIN_GEMMA_RAM_BYTES = 7_000_000_000L
 
     /**
-     * [english] decides Gemma only. Whisper's multilingual model serves every
-     * app language, so a Polish or Finnish phone is recommended Whisper exactly
-     * as an English one is.
+     * Image/chat Gemma and multilingual Whisper are offered by hardware, not
+     * language. [english] is retained for caller compatibility only; it must
+     * not be confused with the independent Gemma speech-recognition gate.
      */
-    fun tier(totalRamBytes: Long, freeBytes: Long, english: Boolean): Tier = when {
-        english && totalRamBytes >= MIN_GEMMA_RAM_BYTES &&
-            freeBytes >= GEMMA_BYTES + WHISPER_BYTES + RESERVE_BYTES -> Tier.FULL
+    fun tier(totalRamBytes: Long, freeBytes: Long, english: Boolean, gemmaBytes: Long = GEMMA_BYTES): Tier = when {
+        totalRamBytes >= MIN_GEMMA_RAM_BYTES &&
+            freeBytes >= gemmaBytes + WHISPER_BYTES + RESERVE_BYTES -> Tier.FULL
         freeBytes >= WHISPER_BYTES + RESERVE_BYTES -> Tier.WHISPER
         else -> Tier.NONE
     }

@@ -68,9 +68,9 @@ class SpeechOfferTest {
         val tier = ModelSetup.tier(totalRamBytes = 5_700_000_000L, freeBytes = 10_000_000_000L, english = false)
         assertEquals(ModelSetup.Tier.WHISPER, tier)
         assertEquals(161_253_144L, ModelSetup.packageBytes(tier))
-        // Gemma still needs English, so the full tier does not apply elsewhere.
+        // Image/chat Gemma is multilingual; its speech-only gate is separate.
         assertEquals(
-            ModelSetup.Tier.WHISPER,
+            ModelSetup.Tier.FULL,
             ModelSetup.tier(totalRamBytes = 8_000_000_000L, freeBytes = 10_000_000_000L, english = false),
         )
     }

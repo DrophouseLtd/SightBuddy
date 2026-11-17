@@ -30,7 +30,7 @@ ML Kit Language Identification, by Google, under the ML Kit Terms of Service.
 
 Downloaded when you choose to
 
-Gemma 4 E2B, the on-device AI model, by Google, converted for LiteRT-LM by LiteRT Community, downloaded from Hugging Face at revision 6e5c4f1e. Apache License 2.0.
+Gemma 4 E2B and optional experimental E4B, on-device AI models by Google, converted for LiteRT-LM by LiteRT Community. Downloaded from Hugging Face at pinned revisions 6e5c4f1e (E2B) and f254b5ba (E4B). Apache License 2.0.
 
 Whisper base (multilingual) and legacy base.en (English), the on-device speech recognition models, by OpenAI. MIT License. Converted to ONNX by the sherpa-onnx project, Apache License 2.0.
 

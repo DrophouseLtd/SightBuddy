@@ -43,9 +43,9 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * On-device Gemma through LiteRT-LM.
  *
- * Spike: the model file is side-loaded, not downloaded. Push it to
- * `Android/data/<app id>/files/llm/` and it loads at start-up. Nothing here
- * touches the network.
+ * E2B is the default; E4B is an explicitly selected experimental alternative.
+ * Downloads are user-initiated and pinned by size and SHA-256. Selecting one
+ * retains the other model on disk; only one native engine is held at a time.
  *
  * One engine, one request at a time: LiteRT-LM runs a single decode, and two
  * features asking at once would only slow both down.
@@ -53,158 +53,62 @@ import java.util.concurrent.atomic.AtomicReference
 class LocalGemma(context: Context) : LocalAnswerer {
 
     private val modelDir = File(context.getExternalFilesDir(null), "llm")
-    private val cacheDir = context.cacheDir.absolutePath
-
-    /** The multimodal model (text, image, audio), or null when not on the device. */
-    val modelFile: File? get() = File(modelDir, E2B_FILE).takeIf { it.isFile }
-
-    private val _installed = MutableStateFlow(modelFile != null)
-
-    /** On the device, loaded or not. */
-    val installedState = _installed.asStateFlow()
-    val installed: Boolean get() = _installed.value
-
-    fun sizeOnDisk(): Long = modelFile?.length() ?: 0L
-
-    private val _downloadPercent = MutableStateFlow<Int?>(null)
-
-    private val partFile get() = File(modelDir, "$E2B_FILE.part")
-
-    /** How far an interrupted download got, 0 when none; a new download resumes from it. */
-    fun partialPercent(): Int = (partFile.length() * 100 / E2B_SIZE).toInt().coerceIn(0, 99)
-
-    /** Progress of a download in progress, or null. */
-    val downloadPercent = _downloadPercent.asStateFlow()
-
-    /** Model files already checked against their SHA-256, so each is hashed once. */
+    private val cacheRoot = File(context.cacheDir, "local_ai")
+    private val cacheDir: String get() = File(cacheRoot, selectedModel.value.id).apply { mkdirs() }.absolutePath
+    private val preferences = context.getSharedPreferences("local_ai_model", Context.MODE_PRIVATE)
     private val checks = VerifiedModels(File(context.filesDir, VerifiedModels.DIR))
+    private val repository = LocalModelRepository(
+        modelDir, checks,
+        { preferences.getString("selected", null) },
+        { id -> check(preferences.edit().putString("selected", id).commit()) { "Could not save model choice" } },
+    )
+    private val mutation = java.util.concurrent.Semaphore(1)
+    val selectedModel = repository.selected
+    val installedState = repository.installed
+    val installed: Boolean get() = installedState.value
+    val modelFile: File? get() = repository.file().takeIf { it.isFile }
+    val downloadPercent = repository.progress
+    fun sizeOnDisk(): Long = modelFile?.length() ?: 0L
+    fun partialPercent(): Int = repository.partialPercent()
+    fun isInstalled(spec: LocalModelSpec): Boolean = repository.isInstalled(spec)
 
-    /**
-     * Downloads the model from Hugging Face (litert-community, Apache 2.0, no
-     * login), pinned to one revision and checked by size and SHA-256. Resumes a
-     * partial download. Single-flight: a second call while one runs returns false.
-     */
-    suspend fun download(): Boolean = withContext(Dispatchers.IO) {
-        if (installed) return@withContext true
-        if (!_downloadPercent.compareAndSet(null, partialPercent())) return@withContext false
+    /** Selecting keeps other model files. Refuse while a load/decode/download is busy. */
+    fun selectModel(id: String): Boolean {
+        if (id == selectedModel.value.id) return true
+        if (LocalModelCatalog.fromId(id) == null || !mutation.tryAcquire()) return false
         try {
-            // A dropped connection is normal over 2.6 GB on a phone: retry, resuming
-            // where it stopped, before giving up.
+            if (nativeAbandoned || loadingState.value || !inference.tryEnter()) return false
+            try {
+                if (nativeAbandoned || retired) return false
+                if (!repository.select(id)) return false
+                generation++
+                engine?.close()
+                engine = null
+                _ready.value = false
+                loadStarted.set(false)
+                loadFailed = false
+                return true
+            } finally { inference.leave() }
+        } finally { mutation.release() }
+    }
+
+    /** Explicit user-initiated download of the selected model; interrupted files resume. */
+    suspend fun download(expectedId: String = selectedModel.value.id): Boolean = withContext(Dispatchers.IO) {
+        if (!mutation.tryAcquire()) return@withContext false
+        try {
+            if (selectedModel.value.id != expectedId) return@withContext false
             for (attempt in 1..DOWNLOAD_ATTEMPTS) {
-                when (downloadOnce()) {
-                    Attempt.DONE -> return@withContext true
-                    // Not retried: 2.6 GB again would most likely bring the same file.
-                    Attempt.WRONG_FILE -> return@withContext false
-                    Attempt.INTERRUPTED ->
-                        if (attempt < DOWNLOAD_ATTEMPTS) kotlinx.coroutines.delay(attempt * 5_000L)
-                }
+                if (repository.download()) return@withContext true
+                if (attempt < DOWNLOAD_ATTEMPTS) kotlinx.coroutines.delay(attempt * 5_000L)
             }
             false
-        } finally {
-            _downloadPercent.value = null
-        }
-    }
-
-    private enum class Attempt { DONE, INTERRUPTED, WRONG_FILE }
-
-    /** One attempt, resuming a partial file; [Attempt.DONE] when the model is complete, checked and in place. */
-    private fun downloadOnce(): Attempt {
-        try {
-            modelDir.mkdirs()
-            val part = partFile
-            if (part.length() > E2B_SIZE) part.delete()
-            // Already whole (the app stopped before the rename): asking for more would
-            // be refused (HTTP 416) on every attempt.
-            if (part.length() < E2B_SIZE) fetchInto(part)
-            if (part.length() != E2B_SIZE) {
-                Log.e(TAG, "Download incomplete: ${part.length()} of $E2B_SIZE bytes")
-                return Attempt.INTERRUPTED
-            }
-            // Progress stays at 99 % for the few seconds this takes: the model
-            // is not installed until it is known to be the right file.
-            val started = SystemClock.elapsedRealtime()
-            val result = ModelFileGate.install(part, File(modelDir, E2B_FILE), E2B_SHA256, checks)
-            Log.i(TAG, "SHA-256 checked in ${SystemClock.elapsedRealtime() - started} ms: $result")
-            return when (result) {
-                Install.INSTALLED -> {
-                    _installed.value = true
-                    Attempt.DONE
-                }
-                Install.WRONG_FILE -> {
-                    Log.e(TAG, "Downloaded model does not match its SHA-256: deleted")
-                    Attempt.WRONG_FILE
-                }
-                Install.NOT_MOVED -> Attempt.INTERRUPTED
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Download interrupted at ${partFile.length()} bytes", e)
-            return Attempt.INTERRUPTED
-        }
-    }
-
-    /**
-     * Appends the rest of the model to [part], or starts it again when the
-     * server will not carry on from where the file ends.
-     *
-     * The server's answer decides, not the request: asked for the rest, it may
-     * send the whole file back with a 206 anyway. Appending that gave a file
-     * 65 MB too long, which the size check then threw away — after the whole
-     * 2.6 GB had come down.
-     */
-    private fun fetchInto(part: File) {
-        val client = okhttp3.OkHttpClient.Builder()
-            .readTimeout(30, TimeUnit.SECONDS)
-            .build()
-        val request = okhttp3.Request.Builder()
-            .url(E2B_URL)
-            .apply { if (part.length() > 0) header("Range", "bytes=${part.length()}-") }
-            .build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                Log.e(TAG, "Download failed: HTTP ${response.code}")
-                return
-            }
-            // "bytes 1234-2588147711/2588147712": where what follows belongs.
-            val resumesAt = response.header("Content-Range")
-                ?.substringAfter("bytes ", "")
-                ?.substringBefore('-')
-                ?.trim()
-                ?.toLongOrNull()
-            val append = response.code == 206 && resumesAt == part.length()
-            if (!append) {
-                if (response.code == 206) {
-                    Log.w(TAG, "Server resumed at $resumesAt, not ${part.length()}: starting again")
-                }
-                part.delete()
-            }
-            val body = response.body ?: return
-            FileOutputStream(part, append).use { out ->
-                body.byteStream().use { input ->
-                    val buffer = ByteArray(1 shl 16)
-                    var done = part.length()
-                    while (true) {
-                        val n = input.read(buffer)
-                        if (n < 0) break
-                        // Never write past the end of the model: a server that
-                        // sends more than was asked for is not worth a full disk.
-                        if (done + n > E2B_SIZE) {
-                            Log.w(TAG, "Server sent more than the model's size; stopping")
-                            out.write(buffer, 0, (E2B_SIZE - done).toInt())
-                            return
-                        }
-                        out.write(buffer, 0, n)
-                        done += n
-                        _downloadPercent.value = (done * 100 / E2B_SIZE).toInt().coerceIn(0, 99)
-                    }
-                }
-            }
-        }
+        } finally { mutation.release() }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val loadStarted = AtomicBoolean(false)
     /** One model call at a time; waiting can be given up, and any thread may let go. */
-    private val inference = ModelGate()
+    private val inference = PROCESS_INFERENCE
 
     /** Bumped by [cancel]; a request that sees it change gives up. */
     @Volatile
@@ -216,6 +120,13 @@ class LocalGemma(context: Context) : LocalAnswerer {
     @Volatile
     private var engine: Engine? = null
 
+    /** A native stream did not acknowledge cancellation. Quarantine until process restart. */
+    private var nativeAbandoned: Boolean
+        get() = PROCESS_QUARANTINED.get()
+        set(value) { if (value) PROCESS_QUARANTINED.set(true) }
+    private val conversationLock = Any()
+    @Volatile private var retired = false
+
     /** The model would not load on this phone; requests stop waiting for it. */
     @Volatile
     private var loadFailed = false
@@ -224,41 +135,53 @@ class LocalGemma(context: Context) : LocalAnswerer {
     @Volatile
     private var generation = 0
 
+    private val _loading = MutableStateFlow(false)
+    val loadingState = _loading.asStateFlow()
     private val _ready = MutableStateFlow(false)
     val ready = _ready.asStateFlow()
 
     /** Load in the background when the model is present. Single-flight. */
     fun loadIfPresent() {
-        val file = modelFile ?: return
-        if (loadFailed || !loadStarted.compareAndSet(false, true)) return
-        val gen = generation
-        // Set before the launch, so a request starting its wait now sees it.
-        verifying = true
-        scope.launch {
-            val checked = try {
-                verifiedForLoad(file)
-            } finally {
-                verifying = false
+        if (!mutation.tryAcquire()) return
+        var handedOff = false
+        var ownsInference = false
+        try {
+            // Reserve BEFORE scheduling: there are no queued, stale load jobs
+            // whose finally could clear a later flight after release/recreate.
+            if (!inference.tryEnter()) return
+            ownsInference = true
+            if (nativeAbandoned || retired || loadFailed || engine != null || loadStarted.get()) return
+            val spec = selectedModel.value
+            val file = repository.file(spec)
+            if (!file.isFile) return
+            loadStarted.set(true)
+            _loading.value = true
+            verifying = true
+            val gen = generation
+            scope.launch {
+                try {
+                    if (nativeAbandoned || retired || gen != generation) return@launch
+                    val checked = verifiedForLoad(file, spec) ?: return@launch
+                    verifying = false
+                    if (nativeAbandoned || retired || gen != generation) return@launch
+                    PROCESS_OWNER.replace(this@LocalGemma) { closeOwnedEngine() }
+                    val loaded = localBackendAttempts().firstNotNullOfOrNull { (llm, vision) -> open(checked, llm, vision) }
+                    if (loaded == null) { loadFailed = true; return@launch }
+                    if (retired || gen != generation) { loaded.close(); return@launch }
+                    engine = loaded
+                    warmUp(loaded)
+                    _ready.value = true
+                } finally {
+                    verifying = false
+                    _loading.value = false
+                    loadStarted.set(false)
+                    inference.leave()
+                }
             }
-            if (checked == null || gen != generation) {
-                loadStarted.set(false)
-                return@launch
-            }
-            val started = SystemClock.elapsedRealtime()
-            val loaded = open(checked, Backend.GPU()) ?: open(checked, Backend.CPU())
-            if (loaded == null) {
-                loadFailed = true
-                loadStarted.set(false)
-                return@launch
-            }
-            if (gen != generation) {
-                loaded.close()
-                return@launch
-            }
-            engine = loaded
-            Log.i(TAG, "Loaded ${file.name} in ${SystemClock.elapsedRealtime() - started} ms")
-            warmUp(loaded)
-            _ready.value = true
+            handedOff = true
+        } finally {
+            if (ownsInference && !handedOff) inference.leave()
+            mutation.release()
         }
     }
 
@@ -271,9 +194,9 @@ class LocalGemma(context: Context) : LocalAnswerer {
      * installed, a request waiting for it gives up, the download is offered
      * again, and [removedAsDamaged] is set for the app to say so.
      */
-    private suspend fun verifiedForLoad(file: File): ForLoad.Verified? = withContext(Dispatchers.IO) {
+    private suspend fun verifiedForLoad(file: File, spec: LocalModelSpec): ForLoad.Verified? = withContext(Dispatchers.IO) {
         val started = SystemClock.elapsedRealtime()
-        when (val result = ModelFileGate.forLoad(file, E2B_SHA256, checks)) {
+        when (val result = ModelFileGate.forLoad(file, spec.sha256, checks)) {
             is ForLoad.Verified -> {
                 val ms = SystemClock.elapsedRealtime() - started
                 if (ms > 100) Log.i(TAG, "SHA-256 of ${file.name} checked in $ms ms")
@@ -287,8 +210,8 @@ class LocalGemma(context: Context) : LocalAnswerer {
             }
             ForLoad.Damaged -> {
                 Log.e(TAG, "${file.name} does not match its SHA-256: deleted")
-                File(cacheDir).listFiles { f -> f.name.startsWith(E2B_FILE) }?.forEach { it.delete() }
-                _installed.value = false
+                File(cacheDir).deleteRecursively()
+                repository.refresh()
                 _removedAsDamaged.value = true
                 null
             }
@@ -313,7 +236,7 @@ class LocalGemma(context: Context) : LocalAnswerer {
      * (the first picture took 15 s, later ones 7 s). Pay it here, before anyone
      * is waiting: one tiny image question and one second of silence.
      */
-    private fun warmUp(eng: Engine) = inference.withModel {
+    private fun warmUp(eng: Engine) {
         val started = SystemClock.elapsedRealtime()
         try {
             eng.createConversation(ConversationConfig(maxOutputToken = 1)).use {
@@ -339,17 +262,22 @@ class LocalGemma(context: Context) : LocalAnswerer {
     }
 
     /** Takes only a file the gate has checked: an unchecked [File] cannot be opened. */
-    private fun open(model: ForLoad.Verified, backend: Backend): Engine? = try {
+    private fun open(model: ForLoad.Verified, backend: Backend, visionBackend: Backend): Engine? = try {
         Engine(
             EngineConfig(
                 modelPath = model.file.absolutePath,
                 backend = backend,
-                visionBackend = Backend.GPU(),
+                visionBackend = visionBackend,
                 // The audio encoder must run on the CPU for Gemma's E models.
                 audioBackend = Backend.CPU(),
                 cacheDir = cacheDir,
             )
-        ).also { it.initialize() }
+        ).also { created ->
+            try { created.initialize() } catch (failure: Throwable) {
+                runCatching { created.close() }
+                throw failure
+            }
+        }
     } catch (e: Throwable) {
         Log.e(TAG, "Could not load ${model.file.name} on $backend", e)
         null
@@ -363,13 +291,17 @@ class LocalGemma(context: Context) : LocalAnswerer {
         // A question asked while the model is still loading waits for it.
         loadIfPresent()
         val wait = LoadWait(LOAD_WAIT_MS, SystemClock.elapsedRealtime())
-        while (!ready.value && !loadFailed && installed) {
+        while (!ready.value && !loadFailed && installed && !nativeAbandoned && !retired) {
             if (wait.expired(SystemClock.elapsedRealtime(), verifying)) break
+            // The process permit may have belonged to the preceding Activity
+            // when the first attempt ran. Retry within the existing bounded wait.
+            loadIfPresent()
             kotlinx.coroutines.delay(100)
         }
         return withContext(Dispatchers.Default) {
             inference.withModel {
                 // Read under the lock: a release in between would leave a closed engine.
+                if (nativeAbandoned || retired) return@withModel null
                 val eng = engine ?: return@withModel null
                 try {
                     val started = SystemClock.elapsedRealtime()
@@ -410,7 +342,7 @@ class LocalGemma(context: Context) : LocalAnswerer {
      */
     override fun cancel() {
         cancelToken++
-        active?.cancelProcess()
+        synchronized(conversationLock) { active?.cancelProcess() }
     }
 
     override fun complete(openAiRequestBody: JSONObject): String? = answer(openAiRequestBody, onDelta = null)
@@ -438,14 +370,16 @@ class LocalGemma(context: Context) : LocalAnswerer {
         val wait = LoadWait(LOAD_WAIT_MS, waitStarted)
         while (!ready.value) {
             // Not installed: deleted meanwhile, or it failed its SHA-256 check.
-            if (loadFailed || !installed || cancelled()) return null
+            if (nativeAbandoned || retired || loadFailed || !installed || cancelled()) return null
             if (wait.expired(SystemClock.elapsedRealtime(), verifying)) return null
+            loadIfPresent()
             Thread.sleep(100)
         }
         if (!inference.enter { cancelled() }) return null
         try {
             if (cancelled()) return null
             // Read under the lock: a release in between would leave a closed engine.
+            if (nativeAbandoned || retired) return null
             val eng = engine ?: return null
             return try {
                 val started = SystemClock.elapsedRealtime()
@@ -491,19 +425,36 @@ class LocalGemma(context: Context) : LocalAnswerer {
                 // than leaving it.
                 var abandoned = false
                 val text = try {
-                    active = conversation
+                    synchronized(conversationLock) { active = conversation }
                     // A cancel between the check above and here would have missed it.
                     if (token != cancelToken) conversation.cancelProcess()
                     if (onDelta == null) {
                         conversation.sendMessage(question).toString().trim()
                     } else {
-                        val streamed = streamInto(conversation, question, token, started, onDelta)
+                        val streamed = try {
+                            streamInto(conversation, question, token, started, onDelta)
+                        } catch (failure: Throwable) {
+                            // An exception is not native completion. Keep the engine
+                            // alive and forbid all new engines in this process.
+                            abandoned = true
+                            nativeAbandoned = true
+                            loadFailed = true
+                            _ready.value = false
+                            throw failure
+                        }
                         abandoned = streamed.abandoned
+                        if (abandoned) {
+                            nativeAbandoned = true
+                            loadFailed = true
+                            _ready.value = false
+                        }
                         streamed.text
                     }
                 } finally {
-                    active = null
-                    if (!abandoned) conversation.close()
+                    synchronized(conversationLock) {
+                        active = null
+                        if (!abandoned) conversation.close()
+                    }
                 }
                 if (cancelled()) return null
                 Log.i(TAG, "Answered in ${SystemClock.elapsedRealtime() - started} ms (${history.size} earlier turns)")
@@ -574,7 +525,7 @@ class LocalGemma(context: Context) : LocalAnswerer {
             val step = watch.step(SystemClock.elapsedRealtime() - started, cancelled = token != cancelToken)
             if (step == StreamWatch.Step.STOP) {
                 if (watch.stoppedByLimit) Log.w(TAG, "Streamed answer still running after $STREAM_LIMIT_MS ms: stopped")
-                conversation.cancelProcess()
+                synchronized(conversationLock) { conversation.cancelProcess() }
             } else if (step == StreamWatch.Step.GIVE_UP) {
                 Log.w(TAG, "No word from the model $STOP_WAIT_MS ms after stopping it: no longer waited for")
                 abandoned = true
@@ -651,7 +602,7 @@ class LocalGemma(context: Context) : LocalAnswerer {
     }
 
     /** Frees the memory (about 2 GB). Waits for a request in progress to finish. */
-    fun release() = inference.withModel {
+    private fun closeOwnedEngine() {
         generation++
         engine?.close()
         engine = null
@@ -660,18 +611,42 @@ class LocalGemma(context: Context) : LocalAnswerer {
         loadFailed = false
     }
 
+    fun release() = inference.withModel {
+        if (nativeAbandoned) return@withModel
+        if (!PROCESS_OWNER.release(this)) closeOwnedEngine()
+    }
+
+    /** Prevent a destroyed Activity from reloading while its asynchronous release waits. */
+    fun retire() {
+        retired = true
+        cancel()
+    }
+
     /** Unloads and deletes the model and its GPU caches. */
     fun deleteModel(): Boolean {
-        release()
-        val file = File(modelDir, E2B_FILE)
-        val deleted = !file.exists() || file.delete()
-        checks.forget(file)
-        File(cacheDir).listFiles { f -> f.name.startsWith(E2B_FILE) }?.forEach { it.delete() }
-        _installed.value = !deleted
-        return deleted
+        if (!mutation.tryAcquire()) return false
+        try {
+            if (nativeAbandoned || (loadStarted.get() && !ready.value)) return false
+            if (!inference.tryEnter()) return false
+            try {
+                if (nativeAbandoned || retired) return false
+                generation++
+                engine?.close()
+                engine = null
+                _ready.value = false
+                loadStarted.set(false)
+                loadFailed = false
+                val deleted = repository.delete()
+                File(cacheDir).deleteRecursively()
+                return deleted
+            } finally { inference.leave() }
+        } finally { mutation.release() }
     }
 
     companion object {
+        private val PROCESS_OWNER = ProcessModelOwner()
+        private val PROCESS_INFERENCE = ModelGate()
+        private val PROCESS_QUARANTINED = AtomicBoolean(false)
         private const val TAG = "LocalGemma"
 
         const val E2B_FILE = "gemma-4-E2B-it.litertlm"
