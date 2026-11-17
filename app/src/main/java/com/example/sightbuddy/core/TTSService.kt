@@ -93,8 +93,10 @@ class TTSService(
      * Told the languages a line was in that the phone has no voice for, as
      * it is said (said in the app's language instead): for the one-time hint.
      */
-    @Volatile
-    var onVoiceMissing: ((Set<String>) -> Unit)? = null
+    private val missingVoiceEvents = com.example.sightbuddy.core.language.MissingVoiceEvents()
+    var onVoiceMissing: ((Set<String>) -> Unit)?
+        get() = missingVoiceEvents.listener
+        set(value) { missingVoiceEvents.listener = value }
 
     /** The phone's voices, asked for at most every [VOICES_KEPT_MS]. */
     private var voices: List<VoiceInfo>? = null
@@ -180,15 +182,25 @@ class TTSService(
             val preferred = Locale.getDefault()
             var result = tts?.setLanguage(preferred)
             appVoiceLocale = preferred
+            var appVoiceMissing = false
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 Log.w("TTSService", "No voice for $preferred; falling back to English")
                 result = tts?.setLanguage(Locale.US)
                 appVoiceLocale = Locale.US
+                appVoiceMissing = true
             }
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 Log.e("TTSService", "The Language specified is not supported!")
             } else {
                 _isInitialized.value = true
+                // The app's own language had no voice and reading falls back to
+                // English: report it like a missing span language, so the
+                // one-time MissingVoiceDialog tells the user instead of a
+                // silent swap. Not reported for English itself: an English
+                // variant without a voice is still read in English.
+                if (appVoiceMissing && preferred.language != Locale.US.language) {
+                    missingVoiceEvents.report(setOf(preferred.toLanguageTag()))
+                }
                 // The language model is loaded now, on a thread of its own, so
                 // the first line in another language does not wait for it.
                 languageIdentifier?.let { identifier ->
@@ -367,7 +379,7 @@ class TTSService(
             emptyList()
         } else {
             val picked = VoiceChoice.pick(found, ::localeFor)
-            if (picked.missing.isNotEmpty()) onVoiceMissing?.invoke(picked.missing)
+            if (picked.missing.isNotEmpty()) missingVoiceEvents.report(picked.missing)
             picked.spans
         }
         if (output == SpeechRoute.Output.SCREEN_READER) {

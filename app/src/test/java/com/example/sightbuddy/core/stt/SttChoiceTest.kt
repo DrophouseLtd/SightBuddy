@@ -33,6 +33,14 @@ class SttChoiceTest {
     }
 
     @Test
+    fun multilingualWhisperCanRunOutsideEnglishButLegacyCannot() {
+        assertEquals(WHISPER, SttChoice.effective(WHISPER, true, true, english = false, whisperServesLanguage = true))
+        assertEquals(ANDROID, SttChoice.effective(WHISPER, true, true, english = false, whisperServesLanguage = false))
+        assertEquals(ANDROID, SttChoice.effective(ANDROID, true, true, english = false, whisperServesLanguage = true))
+        assertEquals(ANDROID, SttChoice.effective(GEMMA, false, true, english = false, whisperServesLanguage = true))
+    }
+
+    @Test
     fun settingsOffersWhisperThenAndroidNeverGemma() {
         assertEquals(listOf(WHISPER, ANDROID), SttChoice.available(whisperReady = true, gemmaInstalled = true))
         assertEquals(listOf(ANDROID), SttChoice.available(whisperReady = false, gemmaInstalled = true))

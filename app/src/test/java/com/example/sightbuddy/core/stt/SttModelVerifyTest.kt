@@ -1,6 +1,7 @@
 package com.example.sightbuddy.core.stt
 
 import com.example.sightbuddy.core.ModelChecksums
+import com.example.sightbuddy.core.stt.SttModelSet.LEGACY_EN
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -29,6 +30,28 @@ class SttModelVerifyTest {
 
     private val pins = contents.mapValues { (_, text) -> SttModelManager.Pinned(1L, sha(text)) }
 
+    /**
+     * The pins must weigh at least what the legacy spec demands, or `isReady`
+     * (which checks the published sizes) refuses these one-byte stand-ins.
+     */
+    private val catalog = { set: SttModelSet ->
+        val real = SttModelCatalog.of(set, SttModelManager.FILES)
+        if (set == SttModelSet.LEGACY_EN) {
+            SttModelSpec(
+                set = set,
+                dirName = real.dirName,
+                files = real.files.map { file ->
+                    ModelFileSpec(file.name, pins.getValue(file.name).sha256, 1L)
+                },
+                vad = ModelFileSpec(real.vad.name, pins.getValue(real.vad.name).sha256, 1L),
+                totalBytes = real.totalBytes,
+                marker = real.marker,
+            )
+        } else {
+            real
+        }
+    }
+
     /** A finished download as an earlier version left it: every file and the marker. */
     private fun installed(vararg replaced: Pair<String, String>): SttModelManager {
         val filesDir = temp.newFolder("files")
@@ -36,24 +59,24 @@ class SttModelVerifyTest {
         val texts = contents + replaced
         texts.forEach { (name, text) -> File(dir, name).writeText(text) }
         File(dir, SttModelManager.MARKER).writeText("v1")
-        return SttModelManager(filesDir, baseUrl = "", files = pins)
+        return SttModelManager(filesDir, baseUrl = "", files = pins, catalog = catalog)
     }
 
     @Test
     fun matchingFilesAreHandedOutForLoading() {
         val models = installed()
-        val files = models.verifiedFiles()
+        val files = models.verifiedFiles(SttModelSet.LEGACY_EN)
         assertNotNull(files)
         assertEquals("encoder", files!!.encoder.file.readText())
         assertEquals("vad", files.vad.file.readText())
-        assertEquals(SttModelManager.DownloadState.Ready, models.downloadState.value)
+        assertEquals(SttModelManager.DownloadState.Ready, models.stateOf(LEGACY_EN).value)
         assertFalse(models.removedAsDamaged.value)
     }
 
     @Test
     fun aDamagedFileIsNeverHandedOutAndTheModelsCountAsMissing() {
         val models = installed(SttModelManager.DECODER to "tampered")
-        assertNull(models.verifiedFiles())
+        assertNull(models.verifiedFiles(SttModelSet.LEGACY_EN))
         assertFalse(File(models.modelDir, SttModelManager.DECODER).exists())
         assertFalse(models.isReady())
         assertEquals(SttModelManager.DownloadState.Idle, models.downloadState.value)

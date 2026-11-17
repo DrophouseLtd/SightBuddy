@@ -57,7 +57,7 @@ class VoiceInputService(
 
     sealed class SttEvent {
         /** Recording ended by the service, not the user. */
-        data class AutoStopped(val noSpeech: Boolean) : SttEvent()
+        data class AutoStopped(val noSpeech: Boolean, val maxMs: Long = 0L) : SttEvent()
 
         /** Recording finished but produced no usable text. */
         data object Empty : SttEvent()
@@ -83,6 +83,7 @@ class VoiceInputService(
         whisperReady = engine != null,
         gemmaInstalled = localGemma?.installed == true,
         english = Locale.getDefault().language == "en",
+        whisperServesLanguage = loadedPlan?.multilingual == true,
     )
 
     private fun usingGemma(): Boolean = effectiveChoice() == SttChoice.GEMMA
@@ -160,6 +161,14 @@ class VoiceInputService(
 
     private var engine: WhisperEngine? = null
 
+    /**
+     * The model and language the running engine was built for, so a language
+     * change can be seen and the engine replaced rather than reused with the
+     * wrong language baked in.
+     */
+    @Volatile
+    private var loadedPlan: WhisperPlan? = null
+
     private val engineLoadStarted = AtomicBoolean(false)
 
     @Volatile
@@ -211,23 +220,34 @@ class VoiceInputService(
 
     /** Load the Whisper engine when model files are available. Single-flight. */
     fun loadEngineIfReady() {
-        // The bundled model is Whisper base.en — English only. In any other app
-        // language stay on the system recogniser, which does support it.
-        if (Locale.getDefault().language != "en") return
-        if (!models.isReady() || !engineLoadStarted.compareAndSet(false, true)) return
+        // Which model serves the current language (multilingual in its language,
+        // base.en for English, null when neither applies: Polish with only the
+        // legacy model stays on the platform recogniser, as before).
+        val plan = models.plan(Locale.getDefault().toLanguageTag()) ?: return
+        // Already running for exactly this model and language: nothing to do.
+        if (loadedPlan == plan && engine != null) return
+        if (!models.isReady(plan.set) || !engineLoadStarted.compareAndSet(false, true)) return
         scope.launch {
             // Only files that have matched their SHA-256 are handed out: files from
             // an earlier version are hashed here once. One that fails is deleted and
             // the download is offered again; until then the system recogniser.
-            val files = withContext(Dispatchers.IO) { models.verifiedFiles() }
+            val files = withContext(Dispatchers.IO) { models.verifiedFiles(plan.set) }
             val loaded = files?.let { WhisperEngine.load(it) }
             if (loaded != null) {
-                engine = loaded
-                _whisperReady.value = true
+                replaceEngine(loaded)
             } else {
                 engineLoadStarted.set(false) // allow a later retry
             }
         }
+    }
+
+    /** Takes the new engine, releasing the one it replaces. */
+    @Synchronized
+    private fun replaceEngine(loaded: WhisperEngine) {
+        engine?.release()
+        engine = loaded
+        loadedPlan = loaded.builtFor()
+        _whisperReady.value = true
     }
 
     /**
@@ -238,6 +258,7 @@ class VoiceInputService(
         if (recordJob?.isActive == true) return false
         engine?.release()
         engine = null
+        loadedPlan = null
         _whisperReady.value = false
         engineLoadStarted.set(false)
         return true
@@ -325,7 +346,11 @@ class VoiceInputService(
     private suspend fun recordAndTranscribe(eng: WhisperEngine) {
         val sampleRate = WhisperEngine.SAMPLE_RATE
         val window = WhisperEngine.VAD_WINDOW
-        val maxSamples = sampleRate * (MAX_RECORDING_MS / 1000L).toInt()
+        // Whisper's feature window keeps only ~30 s of audio; everything past
+        // it is silently dropped (measured, .local/qa/multilingual/
+        // decoding-diagnosis), so the hard stop for this path is earlier than
+        // the 60 s cap the cloud/Gemma paths keep.
+        val maxSamples = sampleRate * (WHISPER_RECORDING_MS / 1000L).toInt()
         val minBuf = AudioRecord.getMinBufferSize(
             sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
         )
@@ -390,7 +415,7 @@ class VoiceInputService(
         if (recordingGate.discardsTranscript()) return
 
         if (maxedOut) {
-            _events.tryEmit(SttEvent.AutoStopped(noSpeech = false))
+            _events.tryEmit(SttEvent.AutoStopped(noSpeech = false, maxMs = WHISPER_RECORDING_MS))
         }
         if (!speechDetected) {
             _lastError.value = ERROR_NO_MATCH
@@ -542,6 +567,7 @@ class VoiceInputService(
         legacy.shutdown()
         engine?.release()
         engine = null
+        loadedPlan = null
     }
 
     companion object {
@@ -552,6 +578,14 @@ class VoiceInputService(
          * think mid-question and were being cut off.
          */
         const val MAX_RECORDING_MS = 60_000L
+
+        /**
+         * Earlier hard cap for the on-device Whisper path only: sherpa-onnx
+         * drops everything past ~30 s of audio, so a 60 s Whisper recording
+         * would lose half its tail for the same stop cue. Cloud transcription
+         * and Gemma keep [MAX_RECORDING_MS].
+         */
+        const val WHISPER_RECORDING_MS = 29_000L
 
         /** Mirrors SpeechRecognizer.ERROR_NO_MATCH for caller compatibility. */
         const val ERROR_NO_MATCH = 7

@@ -50,10 +50,12 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.sightbuddy.R
 import com.example.sightbuddy.ui.DialogWindowTitle
 import com.example.sightbuddy.ui.buttonSemantics
+import com.example.sightbuddy.core.ModelSetup
 import com.example.sightbuddy.core.SettingsManager
 import com.example.sightbuddy.ui.theme.actionButtonBackground
 import com.example.sightbuddy.ui.theme.actionButtonText
 import kotlinx.coroutines.launch
+import android.text.format.Formatter
 import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.foundation.focusable
@@ -94,6 +96,12 @@ fun SettingsScreen(
     sttDownloadPercent: Int? = null,
     onRequestSttDownload: () -> Unit = {},
     onManageSttModels: () -> Unit = {},
+    smallInstalled: Boolean = false,
+    smallDownloadPercent: Int? = null,
+    smallSizeLabel: String = "",
+    smallDownloadSizeLabel: String = "",
+    onRequestSmallDownload: () -> Unit = {},
+    onManageSmall: () -> Unit = {},
     cloudSttOffered: Boolean = false,
     onRequestCloudStt: () -> Unit = {},
     currentLanguageName: String = "",
@@ -104,6 +112,9 @@ fun SettingsScreen(
     onPrivacyPolicy: () -> Unit = {},
     onTermsOfUse: () -> Unit = {},
     whisperSupported: Boolean = true,
+    localModelLabel: String = "",
+    localModelSizeLabel: String = "",
+    onChooseLocalModel: () -> Unit = {},
     gemmaInstalled: Boolean = false,
     gemmaDownloadPercent: Int? = null,
     onManageGemma: () -> Unit = {},
@@ -119,6 +130,11 @@ fun SettingsScreen(
     onSttChoiceCycle: () -> Unit = {},
     onLeaveFeedback: () -> Unit = {},
 ) {
+    /** Bytes as the phone says them ("154 MB"), for the download's own size line. */
+    val whisperDownloadSizeLabel = Formatter.formatShortFileSize(
+        LocalContext.current,
+        ModelSetup.WHISPER_BYTES,
+    )
     val textPreview by settingsManager.textPreviewEnabled.collectAsState()
     val scanLight by settingsManager.scanLightEnabled.collectAsState()
     val scanColour by settingsManager.scanColourEnabled.collectAsState()
@@ -289,7 +305,7 @@ fun SettingsScreen(
                             sttModelsReady -> stringResource(R.string.settings_stt_downloaded)
                             sttDownloadPercent != null ->
                                 stringResource(R.string.settings_stt_downloading, sttDownloadPercent)
-                            else -> stringResource(R.string.settings_stt_not_downloaded)
+                            else -> stringResource(R.string.settings_stt_not_downloaded, whisperDownloadSizeLabel)
                         },
                         action = if (!sttModelsReady && sttDownloadPercent == null) {
                             stringResource(R.string.settings_action_download)
@@ -305,6 +321,39 @@ fun SettingsScreen(
                         },
                     )
                 }
+                // The optional larger Whisper model: offered only once the base
+                // one is there or being fetched, never in the recommended setup.
+                if (sttModelsReady || smallInstalled || smallDownloadPercent != null) add {
+                    SettingsNavRow(
+                        label = stringResource(R.string.settings_stt_small_model),
+                        description = when {
+                            smallInstalled -> stringResource(R.string.settings_stt_small_downloaded)
+                            smallDownloadPercent != null ->
+                                stringResource(R.string.settings_stt_downloading, smallDownloadPercent)
+                            else -> stringResource(R.string.settings_stt_small_not_downloaded, smallDownloadSizeLabel)
+                        },
+                        action = if (!smallInstalled && smallDownloadPercent == null) {
+                            stringResource(R.string.settings_action_download)
+                        } else null,
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode,
+                        onClick = {
+                            when {
+                                smallInstalled -> onManageSmall()
+                                smallDownloadPercent == null -> onRequestSmallDownload()
+                            }
+                        },
+                    )
+                }
+                add {
+                    SettingsNavRow(
+                        label = stringResource(R.string.local_model_choice_title),
+                        description = localModelLabel + " — " + localModelSizeLabel,
+                        labelColor = labelColor, highContrast = highContrast, whiteMode = whiteMode,
+                        onClick = onChooseLocalModel,
+                    )
+                }
                 if (gemmaInstalled || gemmaDownloadPercent != null || (gemmaDownloadable && gemmaRecommended)) add {
                     SettingsNavRow(
                         label = stringResource(R.string.settings_gemma_model),
@@ -314,7 +363,7 @@ fun SettingsScreen(
                                 stringResource(R.string.settings_stt_downloading, gemmaDownloadPercent)
                             gemmaPartialPercent > 0 ->
                                 stringResource(R.string.settings_gemma_paused, gemmaPartialPercent)
-                            else -> stringResource(R.string.settings_gemma_not_downloaded)
+                            else -> stringResource(R.string.local_model_not_downloaded) + " — " + localModelSizeLabel
                         },
                         action = when {
                             gemmaInstalled || gemmaDownloadPercent != null -> null
@@ -692,7 +741,7 @@ fun SettingsScreen(
                     if (whisperSupported && !whisperRecommended && !sttModelsReady && sttDownloadPercent == null) add {
                         SettingsNavRow(
                             label = stringResource(R.string.settings_stt_models),
-                            description = stringResource(R.string.settings_stt_not_downloaded),
+                            description = stringResource(R.string.settings_stt_not_downloaded, whisperDownloadSizeLabel),
                             action = stringResource(R.string.settings_action_download),
                             labelColor = labelColor,
                             highContrast = highContrast,
@@ -703,10 +752,7 @@ fun SettingsScreen(
                     if (gemmaDownloadable && !gemmaRecommended && !gemmaInstalled && gemmaDownloadPercent == null) add {
                         SettingsNavRow(
                             label = stringResource(R.string.settings_gemma_model),
-                            description = stringResource(
-                                if (gemmaRecommended) R.string.settings_gemma_not_downloaded
-                                else R.string.settings_gemma_not_recommended
-                            ),
+                            description = stringResource(R.string.local_model_not_downloaded) + " — " + localModelSizeLabel,
                             action = stringResource(R.string.settings_action_download),
                             labelColor = labelColor,
                             highContrast = highContrast,

@@ -235,6 +235,7 @@ class MainActivity : ComponentActivity() {
                 apiOff = getString(R.string.error_api_off),
                 localFailed = getString(R.string.error_local_failed),
                 tooLong = getString(R.string.error_too_long),
+                unreadable = getString(R.string.error_unreadable),
                 chatFull = getString(R.string.error_chat_full),
             ),
             apiAllowed = { settingsManager.useApi.value },
@@ -440,7 +441,7 @@ class MainActivity : ComponentActivity() {
         voiceInputService.shutdown()
         // Stop any answer, then free the model off the main thread: release waits
         // for the model call to end, and waiting here would freeze the screen.
-        localGemma.cancel()
+        localGemma.retire()
         Thread { localGemma.release() }.start()
         objectAnalyzer.close()
         beepService.shutdown()

@@ -28,18 +28,18 @@ enum class SttChoice(val key: String, val labelRes: Int) {
 
         /**
          * What actually runs: the choice when its model is here, otherwise the other
-         * model, otherwise the platform. Both models are English only.
+         * model, otherwise the platform. Gemma speech remains English-only;
+         * Whisper's language support depends on the installed model.
          */
-        fun effective(chosen: SttChoice, whisperReady: Boolean, gemmaInstalled: Boolean, english: Boolean): SttChoice {
-            if (!english) return ANDROID
+        fun effective(chosen: SttChoice, whisperReady: Boolean, gemmaInstalled: Boolean, english: Boolean, whisperServesLanguage: Boolean = english): SttChoice {
             val order = when (chosen) {
                 WHISPER -> listOf(WHISPER, GEMMA, ANDROID)
                 GEMMA -> listOf(GEMMA, WHISPER, ANDROID)
                 ANDROID -> listOf(ANDROID)
             }
             return order.first {
-                it == ANDROID || (it == WHISPER && whisperReady) ||
-                    (it == GEMMA && gemmaInstalled && GEMMA_SPEECH_OFFERED)
+                it == ANDROID || (it == WHISPER && whisperReady && whisperServesLanguage) ||
+                    (it == GEMMA && gemmaInstalled && english && GEMMA_SPEECH_OFFERED)
             }
         }
 
@@ -86,6 +86,10 @@ class SpeechAvailability(
     /** The user's "Use downloaded model" switch. */
     val localEnabled: Boolean = true,
 ) {
+    /** Disable cloud only when a newly ready model serves the current language. */
+    fun shouldDisableCloudOnModelReady(wasReady: Boolean): Boolean =
+        modelServesLanguage && modelDownloaded && !wasReady && cloudEnabled
+
     /** Which recogniser this device will use, assuming the model loads. */
     val engine: SpeechEngine = when {
         // Chosen deliberately and paid for, so it outranks the free options.

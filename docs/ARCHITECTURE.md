@@ -28,8 +28,8 @@ Release builds are **arm64-only** (`minSdk 30` ⇒ every supported device is arm
 | **Memories** | Save chat stores the chat on the phone (`core/MemoryStore.kt`); Gemma names it; list, read, rename, share, delete. Share sends a chat as plain text through Android's share sheet |
 | **Scan colour** | Median of a centre patch sampled straight from the YUV planes, mapped to colour names (incl. brown/beige); on-screen focus frame |
 | **Scan light** | Y-plane luma average |
-| **Speech-to-text** | Chosen in Settings: Whisper `base.en` int8 via sherpa-onnx (default), Gemma 4 E2B, or the Android recogniser; OpenAI transcription when enabled. English only on-device |
-| **Model setup** | `core/ModelSetup.kt` picks a tier from memory and free space (Gemma + Whisper / Whisper / nothing; Finnish: nothing) and offers it with sizes and free space. Downloads run under `ModelDownloadService` |
+| **Speech-to-text** | Chosen in Settings: Multilingual Whisper `base` int8 via sherpa-onnx (default), Gemma 4 E2B, or the Android recogniser; OpenAI transcription when enabled. Multilingual Whisper base int8 supports PL/FI/EN; legacy base.en and Gemma speech remain English-only |
+| **Model setup** | `core/ModelSetup.kt` picks a tier from memory and free space (Gemma + Whisper / Whisper / nothing; Polish/Finnish: Whisper only) and offers it with sizes and free space. Downloads run under `ModelDownloadService` |
 
 Each carousel feature can be hidden in Settings, with a guard that keeps at least one enabled.
 
@@ -44,6 +44,7 @@ Each carousel feature can be hidden in Settings, with a guard that keeps at leas
 
 ### On-device AI
 
+- On-device speech recognition (`core/stt/`): multilingual Whisper base int8 via sherpa-onnx (default download), or the larger Whisper small int8 downloaded deliberately from Settings and preferred once present. Each model lives in its own folder with pinned Hugging Face files; deleting one never removes another.
 - **Gemma 4 E2B** (`core/llm/LocalGemma.kt`) on LiteRT-LM: image questions,
   text questions, the Find objects fallback, speech, chat names. Downloaded
   from Hugging Face `litert-community` (Apache 2.0), pinned, resumable.
@@ -61,9 +62,15 @@ Each carousel feature can be hidden in Settings, with a guard that keeps at leas
 - AI features appear when either path is available: the key alone is no longer
   the feature flag.
 
+### Local model selection
+
+`LocalModelCatalog` pins each model URL, size and SHA-256. `LocalModelRepository` retains separate model/partial files and persists the explicit selection; selection is not download consent. `LocalGemma` uses per-model caches, a process-wide inference permit and `ProcessModelOwner` to close the former engine before creating its replacement. Destroyed activities retire their instance before asynchronous release. An unacknowledged native stream cancellation quarantines local inference for the rest of the process rather than closing a possibly running engine; reopening an activity does not clear this state. This is a conservative failure path, not automatic recovery.
+
+Model setup recommends image/chat Gemma by memory/storage rather than language. The local-model selection plumbing (`LocalModelCatalog`) keeps one pinned model; a larger Gemma was piloted, showed no Polish quality gain at 3x the cost, and was not kept. The separate Gemma speech-recognition gate is unchanged. Hosted legal documents remain English; the onboarding UI discloses that language. Android/TalkBack and GPU/CPU behavior still require device acceptance.
+
 ### Speech input
 
-`VoiceInputService` is the single entry point. With models present it records 16 kHz mono via `AudioRecord`, uses Silero VAD only to tell whether anything was said (silence does not end a recording: the user stops it, or the 60 s cap does) and transcribes with Whisper; otherwise it proxies to the system recogniser. Same flow surface either way (`transcripts`, `isListening`, `events`). Transcripts are one-time events, not state: the app collects them again each time it returns to the foreground, and state replayed the last question.
+`VoiceInputService` is the single entry point. With models present it records 16 kHz mono via `AudioRecord`, uses Silero VAD only to tell whether anything was said (silence does not end a recording: the user stops it, or the 29 s Whisper cap does; cloud/Gemma retain 60 s) and transcribes with Whisper; otherwise it proxies to the system recogniser. Same flow surface either way (`transcripts`, `isListening`, `events`). Transcripts are one-time events, not state: the app collects them again each time it returns to the foreground, and state replayed the last question.
 
 **Mic-first capture** ("ask straight away"): pressing Ask with nothing captured and Automatic capture on records the question, takes the picture once the recording ends (in Text chat a full-size photo: of the page, after guiding to it as Find page does, with Ask finds the page on; of everything in view with it off), then pairs picture + transcription in an order-independent `LaunchedEffect`. The request itself runs in a separate scope — consuming the trigger changes the effect's keys, so running it inline would cancel the call mid-flight.
 
@@ -109,8 +116,8 @@ All entries are optional — a clone builds and runs without any of them.
 ```properties
 sdk.dir=...
 
-# Override the Whisper model download source (defaults to the public
-# sightbuddy-stt-models release).
+# Legacy Whisper model source / download-enable configuration.
+# Multilingual weights and VAD use pinned absolute URLs from SttModelCatalog.
 STT_MODEL_BASE_URL=<release URL serving the model files>
 
 # Release signing. Omit these and release builds fall back to debug signing.
@@ -131,7 +138,7 @@ There is **no API key in the build** — cloud AI is bring-your-own-key, entered
 - No accounts, no analytics of ours, no advertising SDKs; AD_ID permissions are stripped in the manifest and Firebase Analytics collection is disabled. Google's on-device libraries (ML Kit for text and language, MediaPipe Tasks for object detection) send Google anonymous usage and performance data (package name, app version, timings); there is no switch for it, and the privacy policy says so.
 - Camera frames and audio are processed in memory and never uploaded by the app.
 - The only outbound data is user-initiated AI requests (to OpenAI, on the user's own key) and anonymous crash reports (opt-out in Settings → Privacy).
-- The speech models are fetched once from a public GitHub release.
+- Multilingual Whisper weights are fetched from a pinned Hugging Face revision; VAD and legacy weights use a public GitHub release. Each file is SHA-256 checked. The legacy model is preserved in a separate directory.
 
 ## 7. Files worth reading first
 

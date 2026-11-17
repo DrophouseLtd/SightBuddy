@@ -3,23 +3,32 @@ package com.example.sightbuddy.core
 import android.app.ActivityManager
 import android.content.Context
 import android.os.StatFs
+import com.example.sightbuddy.core.stt.SttModelCatalog
+import com.example.sightbuddy.core.stt.SttModelSet
 
 /**
  * Which models suit this phone, judged from its specs alone (memory and free
- * storage) and the app language. No benchmark: the specs decide.
+ * storage). No benchmark: the specs decide; language does not gate image/chat AI.
  *
  * - [Tier.FULL] (tier 3): Gemma for images, chat and Find objects, plus Whisper for speech.
  * - [Tier.WHISPER] (tier 2): Whisper for speech. No on-device answers.
  * - [Tier.NONE] (tier 1): nothing to download; the platform recogniser.
  *
- * Both models are English only, so other languages are always tier 1.
+ * Whisper now has a multilingual model, so speech is offered in Polish and
+ * Finnish as well as English. Gemma image/chat answers are multilingual too;
+ * its independent speech path remains gated elsewhere. Gemma is downloaded
+ * only after acceptance of its own or the full-setup offer.
  */
 object ModelSetup {
 
     enum class Tier { NONE, WHISPER, FULL }
 
-    /** Whisper base.en int8 plus the VAD, as downloaded. */
-    const val WHISPER_BYTES = 161_300_000L
+    /**
+     * The voice model a new download fetches: the multilingual Whisper base
+     * (encoder, decoder, tokens) plus the silero VAD, as published — the real
+     * byte count, not a rounded one.
+     */
+    val WHISPER_BYTES: Long = SttModelCatalog.of(SttModelSet.MULTILINGUAL).totalBytes
 
     /** Gemma 4 E2B, as downloaded. */
     const val GEMMA_BYTES = 2_588_147_712L
@@ -33,10 +42,14 @@ object ModelSetup {
      */
     const val MIN_GEMMA_RAM_BYTES = 7_000_000_000L
 
-    fun tier(totalRamBytes: Long, freeBytes: Long, english: Boolean): Tier = when {
-        !english -> Tier.NONE
+    /**
+     * Image/chat Gemma and multilingual Whisper are offered by hardware, not
+     * language. [english] is retained for caller compatibility only; it must
+     * not be confused with the independent Gemma speech-recognition gate.
+     */
+    fun tier(totalRamBytes: Long, freeBytes: Long, english: Boolean, gemmaBytes: Long = GEMMA_BYTES): Tier = when {
         totalRamBytes >= MIN_GEMMA_RAM_BYTES &&
-            freeBytes >= GEMMA_BYTES + WHISPER_BYTES + RESERVE_BYTES -> Tier.FULL
+            freeBytes >= gemmaBytes + WHISPER_BYTES + RESERVE_BYTES -> Tier.FULL
         freeBytes >= WHISPER_BYTES + RESERVE_BYTES -> Tier.WHISPER
         else -> Tier.NONE
     }

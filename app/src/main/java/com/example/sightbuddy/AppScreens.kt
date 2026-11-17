@@ -197,6 +197,10 @@ private fun SettingsHost(
         val sttModelDownloadState by sttModelManager.downloadState.collectAsState()
         val sttModelsReady = sttModelDownloadState is SttModelManager.DownloadState.Ready
         val sttDownloadPercent = (sttModelDownloadState as? SttModelManager.DownloadState.Downloading)?.percent
+        val smallDownloadState by sttModelManager.smallDownloadState.collectAsState()
+        val smallInstalled = smallDownloadState is SttModelManager.DownloadState.Ready
+        val smallDownloadingPercent = (smallDownloadState as? SttModelManager.DownloadState.Downloading)?.percent
+        val selectedLocalModel by localGemma.selectedModel.collectAsState()
         val gemmaInstalled by localGemma.installedState.collectAsState()
         val gemmaDownloadPercent by localGemma.downloadPercent.collectAsState()
         settingsManager.sttChoice.collectAsState().value
@@ -247,6 +251,12 @@ private fun SettingsHost(
                 onLeaveFeedback = { openFeedbackEmail() },
                 sttModelsReady = sttModelsReady,
                 sttDownloadPercent = sttDownloadPercent,
+                smallInstalled = smallInstalled,
+                smallDownloadPercent = smallDownloadingPercent,
+                smallSizeLabel = sizeLabel(sttModelManager.sizeOnDisk(com.example.sightbuddy.core.stt.SttModelSet.SMALL)),
+                smallDownloadSizeLabel = sizeLabel(com.example.sightbuddy.core.stt.SttModelCatalog.of(com.example.sightbuddy.core.stt.SttModelSet.SMALL).totalBytes),
+                onRequestSmallDownload = { c.startSmallSttDownload() },
+                onManageSmall = { showSttSmallDialog = true },
                 // Nothing about the on-device model may surface in a language
                 // it cannot serve, from any entry point.
                 onRequestSttDownload = {
@@ -255,12 +265,15 @@ private fun SettingsHost(
                 setupOffered = setupOffered,
                 setupDescription = stringResource(
                     R.string.settings_setup_desc,
-                    stringResource(setupModelsRes),
-                    sizeLabel(ModelSetup.packageBytes(deviceTier)),
+                    stringResource(setupModelsRes) + if (deviceTier == ModelSetup.Tier.FULL) " — " + stringResource(selectedLocalModel.nameRes) else "",
+                    sizeLabel(setupDownloadBytes),
                     sizeLabel(freeSpace),
                 ),
                 onRequestSetup = { showSetupDialog = true },
                 // Downloadable in any language from Advanced; recommended only in English.
+                localModelLabel = stringResource(selectedLocalModel.nameRes),
+                localModelSizeLabel = sizeLabel(selectedLocalModel.sizeBytes),
+                onChooseLocalModel = { modelSwitchMessage = null; showLocalModelChoice = true },
                 gemmaDownloadable = true,
                 gemmaRecommended = deviceTier == ModelSetup.Tier.FULL,
                 whisperRecommended = deviceTier != ModelSetup.Tier.NONE,
@@ -285,18 +298,24 @@ private fun SettingsHost(
                 // Named in the app's language ("switch to Finnish"), not in
                 // their own ("Suomi"), which only the language picker uses.
                 currentLanguageName = stringResource(
-                    if (languageStore.isFinnish()) R.string.language_name_finnish
-                    else R.string.language_name_english
+                    when (languageStore.language()) {
+                        LanguageStore.LANG_FI -> R.string.language_name_finnish
+                        LanguageStore.LANG_PL -> R.string.language_name_polish
+                        else -> R.string.language_name_english
+                    }
                 ),
                 otherLanguageName = stringResource(
-                    if (languageStore.isFinnish()) R.string.language_name_english
-                    else R.string.language_name_finnish
+                    when (LanguageStore.nextLanguage(languageStore.language())) {
+                        LanguageStore.LANG_FI -> R.string.language_name_finnish
+                        LanguageStore.LANG_PL -> R.string.language_name_polish
+                        else -> R.string.language_name_english
+                    }
                 ),
                 onSwitchLanguage = { showLanguageDialog = true },
                 onFeatureHideBlocked = {
                     confirmation(
-                        "At least one feature must stay on.",
-                        flush = true,
+                            context.getString(R.string.spoken_feature_must_stay_on),
+                            flush = true,
                     )
                 },
                 onCrashReportingChange = { enabled ->
@@ -576,6 +595,9 @@ private fun AppDialogs(c: AppController, highContrast: Boolean, whiteMode: Boole
         sttModelManager.downloadState.collectAsState().value
         localGemma.installedState.collectAsState().value
         localGemma.downloadPercent.collectAsState().value
+        val selectedLocalModel by localGemma.selectedModel.collectAsState()
+        val localModelReady by localGemma.ready.collectAsState()
+        val localModelLoading by localGemma.loadingState.collectAsState()
         // Voice-model download dialog — rendered at the top level so it also
         // appears over the Settings screen (where the download row lives).
         // Not over the first-run terms; an update never has them anyway.
@@ -632,11 +654,14 @@ private fun AppDialogs(c: AppController, highContrast: Boolean, whiteMode: Boole
         }
 
         if (showLanguageDialog) {
-            val target = if (languageStore.isFinnish()) LanguageStore.LANG_EN else LanguageStore.LANG_FI
+            val target = LanguageStore.nextLanguage(languageStore.language())
             LanguageSwitchDialog(
                 targetLanguageName = stringResource(
-                    if (languageStore.isFinnish()) R.string.language_english
-                    else R.string.language_finnish
+                    when (target) {
+                        LanguageStore.LANG_FI -> R.string.language_finnish
+                        LanguageStore.LANG_PL -> R.string.language_polish
+                        else -> R.string.language_english
+                    }
                 ),
                 highContrast = highContrast,
                 whiteMode = whiteMode,
@@ -678,8 +703,51 @@ private fun AppDialogs(c: AppController, highContrast: Boolean, whiteMode: Boole
             )
         }
 
+        if (showSttSmallDialog) {
+            val sizeLabel = remember {
+                Formatter.formatShortFileSize(context, sttModelManager.sizeOnDisk(com.example.sightbuddy.core.stt.SttModelSet.SMALL))
+            }
+            SttModelsDialog(
+                highContrast = highContrast,
+                whiteMode = whiteMode,
+                sizeLabel = sizeLabel,
+                title = stringResource(R.string.settings_stt_small_model),
+                bodyRes = R.string.stt_small_models_body,
+                confirmRes = R.string.stt_models_delete_confirm,
+                onDelete = {
+                    showSttSmallDialog = false
+                    val deleted = voiceInputService.unloadEngine() && sttModelManager.deleteModels(com.example.sightbuddy.core.stt.SttModelSet.SMALL)
+                    if (deleted) {
+                        voiceInputService.loadEngineIfReady()
+                    }
+                    confirmation(
+                        context.getString(
+                            if (deleted) R.string.spoken_models_deleted else R.string.spoken_models_delete_failed
+                        ),
+                        flush = true,
+                    )
+                },
+                onDismiss = { showSttSmallDialog = false },
+            )
+        }
+
+        if (showLocalModelChoice) {
+            com.example.sightbuddy.ui.screens.LocalModelChoiceDialog(
+                selected = selectedLocalModel,
+                installed = localGemma::isInstalled,
+                ready = localModelReady,
+                loading = localModelLoading,
+                busy = modelSwitching || gemmaDownloadPercent != null,
+                message = modelSwitchMessage,
+                onSelect = ::selectLocalModel,
+                onDismiss = { showLocalModelChoice = false },
+            )
+        }
+
         if (showGemmaDownloadDialog) {
             GemmaDownloadDialog(
+                modelName = stringResource(selectedLocalModel.nameRes),
+                sizeLabel = sizeLabel(selectedLocalModel.sizeBytes),
                 highContrast = highContrast,
                 whiteMode = whiteMode,
                 onDownload = {
@@ -715,8 +783,8 @@ private fun AppDialogs(c: AppController, highContrast: Boolean, whiteMode: Boole
                 whiteMode = whiteMode,
                 message = stringResource(
                     R.string.setup_body,
-                    stringResource(setupModelsRes),
-                    sizeLabel(ModelSetup.packageBytes(deviceTier)),
+                    stringResource(setupModelsRes) + if (deviceTier == ModelSetup.Tier.FULL) " — " + stringResource(selectedLocalModel.nameRes) else "",
+                    sizeLabel(setupDownloadBytes),
                     sizeLabel(freeSpace),
                 ),
                 onDownload = { startModelSetup(deviceTier) },

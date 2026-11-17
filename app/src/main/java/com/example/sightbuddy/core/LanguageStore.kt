@@ -37,6 +37,13 @@ class LanguageStore(context: Context) {
 
         const val LANG_EN = "en"
         const val LANG_FI = "fi"
+        const val LANG_PL = "pl"
+
+        fun nextLanguage(tag: String): String = when (tag) {
+            LANG_EN -> LANG_FI
+            LANG_FI -> LANG_PL
+            else -> LANG_EN
+        }
 
         fun localeOf(tag: String): Locale = Locale.forLanguageTag(tag)
 

@@ -246,6 +246,8 @@ fun SttModelsDialog(
 /** Asks before the ~2.6 GB Gemma download. */
 @Composable
 fun GemmaDownloadDialog(
+    modelName: String,
+    sizeLabel: String,
     highContrast: Boolean,
     whiteMode: Boolean,
     onDownload: () -> Unit,
@@ -296,7 +298,7 @@ fun GemmaDownloadDialog(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = stringResource(R.string.gemma_download_body),
+                    text = stringResource(R.string.local_model_download_confirm, modelName, sizeLabel),
                     style = MaterialTheme.typography.bodyLarge,
                     color = textColor,
                     lineHeight = 26.sp,
@@ -306,7 +308,7 @@ fun GemmaDownloadDialog(
                     label = stringResource(R.string.gemma_download_now),
                     background = actionButtonBackground(highContrast, whiteMode, Color(0xFF8EEFCA)),
                     textColor = actionButtonText(highContrast, whiteMode, Color.Black),
-                    contentDescription = stringResource(R.string.gemma_download_now_cd),
+                    contentDescription = stringResource(R.string.local_model_download_confirm, modelName, sizeLabel),
                     onClick = onDownload,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
