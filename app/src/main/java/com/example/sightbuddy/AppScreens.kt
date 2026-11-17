@@ -285,18 +285,24 @@ private fun SettingsHost(
                 // Named in the app's language ("switch to Finnish"), not in
                 // their own ("Suomi"), which only the language picker uses.
                 currentLanguageName = stringResource(
-                    if (languageStore.isFinnish()) R.string.language_name_finnish
-                    else R.string.language_name_english
+                    when (languageStore.language()) {
+                        LanguageStore.LANG_FI -> R.string.language_name_finnish
+                        LanguageStore.LANG_PL -> R.string.language_name_polish
+                        else -> R.string.language_name_english
+                    }
                 ),
                 otherLanguageName = stringResource(
-                    if (languageStore.isFinnish()) R.string.language_name_english
-                    else R.string.language_name_finnish
+                    when (LanguageStore.nextLanguage(languageStore.language())) {
+                        LanguageStore.LANG_FI -> R.string.language_name_finnish
+                        LanguageStore.LANG_PL -> R.string.language_name_polish
+                        else -> R.string.language_name_english
+                    }
                 ),
                 onSwitchLanguage = { showLanguageDialog = true },
                 onFeatureHideBlocked = {
                     confirmation(
-                        "At least one feature must stay on.",
-                        flush = true,
+                            context.getString(R.string.spoken_feature_must_stay_on),
+                            flush = true,
                     )
                 },
                 onCrashReportingChange = { enabled ->
@@ -632,11 +638,14 @@ private fun AppDialogs(c: AppController, highContrast: Boolean, whiteMode: Boole
         }
 
         if (showLanguageDialog) {
-            val target = if (languageStore.isFinnish()) LanguageStore.LANG_EN else LanguageStore.LANG_FI
+            val target = LanguageStore.nextLanguage(languageStore.language())
             LanguageSwitchDialog(
                 targetLanguageName = stringResource(
-                    if (languageStore.isFinnish()) R.string.language_english
-                    else R.string.language_finnish
+                    when (target) {
+                        LanguageStore.LANG_FI -> R.string.language_finnish
+                        LanguageStore.LANG_PL -> R.string.language_polish
+                        else -> R.string.language_english
+                    }
                 ),
                 highContrast = highContrast,
                 whiteMode = whiteMode,

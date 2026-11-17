@@ -32,7 +32,7 @@ Downloaded when you choose to
 
 Gemma 4 E2B, the on-device AI model, by Google, converted for LiteRT-LM by LiteRT Community, downloaded from Hugging Face at revision 6e5c4f1e. Apache License 2.0.
 
-Whisper base, English, the on-device speech recognition model, by OpenAI. MIT License. Converted to ONNX by the sherpa-onnx project, Apache License 2.0.
+Whisper base (multilingual) and legacy base.en (English), the on-device speech recognition models, by OpenAI. MIT License. Converted to ONNX by the sherpa-onnx project, Apache License 2.0.
 
 Silero VAD, the voice activity detector, by Silero. MIT License.
 

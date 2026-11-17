@@ -1,4 +1,7 @@
 <resources>
+    <string name="language_polish">Polski</string>
+    <string name="language_name_polish">puola</string>
+    <string name="language_polish_cd">Polski. Käytä sovellusta puolaksi</string>
     <string name="app_name">Sight Buddy</string>
 
     <!-- Pakollinen kielivalinta, näytetään käyttöehtojen yhteydessä. -->
@@ -79,6 +82,7 @@
     <string name="spoken_looking_for">Etsitään: %1$s</string>
     <string name="spoken_repeat">Anteeksi, voisitko toistaa?</string>
     <string name="spoken_nothing_heard">En kuullut mitään. Yritä uudelleen.</string>
+    <string name="spoken_recording_max">Äänitys pysäytettiin %1$d sekunnin kohdalla. Offline-malli käsittelee noin puoli minuuttia.</string>
     <string name="spoken_llm_off">Tekoälykeskustelu on poistettu käytöstä asetuksissa.</string>
     <string name="spoken_capture_first">Ota ensin kuva.</string>
     <string name="spoken_capture_text_first">Ota ensin kuva tekstistä.</string>
@@ -89,7 +93,9 @@
     <string name="spoken_api_key_removed">API-avain poistettu. Tekoälytoiminnot on poistettu käytöstä.</string>
     <string name="spoken_speech_rate">Puhenopeus %1$s</string>
     <string name="spoken_models_downloading">Ladataan puhemalleja. Tämä voi kestää muutaman minuutin.</string>
-    <string name="spoken_models_installed">Puhemallit asennettu. Puheentunnistus päivitetty.</string>
+    <string name="spoken_models_download_failed">Puhemallin lataus epäonnistui. Voit yrittää uudelleen asetuksista.</string>
+    <string name="spoken_feature_must_stay_on">Vähintään yksi toiminto on pysyttävä käytössä.</string>
+    <string name="spoken_models_installed">Puhemalli asennettu. Puhe tunnistetaan tällä laitteella.</string>
     <string name="spoken_models_deleted">Puhemallit poistettu.</string>
     <string name="spoken_models_damaged">Puhemallit olivat vioittuneet, ja ne on poistettu. Voit ladata ne uudelleen asetuksista.</string>
     <string name="spoken_models_delete_failed">Puhemalleja ei voitu poistaa juuri nyt. Yritä uudelleen.</string>
@@ -231,7 +237,7 @@
     <string name="spoken_gemma_damaged">Laitteen tekoälymalli oli vioittunut, ja se on poistettu. Voit ladata sen uudelleen asetuksista.</string>
     <string name="settings_stt_downloaded">Ladattu. Puhe tunnistetaan tällä laitteella</string>
     <string name="settings_stt_downloading">Ladataan… %1$d %%</string>
-    <string name="settings_stt_not_downloaded">Ei ladattu. 154 Mt</string>
+    <string name="settings_stt_not_downloaded">Ei ladattu. %1$s</string>
     <string name="settings_show_in_carousel">Näytä %1$s karusellissa</string>
     <string name="settings_auto_capture">Automaattinen kuvaus</string>
     <string name="settings_auto_capture_desc">Paina Kysy ilman kuvaa, niin kuva otetaan automaattisesti. Kun pois, paina ensin Kuvaa</string>
@@ -287,8 +293,8 @@
     <string name="picker_filter_hint">Kirjoita suodattaaksesi…</string>
     <string name="picker_search_cd">Hae esineitä. Kirjoita esineen nimi suodattaaksesi luetteloa.</string>
     <string name="picker_cancel_cd">Peruuta ja palaa takaisin</string>
-    <string name="stt_models_body">Puhemallit ovat tällä laitteella ja vievät %1$s. Puhe tunnistetaan puhelimessa, myös ilman verkkoyhteyttä.</string>
-    <string name="stt_models_delete_confirm">Poistetaanko puhemallit ja vapautetaan %1$s? Puheentunnistus palaa puhelimen omaan moottoriin, kunnes lataat mallit uudelleen asetuksista.</string>
+    <string name="stt_models_body">Puhemalli on tällä laitteella ja vie %1$s. Puhe tunnistetaan puhelimessa, myös ilman verkkoyhteyttä.</string>
+    <string name="stt_models_delete_confirm">Poistetaanko puhemalli ja vapautetaan %1$s? Puheentunnistus palaa puhelimen omaan moottoriin, kunnes lataat mallin uudelleen asetuksista.</string>
     <string name="stt_models_delete">Poista mallit</string>
     <string name="stt_models_delete_cd">Poista puhemallit. Pyytää ensin vahvistuksen.</string>
     <string name="stt_models_delete_yes">Kyllä, poista</string>
@@ -344,6 +350,7 @@
     <!-- OpenAI transport errors, spoken to the user. -->
     <string name="error_api_off">Tekoälyvastaukset ovat pois päältä. Ota Käytä API:a käyttöön asetuksissa tai asenna laitteen oma malli.</string>
     <string name="error_too_long">Anteeksi, viestisi oli liian pitkä. Voisitko tiivistää sen?</string>
+    <string name="error_unreadable">Sain vastauksen, mutta en pystynyt lukemaan sitä. Yritä uudelleen.</string>
     <string name="error_chat_full">Tämä keskustelu on saavuttanut enimmäispituutensa. Voit tallentaa sen kohdasta Lisää, Tallenna. Ota uusi kuva aloittaaksesi uuden keskustelun.</string>
     <string name="error_local_failed">Laitteen oma malli ei pystynyt vastaamaan. Yritä uudelleen.</string>
     <string name="error_no_api_key">API-avainta ei ole asetettu. Lisää OpenAI API-avaimesi asetuksissa käyttääksesi tekoälytoimintoja.</string>

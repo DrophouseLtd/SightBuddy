@@ -1,4 +1,7 @@
 <resources>
+    <string name="language_polish">Polski</string>
+    <string name="language_name_polish">Polish</string>
+    <string name="language_polish_cd">Polski. Use the app in Polish</string>
     <string name="app_name">Sight Buddy</string>
 
     <!-- Mandatory language choice, shown with the terms during onboarding. -->
@@ -92,6 +95,7 @@ With looping off, the first and last features say when there is no feature furth
     <string name="spoken_looking_for">Looking for %1$s</string>
     <string name="spoken_repeat">Sorry, could you please repeat?</string>
     <string name="spoken_nothing_heard">I did not hear anything. Please try again.</string>
+    <string name="spoken_recording_max">Recording stopped at %1$d seconds. The offline model keeps about half a minute.</string>
     <string name="spoken_llm_off">AI chat is turned off in settings.</string>
     <string name="spoken_capture_first">Please capture first.</string>
     <string name="spoken_capture_text_first">Please capture the text first.</string>
@@ -102,7 +106,9 @@ With looping off, the first and last features say when there is no feature furth
     <string name="spoken_api_key_removed">API key removed. AI chat features are disabled.</string>
     <string name="spoken_speech_rate">Speech rate %1$s</string>
     <string name="spoken_models_downloading">Downloading voice models. This may take a few minutes.</string>
-    <string name="spoken_models_installed">Voice models installed. Speech recognition upgraded.</string>
+    <string name="spoken_models_download_failed">Voice model download failed. You can retry from settings.</string>
+    <string name="spoken_feature_must_stay_on">At least one feature must stay on.</string>
+    <string name="spoken_models_installed">Voice model installed. Speech is recognised on this device.</string>
     <string name="spoken_models_deleted">Voice models deleted.</string>
     <string name="spoken_models_damaged">The voice models were damaged and have been removed. You can download them again in Settings.</string>
     <string name="spoken_models_delete_failed">The voice models could not be deleted right now. Please try again.</string>
@@ -249,7 +255,7 @@ With looping off, the first and last features say when there is no feature furth
     <string name="spoken_gemma_damaged">The on-device AI model was damaged and has been removed. You can download it again in Settings.</string>
     <string name="settings_stt_downloaded">Downloaded. Speech is recognised on this device</string>
     <string name="settings_stt_downloading">Downloading… %1$d%%</string>
-    <string name="settings_stt_not_downloaded">Not downloaded. 154 MB</string>
+    <string name="settings_stt_not_downloaded">Not downloaded. %1$s</string>
     <string name="settings_show_in_carousel">Show %1$s in the carousel</string>
     <string name="settings_auto_capture">Automatic capture</string>
     <string name="settings_auto_capture_desc">Press Ask with no picture to snap one automatically. When off, press Capture first</string>
@@ -306,8 +312,8 @@ With looping off, the first and last features say when there is no feature furth
     <string name="picker_filter_hint">Type to filter…</string>
     <string name="picker_search_cd">Search objects. Type an object name to filter the list.</string>
     <string name="picker_cancel_cd">Cancel and go back</string>
-    <string name="stt_models_body">The voice models are on this device and take up %1$s. Speech is recognised on the phone, even offline.</string>
-    <string name="stt_models_delete_confirm">Delete the voice models and free %1$s? Speech recognition goes back to the phone\'s own engine until you download them again from settings.</string>
+    <string name="stt_models_body">The voice model is on this device and takes up %1$s. Speech is recognised on the phone, even offline.</string>
+    <string name="stt_models_delete_confirm">Delete the voice model and free %1$s? Speech recognition goes back to the phone\'s own engine until you download it again from settings.</string>
     <string name="stt_models_delete">Delete models</string>
     <string name="stt_models_delete_cd">Delete the voice models. Asks to confirm first.</string>
     <string name="stt_models_delete_yes">Yes, delete</string>
@@ -363,6 +369,7 @@ With looping off, the first and last features say when there is no feature furth
     <!-- OpenAI transport errors, spoken to the user. -->
     <string name="error_api_off">AI answers are off. Turn on Use API in settings, or install the on-device model.</string>
     <string name="error_too_long">Sorry, your message was too long. Can you summarize it?</string>
+    <string name="error_unreadable">I received a response but couldn\'t read it. Please try again.</string>
     <string name="error_chat_full">This chat has reached its maximum length. You can save it with Save chat under More. Capture again to start a new chat.</string>
     <string name="error_local_failed">The on-device model could not answer. Please try again.</string>
     <string name="error_no_api_key">No API key set. Add your OpenAI API key in settings to use AI features.</string>

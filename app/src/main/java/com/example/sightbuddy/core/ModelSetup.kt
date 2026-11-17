@@ -3,6 +3,8 @@ package com.example.sightbuddy.core
 import android.app.ActivityManager
 import android.content.Context
 import android.os.StatFs
+import com.example.sightbuddy.core.stt.SttModelCatalog
+import com.example.sightbuddy.core.stt.SttModelSet
 
 /**
  * Which models suit this phone, judged from its specs alone (memory and free
@@ -12,14 +14,20 @@ import android.os.StatFs
  * - [Tier.WHISPER] (tier 2): Whisper for speech. No on-device answers.
  * - [Tier.NONE] (tier 1): nothing to download; the platform recogniser.
  *
- * Both models are English only, so other languages are always tier 1.
+ * Whisper now has a multilingual model, so speech is offered in Polish and
+ * Finnish as well as English. Only Gemma is English-only: it needs an English
+ * phone, and it is never downloaded as a side effect of wanting Whisper.
  */
 object ModelSetup {
 
     enum class Tier { NONE, WHISPER, FULL }
 
-    /** Whisper base.en int8 plus the VAD, as downloaded. */
-    const val WHISPER_BYTES = 161_300_000L
+    /**
+     * The voice model a new download fetches: the multilingual Whisper base
+     * (encoder, decoder, tokens) plus the silero VAD, as published — the real
+     * byte count, not a rounded one.
+     */
+    val WHISPER_BYTES: Long = SttModelCatalog.of(SttModelSet.MULTILINGUAL).totalBytes
 
     /** Gemma 4 E2B, as downloaded. */
     const val GEMMA_BYTES = 2_588_147_712L
@@ -33,9 +41,13 @@ object ModelSetup {
      */
     const val MIN_GEMMA_RAM_BYTES = 7_000_000_000L
 
+    /**
+     * [english] decides Gemma only. Whisper's multilingual model serves every
+     * app language, so a Polish or Finnish phone is recommended Whisper exactly
+     * as an English one is.
+     */
     fun tier(totalRamBytes: Long, freeBytes: Long, english: Boolean): Tier = when {
-        !english -> Tier.NONE
-        totalRamBytes >= MIN_GEMMA_RAM_BYTES &&
+        english && totalRamBytes >= MIN_GEMMA_RAM_BYTES &&
             freeBytes >= GEMMA_BYTES + WHISPER_BYTES + RESERVE_BYTES -> Tier.FULL
         freeBytes >= WHISPER_BYTES + RESERVE_BYTES -> Tier.WHISPER
         else -> Tier.NONE

@@ -21,6 +21,8 @@ object ChatKeywords {
         "read original" to Keyword.READ_ORIGINAL,
         "read the original" to Keyword.READ_ORIGINAL,
         "lue alkuperäinen" to Keyword.READ_ORIGINAL,
+        "czytaj oryginał" to Keyword.READ_ORIGINAL,
+        "przeczytaj oryginał" to Keyword.READ_ORIGINAL,
     )
 
     private val SPACES = Regex("\\s+")
