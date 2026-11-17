@@ -83,7 +83,9 @@ import com.example.sightbuddy.core.stt.SetupDownloadPlan
 import com.example.sightbuddy.core.stt.SpeechAvailability
 import com.example.sightbuddy.core.stt.SpeechEngine
 import com.example.sightbuddy.core.stt.SttChoice
+import com.example.sightbuddy.core.stt.SttModelCatalog
 import com.example.sightbuddy.core.stt.SttModelManager
+import com.example.sightbuddy.core.stt.SttModelSet
 import com.example.sightbuddy.core.stt.VoiceInputService
 import com.example.sightbuddy.core.stt.WhisperPlan
 import com.example.sightbuddy.features.chat.CaptureGate
@@ -698,6 +700,7 @@ class AppController(
         private set
     var moreOpen by mutableStateOf(false)
     var showSttModelsDialog by mutableStateOf(false)
+    var showSttSmallDialog by mutableStateOf(false)
     var showGemmaDialog by mutableStateOf(false)
     var showGemmaDownloadDialog by mutableStateOf(false)
     var showLocalModelChoice by mutableStateOf(false)
@@ -829,6 +832,41 @@ class AppController(
                 flush = false,
             )
             val ok = AppWork.finish { downloadWhisperTracked() }
+            if (ok) {
+                voiceInputService.loadEngineIfReady()
+                confirmation(
+                    context.getString(R.string.spoken_models_installed),
+                    flush = false,
+                )
+            } else {
+                confirmation(
+                    context.getString(R.string.spoken_models_download_failed),
+                    flush = false,
+                )
+            }
+        }
+    }
+
+    /**
+     * The small Whisper model: a deliberate download from Settings, never part
+     * of the recommended setup. Once it is ready the plan prefers it, so the
+     * running engine is reloaded onto the new model.
+     */
+    fun startSmallSttDownload() {
+        if (!checkSpace(SttModelCatalog.of(SttModelSet.SMALL).totalBytes)) return
+        askForDownloadNotification()
+        scope.launch {
+            confirmation(
+                context.getString(R.string.spoken_models_downloading),
+                flush = false,
+            )
+            val ok = AppWork.finish {
+                ModelDownloadService.track(
+                    context,
+                    title = context.getString(R.string.settings_stt_small_model),
+                    progress = sttModelManager.smallDownloadState.map { (it as? SttModelManager.DownloadState.Downloading)?.percent },
+                ) { sttModelManager.downloadIfNeeded(SttModelSet.SMALL) }
+            }
             if (ok) {
                 voiceInputService.loadEngineIfReady()
                 confirmation(
@@ -1370,7 +1408,7 @@ class AppController(
      * one does not move TalkBack to the tab (see LaunchFocus.featureScreenInFront).
      */
     private val screenPopupOpen get() = showHelp || showMemories || showSetupDialog ||
-        showSttModelsDialog || showGemmaDialog || showGemmaDownloadDialog || showLanguageDialog ||
+        showSttModelsDialog || showSttSmallDialog || showGemmaDialog || showGemmaDownloadDialog || showLanguageDialog ||
         showCloudSttDialog || showChoiceRespectedDialog || showUpdateNotice || missingVoiceLanguage != null
 
     suspend fun syncAppSpeech() {

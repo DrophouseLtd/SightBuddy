@@ -44,7 +44,8 @@ Each carousel feature can be hidden in Settings, with a guard that keeps at leas
 
 ### On-device AI
 
-- **Gemma 4 E2B / optional experimental E4B** (`core/llm/LocalGemma.kt`) on LiteRT-LM: image questions,
+- On-device speech recognition (`core/stt/`): multilingual Whisper base int8 via sherpa-onnx (default download), or the larger Whisper small int8 downloaded deliberately from Settings and preferred once present. Each model lives in its own folder with pinned Hugging Face files; deleting one never removes another.
+- **Gemma 4 E2B** (`core/llm/LocalGemma.kt`) on LiteRT-LM: image questions,
   text questions, the Find objects fallback, speech, chat names. Downloaded
   from Hugging Face `litert-community` (Apache 2.0), pinned, resumable.
 - **One router:** `OpenAiTransport.executeChatCompletion` sends each request to
@@ -65,7 +66,7 @@ Each carousel feature can be hidden in Settings, with a guard that keeps at leas
 
 `LocalModelCatalog` pins each model URL, size and SHA-256. `LocalModelRepository` retains separate model/partial files and persists the explicit selection; selection is not download consent. `LocalGemma` uses per-model caches, a process-wide inference permit and `ProcessModelOwner` to close the former engine before creating its replacement. Destroyed activities retire their instance before asynchronous release. An unacknowledged native stream cancellation quarantines local inference for the rest of the process rather than closing a possibly running engine; reopening an activity does not clear this state. This is a conservative failure path, not automatic recovery.
 
-Model setup recommends image/chat Gemma by memory/storage rather than language. The separate Gemma speech-recognition gate is unchanged. Hosted legal documents remain English; the onboarding UI discloses that language. Android/TalkBack and GPU/CPU behavior still require device acceptance.
+Model setup recommends image/chat Gemma by memory/storage rather than language. The local-model selection plumbing (`LocalModelCatalog`) keeps one pinned model; a larger Gemma was piloted, showed no Polish quality gain at 3x the cost, and was not kept. The separate Gemma speech-recognition gate is unchanged. Hosted legal documents remain English; the onboarding UI discloses that language. Android/TalkBack and GPU/CPU behavior still require device acceptance.
 
 ### Speech input
 

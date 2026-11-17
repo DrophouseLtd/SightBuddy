@@ -235,7 +235,11 @@
     <string name="gemma_model_delete_confirm">Poistetaanko laitteen tekoälymalli ja vapautetaan %1$s?</string>
     <string name="spoken_gemma_deleted">Laitteen tekoälymalli poistettu.</string>
     <string name="spoken_gemma_damaged">Laitteen tekoälymalli oli vioittunut, ja se on poistettu. Voit ladata sen uudelleen asetuksista.</string>
-    <string name="settings_stt_downloaded">Ladattu. Puhe tunnistetaan tällä laitteella</string>
+        <string name="settings_stt_small_model">Whisper small (parempi tarkkuus)</string>
+    <string name="settings_stt_small_downloaded">Ladattu. Puheentunnistus käyttää tätä isompaa mallia</string>
+    <string name="settings_stt_small_not_downloaded">Valinnainen isompi malli, parempi muille kuin englannin kielelle. Latauksen koko: %1$s</string>
+    <string name="stt_small_models_body">Valinnainen isompi Whisper-malli vie %1$s tallennustilaa. Poistaminen säilyttää monikielisen perusmallin ja palauttaa puheentunnistuksen siihen.</string>
+<string name="settings_stt_downloaded">Ladattu. Puhe tunnistetaan tällä laitteella</string>
     <string name="settings_stt_downloading">Ladataan… %1$d %%</string>
     <string name="settings_stt_not_downloaded">Ei ladattu. %1$s</string>
     <string name="settings_show_in_carousel">Näytä %1$s karusellissa</string>
@@ -438,14 +442,11 @@
     <string name="legal_documents_language_notice">Linkitetyt käyttöehdot ja tietosuojakäytäntö ovat tekijöiden toimittamia englanninkielisiä asiakirjoja.</string>
     <string name="local_model_choice_title">Laitteen paikallinen tekoälymalli</string>
     <string name="local_model_e2b">Gemma E2B</string>
-    <string name="local_model_e4b">Gemma E4B (kokeellinen)</string>
-    <string name="local_model_selected">Valittu</string>
     <string name="local_model_downloaded">Ladattu</string>
     <string name="local_model_not_downloaded">Ei ladattu</string>
     <string name="local_model_loading">Ladataan</string>
     <string name="local_model_download_confirm">Ladataanko %1$s? Latauksen koko: %2$s. Lataus käyttää verkkoyhteyttä ja tallennustilaa. Nykyinen malli säilytetään.</string>
     <string name="local_model_busy">Odota nykyisen pyynnön tai latauksen päättymistä ennen mallin vaihtamista.</string>
-    <string name="local_model_experimental_note">E2B on oletusmalli. E4B on kokeellinen: se tarvitsee enemmän muistia ja voi olla hitaampi. Parempia vastauksia ei taata. Valinta ei lataa eikä poista malleja. Käytä lataustoimintoa valinnan jälkeen.</string>
     <string name="local_model_ready">Ladattu muistiin ja valmis</string>
     <string name="local_model_not_loaded">Ei ladattu muistiin</string>
     <string name="local_model_close">Sulje</string>

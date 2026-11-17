@@ -83,7 +83,7 @@ class VoiceInputService(
         whisperReady = engine != null,
         gemmaInstalled = localGemma?.installed == true,
         english = Locale.getDefault().language == "en",
-        whisperServesLanguage = loadedPlan?.let { it.set == SttModelSet.MULTILINGUAL } == true,
+        whisperServesLanguage = loadedPlan?.multilingual == true,
     )
 
     private fun usingGemma(): Boolean = effectiveChoice() == SttChoice.GEMMA

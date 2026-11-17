@@ -4,6 +4,7 @@ import com.example.sightbuddy.core.stt.SttModelSet.LEGACY_EN
 import com.example.sightbuddy.core.stt.SttModelSet.MULTILINGUAL
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -19,6 +20,7 @@ class WhisperPlanTest {
         WhisperPlan.choose(
             ready = { set ->
                 when (set) {
+                    SttModelSet.SMALL -> false // not part of this test's scenarios
                     MULTILINGUAL -> modern
                     LEGACY_EN -> legacy
                 }
@@ -77,5 +79,46 @@ class WhisperPlanTest {
         assertNull(plan(modern = false, legacy = false, tag = "pl"))
         // Legacy present, this language unsupported: platform, never legacy.
         assertNull(plan(modern = false, legacy = true, tag = "fi"))
+    }
+}
+
+/**
+ * The optional small model outranks base once the user has downloaded it: the
+ * download was deliberate, so their recordings run on it, in every language
+ * base would serve. Base and legacy keep their old order behind it.
+ */
+class WhisperPlanSmallTest {
+
+    private fun plan(small: Boolean, modern: Boolean, legacy: Boolean, tag: String) =
+        WhisperPlan.choose(
+            ready = { set ->
+                when (set) {
+                    SttModelSet.SMALL -> small
+                    MULTILINGUAL -> modern
+                    LEGACY_EN -> legacy
+                }
+            },
+            appLanguageTag = tag,
+        )
+
+    @Test
+    fun theSmallModelWinsInEveryLanguageItCanServe() {
+        for (tag in listOf("en", "pl", "fi", "de")) {
+            assertEquals(tag, SttModelSet.SMALL, plan(small = true, modern = true, legacy = true, tag = tag)!!.set)
+        }
+    }
+
+    @Test
+    fun baseStillRunsWhenSmallIsMissing() {
+        assertEquals(MULTILINGUAL, plan(small = false, modern = true, legacy = true, "pl")!!.set)
+        // Small alone serves Polish too, without base.
+        assertEquals(SttModelSet.SMALL, plan(small = true, modern = false, legacy = false, "pl")!!.set)
+    }
+
+    @Test
+    fun theSmallModelIsMultilingualAndReloadsLikeTheOthers() {
+        val smallPolish = plan(small = true, modern = true, legacy = false, "pl")!!
+        assertTrue(smallPolish.multilingual)
+        assertTrue(smallPolish.requiresReload(plan(small = true, modern = true, legacy = false, "en")!!))
     }
 }

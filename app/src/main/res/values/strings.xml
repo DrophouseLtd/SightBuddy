@@ -253,7 +253,11 @@ With looping off, the first and last features say when there is no feature furth
     <string name="gemma_model_delete_confirm">Delete the on-device AI model and free %1$s?</string>
     <string name="spoken_gemma_deleted">On-device AI model deleted.</string>
     <string name="spoken_gemma_damaged">The on-device AI model was damaged and has been removed. You can download it again in Settings.</string>
-    <string name="settings_stt_downloaded">Downloaded. Speech is recognised on this device</string>
+        <string name="settings_stt_small_model">Whisper small (higher accuracy)</string>
+    <string name="settings_stt_small_downloaded">Downloaded. Speech recognition uses this larger model</string>
+    <string name="settings_stt_small_not_downloaded">Optional larger model, better for non-English speech. Download size: %1$s</string>
+    <string name="stt_small_models_body">The optional larger Whisper model takes up %1$s of storage. Deleting it keeps the base multilingual model and returns speech recognition to it.</string>
+<string name="settings_stt_downloaded">Downloaded. Speech is recognised on this device</string>
     <string name="settings_stt_downloading">Downloading… %1$d%%</string>
     <string name="settings_stt_not_downloaded">Not downloaded. %1$s</string>
     <string name="settings_show_in_carousel">Show %1$s in the carousel</string>
@@ -459,14 +463,11 @@ With looping off, the first and last features say when there is no feature furth
     <string name="legal_documents_language_notice">The linked Terms of Use and Privacy Policy are provided by the authors in English.</string>
     <string name="local_model_choice_title">On-device AI model</string>
     <string name="local_model_e2b">Gemma E2B</string>
-    <string name="local_model_e4b">Gemma E4B (experimental)</string>
-    <string name="local_model_selected">Selected</string>
     <string name="local_model_downloaded">Downloaded</string>
     <string name="local_model_not_downloaded">Not downloaded</string>
     <string name="local_model_loading">Loading</string>
     <string name="local_model_download_confirm">Download %1$s? Download size: %2$s. This uses network data and storage. The existing model will be kept.</string>
     <string name="local_model_busy">Wait until the current request or download finishes before switching models.</string>
-    <string name="local_model_experimental_note">E2B is the default. E4B is experimental: it needs more memory and may be slower; better answers are not guaranteed. Changing the selection does not download or delete any model. Use the model download action after selecting.</string>
     <string name="local_model_ready">Loaded and ready</string>
     <string name="local_model_not_loaded">Not loaded into memory</string>
     <string name="local_model_close">Close</string>

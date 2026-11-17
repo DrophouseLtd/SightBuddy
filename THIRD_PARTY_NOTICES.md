@@ -29,7 +29,7 @@ licence texts, under **Settings → Privacy → Open-source licences**.
 
 ## Downloaded when the user chooses to
 
-- **Gemma 4 E2B and optional E4B**, the on-device AI models, by Google, converted for LiteRT-LM by
+- **Gemma 4 E2B**, the on-device AI model, by Google, converted for LiteRT-LM by
   [LiteRT Community](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm)
   and downloaded from Hugging Face at a pinned revision — Apache-2.0
 - **Whisper base (multilingual), and legacy base.en (English)**, the speech recognition model, by OpenAI — MIT.

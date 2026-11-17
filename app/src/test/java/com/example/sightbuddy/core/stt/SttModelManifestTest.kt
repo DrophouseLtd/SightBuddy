@@ -19,6 +19,7 @@ class SttModelManifestTest {
 
     private val multilingual = SttModelCatalog.of(MULTILINGUAL)
     private val legacy = SttModelCatalog.of(LEGACY_EN)
+    private val small = SttModelCatalog.of(SttModelSet.SMALL)
 
     @Test
     fun theMultilingualModelIsPinnedToItsHuggingFaceFiles() {
@@ -95,6 +96,53 @@ class SttModelManifestTest {
             assertTrue("${file.name} missing from the pilot manifest", text.contains(file.name))
             assertTrue("${file.sha256} missing from the pilot manifest", text.contains(file.sha256))
             assertTrue("${file.bytes} missing from the pilot manifest", text.contains(file.bytes.toString()))
+        }
+    }
+}
+
+/**
+ * The optional small model: its own folder (so deleting it cannot touch the
+ * base model), its own pinned Hugging Face revision, and byte sizes that match
+ * the files the pilot downloaded and verified against the GitHub archive.
+ */
+class SttModelSmallManifestTest {
+
+    private val small = SttModelCatalog.of(SttModelSet.SMALL)
+
+    @Test
+    fun theSmallModelIsPinnedToItsOwnFolderAndRevision() {
+        assertEquals("stt-small", small.dirName)
+        assertNotEquals(small.dirName, SttModelCatalog.of(MULTILINGUAL).dirName)
+        assertEquals(
+            listOf("small-encoder.int8.onnx", "small-decoder.int8.onnx", "small-tokens.txt"),
+            small.files.map { it.name },
+        )
+        assertEquals(
+            listOf(112_442_483L, 262_226_114L, 816_730L),
+            small.files.map { it.bytes },
+        )
+        val revision = SttModelCatalog.SMALL_REVISION
+        for (file in small.files) {
+            val url = file.url("")
+            assertTrue(url, url.startsWith("https://huggingface.co/"))
+            assertTrue(url, url.contains("/resolve/$revision/"))
+            assertTrue(file.sha256, file.sha256.matches(Regex("[0-9a-f]{64}")))
+        }
+        assertEquals("4cbe7b22fa9026b843b60a68640c747de05bafb1a11b57edc0e66c232d9f33a9", small.files[0].sha256)
+        assertEquals("acad50b5c782696e91b55914cc5ab4f756f1532f76e22aa6fc615f39fb69a8ee", small.files[1].sha256)
+        // The quoted download size is the files plus the shared VAD.
+        assertEquals(112_442_483L + 262_226_114L + 816_730L + 643_854L, small.totalBytes)
+    }
+
+    @Test
+    fun theSmallModelIsNeverPartOfTheRecommendedSetup() {
+        // The setup offer and its plans stay on the base multilingual model;
+        // small is a deliberate download from Settings only.
+        val whisperOnly = SetupDownloadPlan.whisperOnly()
+        assertTrue(whisperOnly.whisperSets.none { it == SttModelSet.SMALL })
+        for (tier in com.example.sightbuddy.core.ModelSetup.Tier.entries) {
+            val plan = SetupDownloadPlan.forTier(tier, gemmaAccepted = true)
+            assertTrue(plan.whisperSets.none { it == SttModelSet.SMALL })
         }
     }
 }

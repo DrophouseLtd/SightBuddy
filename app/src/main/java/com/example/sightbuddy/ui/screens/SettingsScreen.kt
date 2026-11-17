@@ -96,6 +96,12 @@ fun SettingsScreen(
     sttDownloadPercent: Int? = null,
     onRequestSttDownload: () -> Unit = {},
     onManageSttModels: () -> Unit = {},
+    smallInstalled: Boolean = false,
+    smallDownloadPercent: Int? = null,
+    smallSizeLabel: String = "",
+    smallDownloadSizeLabel: String = "",
+    onRequestSmallDownload: () -> Unit = {},
+    onManageSmall: () -> Unit = {},
     cloudSttOffered: Boolean = false,
     onRequestCloudStt: () -> Unit = {},
     currentLanguageName: String = "",
@@ -311,6 +317,31 @@ fun SettingsScreen(
                             when {
                                 sttModelsReady -> onManageSttModels()
                                 sttDownloadPercent == null -> onRequestSttDownload()
+                            }
+                        },
+                    )
+                }
+                // The optional larger Whisper model: offered only once the base
+                // one is there or being fetched, never in the recommended setup.
+                if (sttModelsReady || smallInstalled || smallDownloadPercent != null) add {
+                    SettingsNavRow(
+                        label = stringResource(R.string.settings_stt_small_model),
+                        description = when {
+                            smallInstalled -> stringResource(R.string.settings_stt_small_downloaded)
+                            smallDownloadPercent != null ->
+                                stringResource(R.string.settings_stt_downloading, smallDownloadPercent)
+                            else -> stringResource(R.string.settings_stt_small_not_downloaded, smallDownloadSizeLabel)
+                        },
+                        action = if (!smallInstalled && smallDownloadPercent == null) {
+                            stringResource(R.string.settings_action_download)
+                        } else null,
+                        labelColor = labelColor,
+                        highContrast = highContrast,
+                        whiteMode = whiteMode,
+                        onClick = {
+                            when {
+                                smallInstalled -> onManageSmall()
+                                smallDownloadPercent == null -> onRequestSmallDownload()
                             }
                         },
                     )

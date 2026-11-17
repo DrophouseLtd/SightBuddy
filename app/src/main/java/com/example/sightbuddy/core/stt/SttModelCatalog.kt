@@ -3,21 +3,29 @@ package com.example.sightbuddy.core.stt
 import com.example.sightbuddy.core.ModelSetup
 
 /**
- * The two offline Whisper models this app knows, each with its own folder and
- * its own completion marker so neither can be mistaken for, or delete, the
- * other.
+ * The offline Whisper models this app knows, each with its own folder and
+ * its own completion marker so none can be mistaken for, or delete, another.
  *
+ * - [SMALL]: the optional larger small model for better non-English accuracy.
+ *   Never part of the recommended setup; a deliberate download from Settings
+ *   that replaces base at run time while both stay on the phone.
  * - [MULTILINGUAL]: OpenAI Whisper base (not base.en), converted to ONNX int8 by
  *   k2-fsa sherpa-onnx, pinned to one Hugging Face revision. Recognises Polish,
  *   Finnish, English and the rest of Whisper's languages on the phone, offline.
+ *   This is the model the app downloads and offers by default.
  * - [LEGACY_EN]: the base.en int8 files the app shipped before this one, from the
  *   project's own GitHub release. English only. Kept so a phone that already has
  *   it keeps working (and keeps its 150 MB) until the multilingual model is
  *   downloaded; nothing removes it behind the user's back.
  */
 enum class SttModelSet {
+    SMALL,
     MULTILINGUAL,
     LEGACY_EN,
+    ;
+
+    /** True when this set's weights transcribe more than English. */
+    val multilingual: Boolean get() = this == SMALL || this == MULTILINGUAL
 }
 
 /**
@@ -66,8 +74,14 @@ object SttModelCatalog {
     /** The pinned Hugging Face revision of csukuangfj/sherpa-onnx-whisper-base. */
     const val HUGGING_FACE_REVISION = "bb53ee204431c90d314c1cc08d28d23e5b7927cc"
 
+    /** The pinned Hugging Face revision of csukuangfj/sherpa-onnx-whisper-small. */
+    const val SMALL_REVISION = "8f3c18b358db4d1f2fc1eae49d75cd20989e4309"
+
     private const val HUGGING_FACE_BASE =
         "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/" + HUGGING_FACE_REVISION
+
+    private const val HUGGING_FACE_SMALL =
+        "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/" + SMALL_REVISION
 
     /** The silero VAD the app has always downloaded; unchanged, same bytes. */
     const val VAD_NAME = SttModelManager.VAD
@@ -106,6 +120,46 @@ object SttModelCatalog {
 
     private val LEGACY_VAD = ModelFileSpec(VAD_NAME, VAD_SHA256, VAD_BYTES, VAD_URL)
 
+    /**
+     * The larger small model, measured like the multilingual one: byte sizes and
+     * SHA-256 of the three files at [SMALL_REVISION], downloaded from Hugging
+     * Face and compared with the sherpa-onnx GitHub release archive byte for
+     * byte (see `.local/qa/multilingual/model-pilot-small/`). On the app's Polish
+     * and Finnish pilot samples it transcribed the full sentences where base
+     * misheard endings, at roughly 3x the decode time and 2.3x the download.
+     */
+    private val SMALL_FILES = listOf(
+        ModelFileSpec(
+            name = "small-encoder.int8.onnx",
+            sha256 = "4cbe7b22fa9026b843b60a68640c747de05bafb1a11b57edc0e66c232d9f33a9",
+            bytes = 112_442_483L,
+            absoluteUrl = "$HUGGING_FACE_SMALL/small-encoder.int8.onnx",
+        ),
+        ModelFileSpec(
+            name = "small-decoder.int8.onnx",
+            sha256 = "acad50b5c782696e91b55914cc5ab4f756f1532f76e22aa6fc615f39fb69a8ee",
+            bytes = 262_226_114L,
+            absoluteUrl = "$HUGGING_FACE_SMALL/small-decoder.int8.onnx",
+        ),
+        ModelFileSpec(
+            name = "small-tokens.txt",
+            sha256 = "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+            bytes = 816_730L,
+            absoluteUrl = "$HUGGING_FACE_SMALL/small-tokens.txt",
+        ),
+    )
+
+    private val SMALL = SttModelSpec(
+        set = SttModelSet.SMALL,
+        // A sibling folder, like the others: deleting one model never removes
+        // another, and both can sit on the phone at once.
+        dirName = "stt-small",
+        files = SMALL_FILES,
+        vad = LEGACY_VAD,
+        totalBytes = SMALL_FILES.sumOf { it.bytes } + VAD_BYTES,
+        marker = ".download-complete",
+    )
+
     private val MULTILINGUAL = SttModelSpec(
         set = SttModelSet.MULTILINGUAL,
         // A sibling of "stt", not a folder inside it: deleting the old model must
@@ -141,6 +195,7 @@ object SttModelCatalog {
 
     internal fun of(set: SttModelSet, files: Map<String, SttModelManager.Pinned> = SttModelManager.FILES): SttModelSpec =
         when (set) {
+            SttModelSet.SMALL -> SMALL
             SttModelSet.MULTILINGUAL -> MULTILINGUAL
             SttModelSet.LEGACY_EN -> legacy(files)
         }

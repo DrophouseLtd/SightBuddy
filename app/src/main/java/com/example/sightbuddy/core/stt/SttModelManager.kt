@@ -85,6 +85,9 @@ class SttModelManager internal constructor(
     /** One set's download state. */
     fun stateOf(set: SttModelSet): StateFlow<DownloadState> = states.getValue(set).asStateFlow()
 
+    /** The small model's state, shown in Settings next to the base one. */
+    val smallDownloadState: StateFlow<DownloadState> = states.getValue(SttModelSet.SMALL).asStateFlow()
+
     private val _removedAsDamaged = MutableStateFlow(false)
 
     /** True when files on the phone failed their check and were removed, until [damagedNoticeSaid]. */

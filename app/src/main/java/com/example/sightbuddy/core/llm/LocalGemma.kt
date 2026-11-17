@@ -43,9 +43,9 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * On-device Gemma through LiteRT-LM.
  *
- * E2B is the default; E4B is an explicitly selected experimental alternative.
- * Downloads are user-initiated and pinned by size and SHA-256. Selecting one
- * retains the other model on disk; only one native engine is held at a time.
+ * E2B is the current pinned model. The catalog keeps the selection plumbing,
+ * so a second pinned model can be added later. Downloads are user-initiated
+ * and pinned by size and SHA-256. Only one native engine is held at a time.
  *
  * One engine, one request at a time: LiteRT-LM runs a single decode, and two
  * features asking at once would only slow both down.

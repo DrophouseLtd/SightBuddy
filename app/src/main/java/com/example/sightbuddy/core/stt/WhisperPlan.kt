@@ -13,8 +13,8 @@ import java.util.Locale
  */
 data class WhisperPlan(val set: SttModelSet, val language: String) {
 
-    /** Only the multilingual model speaks anything but English. */
-    val multilingual: Boolean get() = set == SttModelSet.MULTILINGUAL
+    /** Any multilingual model speaks anything but English; the legacy one does not. */
+    val multilingual: Boolean get() = set == SttModelSet.MULTILINGUAL || set == SttModelSet.SMALL
 
     /**
      * True when [loaded] (what the recogniser was built with) cannot serve this
@@ -52,14 +52,17 @@ data class WhisperPlan(val set: SttModelSet, val language: String) {
          * The model to run and its language, or null when the platform
          * recogniser must take the recording.
          *
-         * The multilingual model wins whenever it is ready: it serves every
-         * language, English included, and is the one the app now downloads. The
-         * legacy model is used only when it is what the phone has, and only for
-         * English — its base.en weights cannot transcribe anything else, and
-         * telling it otherwise would produce confident nonsense.
+         * The small model wins whenever it is ready: the user downloaded it
+         * deliberately for its accuracy, so it is what their recordings should
+         * run on, in every language the multilingual base would serve. The
+         * multilingual model follows; the legacy model is used only when it is
+         * what the phone has, and only for English — its base.en weights cannot
+         * transcribe anything else, and telling it otherwise would produce
+         * confident nonsense.
          */
         fun choose(ready: (SttModelSet) -> Boolean, appLanguageTag: String): WhisperPlan? {
             val language = languageFor(appLanguageTag)
+            if (ready(SttModelSet.SMALL)) return WhisperPlan(SttModelSet.SMALL, language)
             if (ready(SttModelSet.MULTILINGUAL)) return WhisperPlan(SttModelSet.MULTILINGUAL, language)
             if (ready(SttModelSet.LEGACY_EN) && language == "en") {
                 return WhisperPlan(SttModelSet.LEGACY_EN, "en")

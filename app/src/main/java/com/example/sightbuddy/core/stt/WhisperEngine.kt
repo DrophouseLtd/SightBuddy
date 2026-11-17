@@ -113,7 +113,7 @@ class WhisperEngine private constructor(
                             // "" lets Whisper detect it, which is the honest setting
                             // for a language this app does not list. The legacy
                             // base.en model hears English, whatever it is asked.
-                            language = if (files.set == SttModelSet.MULTILINGUAL) files.language else "en",
+                            language = if (files.set.multilingual) files.language else "en",
                             task = "transcribe",
                         ),
                         tokens = files.tokens.file.absolutePath,
@@ -138,7 +138,7 @@ class WhisperEngine private constructor(
             )
             Log.i(TAG, "Whisper engine loaded")
             WhisperEngine(
-                WhisperPlan(files.set, if (files.set == SttModelSet.MULTILINGUAL) files.language else "en"),
+                WhisperPlan(files.set, if (files.set.multilingual) files.language else "en"),
                 recognizer,
                 vad,
             )

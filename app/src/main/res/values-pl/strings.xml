@@ -216,7 +216,11 @@
     <string name="gemma_model_delete_confirm">Usunąć model AI z urządzenia i zwolnić %1$s?</string>
     <string name="spoken_gemma_deleted">Model AI został usunięty z urządzenia.</string>
     <string name="spoken_gemma_damaged">Model AI na urządzeniu był uszkodzony i został usunięty. Możesz go ponownie pobrać w ustawieniach.</string>
-    <string name="settings_stt_downloaded">Pobrano. Mowa jest rozpoznawana na tym urządzeniu</string>
+        <string name="settings_stt_small_model">Whisper small (większa dokładność)</string>
+    <string name="settings_stt_small_downloaded">Pobrano. Rozpoznawanie mowy używa tego większego modelu</string>
+    <string name="settings_stt_small_not_downloaded">Opcjonalny większy model, lepszy dla mowy innej niż angielska. Rozmiar pobierania: %1$s</string>
+    <string name="stt_small_models_body">Opcjonalny większy model Whisper zajmuje %1$s miejsca. Usunięcie go zachowa podstawowy model wielojęzyczny i przywróci rozpoznawanie mowy na nim.</string>
+<string name="settings_stt_downloaded">Pobrano. Mowa jest rozpoznawana na tym urządzeniu</string>
     <string name="settings_stt_downloading">Pobieranie… %1$d%%</string>
     <string name="settings_stt_not_downloaded">Nie pobrano. %1$s</string>
     <string name="settings_show_in_carousel">Pokaż na pasku funkcji: %1$s</string>
@@ -404,14 +408,11 @@
     <string name="legal_documents_language_notice">Regulamin i polityka prywatności pod tymi odnośnikami są udostępniane przez autorów po angielsku.</string>
     <string name="local_model_choice_title">Lokalny model AI</string>
     <string name="local_model_e2b">Gemma E2B</string>
-    <string name="local_model_e4b">Gemma E4B (eksperymentalny)</string>
-    <string name="local_model_selected">Wybrany</string>
     <string name="local_model_downloaded">Pobrany</string>
     <string name="local_model_not_downloaded">Niepobrany</string>
     <string name="local_model_loading">Ładowanie</string>
     <string name="local_model_download_confirm">Pobrać %1$s? Rozmiar pobierania: %2$s. Operacja wykorzysta transfer sieciowy i miejsce na urządzeniu. Dotychczasowy model zostanie zachowany.</string>
     <string name="local_model_busy">Przed zmianą modelu zaczekaj na zakończenie bieżącego żądania lub pobierania.</string>
-    <string name="local_model_experimental_note">E2B jest modelem podstawowym. E4B to wariant eksperymentalny: potrzebuje więcej pamięci i może być wolniejszy. Nie gwarantuje lepszych odpowiedzi. Wybór nie pobiera ani nie usuwa modeli. Po wyborze użyj opcji pobierania modelu.</string>
     <string name="local_model_ready">Załadowany i gotowy</string>
     <string name="local_model_not_loaded">Niezaładowany do pamięci</string>
     <string name="local_model_close">Zamknij</string>

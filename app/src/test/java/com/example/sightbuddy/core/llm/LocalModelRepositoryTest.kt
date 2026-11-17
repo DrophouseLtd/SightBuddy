@@ -9,6 +9,16 @@ import org.junit.rules.TemporaryFolder
 import java.io.ByteArrayInputStream
 
 class LocalModelRepositoryTest {
+    /** Synthetic second spec: the selection plumbing must not depend on the real catalog. */
+    private fun altSpec(url: String, bytes: ByteArray, sha: String? = null) = LocalModelSpec(
+        id = "alt",
+        fileName = "alt-model.bin",
+        sizeBytes = bytes.size.toLong(),
+        sha256 = sha ?: ModelChecksums.sha256(ByteArrayInputStream(bytes)),
+        url = url,
+        nameRes = 0,
+    )
+
     @Test fun realDownloadResumesAndVerifiesBeforeInstall() {
         val bytes = "download-fixture-for-two-models".toByteArray()
         val ranges = mutableListOf<String?>()
@@ -25,7 +35,7 @@ class LocalModelRepositoryTest {
         server.start()
         try {
             val dir = temp.newFolder("download")
-            val spec = LocalModelCatalog.E4B.copy(sizeBytes = bytes.size.toLong(), sha256 = ModelChecksums.sha256(ByteArrayInputStream(bytes)), url = "http://127.0.0.1:${server.address.port}/model")
+            val spec = altSpec("http://127.0.0.1:${server.address.port}/model", bytes)
             val repo = LocalModelRepository(dir, VerifiedModels(temp.newFolder("download-checks")), { null }, {}, listOf(spec))
             repo.part().writeBytes(bytes.copyOf(7))
             assertTrue(repo.download())
@@ -51,7 +61,7 @@ class LocalModelRepositoryTest {
         }
         server.start()
         try {
-            val spec = LocalModelCatalog.E4B.copy(sizeBytes = bytes.size.toLong(), sha256 = "0".repeat(64), url = "http://127.0.0.1:${server.address.port}/bad")
+            val spec = altSpec("http://127.0.0.1:${server.address.port}/bad", bytes, sha = "0".repeat(64))
             for (candidate in listOf(spec, spec.copy(url = "http://127.0.0.1:${server.address.port}/missing"))) {
                 val repo = LocalModelRepository(temp.newFolder(), VerifiedModels(temp.newFolder()), { null }, {}, listOf(candidate))
                 assertFalse(repo.download())
@@ -77,7 +87,7 @@ class LocalModelRepositoryTest {
         server.start()
         val pool = java.util.concurrent.Executors.newSingleThreadExecutor()
         try {
-            val spec = LocalModelCatalog.E4B.copy(sizeBytes = bytes.size.toLong(), sha256 = ModelChecksums.sha256(ByteArrayInputStream(bytes)), url = "http://127.0.0.1:${server.address.port}/model")
+            val spec = altSpec("http://127.0.0.1:${server.address.port}/model", bytes)
             val dir = temp.newFolder()
             val old = java.io.File(dir, LocalModelCatalog.E2B.fileName).apply { writeText("keep") }
             val repo = LocalModelRepository(dir, VerifiedModels(temp.newFolder()), { spec.id }, {}, listOf(LocalModelCatalog.E2B, spec))
@@ -99,8 +109,9 @@ class LocalModelRepositoryTest {
     @Test fun selectionPersistsWithoutRemovingOldFilesOrDownloading() {
         val dir = temp.newFolder("models")
         val bytes = "existing-model".toByteArray()
-        val first = LocalModelCatalog.E2B.copy(sizeBytes = bytes.size.toLong(), sha256 = ModelChecksums.sha256(ByteArrayInputStream(bytes)))
-        val second = LocalModelCatalog.E4B
+        // E2B's real size would never match a fixture file; size it like the fixture.
+        val first = LocalModelCatalog.E2B.copy(sizeBytes = bytes.size.toLong())
+        val second = altSpec("http://127.0.0.1:1/never", bytes)
         var saved: String? = null
         val checks = VerifiedModels(temp.newFolder("checks"))
         val repo = LocalModelRepository(dir, checks, { saved }, { saved = it }, listOf(first, second))

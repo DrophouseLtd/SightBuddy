@@ -298,7 +298,7 @@ fun GemmaDownloadDialog(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = stringResource(R.string.local_model_download_confirm, modelName, sizeLabel) + "\n\n" + stringResource(R.string.local_model_experimental_note),
+                    text = stringResource(R.string.local_model_download_confirm, modelName, sizeLabel),
                     style = MaterialTheme.typography.bodyLarge,
                     color = textColor,
                     lineHeight = 26.sp,

@@ -36,9 +36,8 @@ fun LocalModelChoiceDialog(
         title = { Text(stringResource(R.string.local_model_choice_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
-                Text(stringResource(R.string.local_model_experimental_note))
                 LocalModelCatalog.all.forEach { spec ->
-                    val name = stringResource(if (spec.experimental) R.string.local_model_e4b else R.string.local_model_e2b)
+                    val name = stringResource(spec.nameRes)
                     val state = if (installed(spec)) stringResource(R.string.local_model_downloaded) else stringResource(R.string.local_model_not_downloaded)
                     Row(
                         Modifier.fillMaxWidth().selectable(
