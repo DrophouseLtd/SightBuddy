@@ -79,11 +79,13 @@ import com.example.sightbuddy.core.createCrashReporter
 import com.example.sightbuddy.core.hints.FeatureHelpLibrary
 import com.example.sightbuddy.core.hints.HelpContent
 import com.example.sightbuddy.core.stt.CloudTranscriber
+import com.example.sightbuddy.core.stt.SetupDownloadPlan
 import com.example.sightbuddy.core.stt.SpeechAvailability
 import com.example.sightbuddy.core.stt.SpeechEngine
 import com.example.sightbuddy.core.stt.SttChoice
 import com.example.sightbuddy.core.stt.SttModelManager
 import com.example.sightbuddy.core.stt.VoiceInputService
+import com.example.sightbuddy.core.stt.WhisperPlan
 import com.example.sightbuddy.features.chat.CaptureGate
 import com.example.sightbuddy.features.chat.ChatKeywords
 import com.example.sightbuddy.features.chat.ChatSession
@@ -635,6 +637,10 @@ class AppController(
         whisperReady = sttModelsReady,
         gemmaInstalled = gemmaInstalled,
         english = languageStore.language() == LanguageStore.LANG_EN,
+        // Only the multilingual model serves Polish and Finnish; the legacy
+        // base.en one is English-only. A loaded engine decides: the download
+        // being on the disk is not enough if it has not loaded yet.
+        whisperServesLanguage = voiceInputService.whisperReady.value && whisperPlan?.multilingual == true,
     )
     suspend fun syncGemmaLoaded() {
         val forSpeech = effectiveStt == SttChoice.GEMMA
@@ -657,13 +663,23 @@ class AppController(
     val cloudSttEnabled get() = settingsManager.cloudStt.value
     val speech get() = run {
         SpeechAvailability(
-            modelServesLanguage = languageStore.language() == LanguageStore.LANG_EN,
+            modelServesLanguage = whisperPlan != null,
             modelDownloaded = sttModelsReady || gemmaInstalled,
             cloudEnabled = cloudSttEnabled && apiAllowed,
             localEnabled = effectiveStt != SttChoice.ANDROID,
         )
     }
     val whisperSupported get() = speech.downloadRelevant
+
+    /**
+     * The model and language speech recognition is to run with for the app's
+     * current language, or null when none applies (the platform recogniser
+     * takes it). This is what decides whether the download is offered at all:
+     * the multilingual model covers Polish, Finnish and English; the legacy
+     * base.en model only ever served English.
+     */
+    val whisperPlan: WhisperPlan? get() =
+        sttModelManager.plan(languageStore.language())
 
     val sttDownloadPercent get() =
         (sttModelDownloadState as? SttModelManager.DownloadState.Downloading)?.percent
@@ -753,18 +769,23 @@ class AppController(
     fun startModelSetup(tier: ModelSetup.Tier) {
         showSetupDialog = false
         sttPromptShownThisLaunch = true
-        if (!checkSpace(ModelSetup.packageBytes(tier))) return
+        // What this setup will fetch. Whisper is the multilingual model (its real
+        // size, as shown); Gemma only when the user accepted the full tier that
+        // named it and its size — never as a side effect of wanting Whisper.
+        val plan = SetupDownloadPlan.forTier(tier, gemmaAccepted = tier == ModelSetup.Tier.FULL)
+        val bytes = ModelSetup.packageBytes(tier)
+        if (!checkSpace(bytes)) return
         askForDownloadNotification()
         scope.launch {
             confirmation(
-                context.getString(R.string.spoken_setup_downloading, sizeLabel(ModelSetup.packageBytes(tier))),
+                context.getString(R.string.spoken_setup_downloading, sizeLabel(bytes)),
                 flush = true,
             )
             val (whisperOk, gemmaOk) = AppWork.finish {
                 val whisper = downloadWhisperTracked()
                 // Usable while Gemma downloads; skipped if the screen has gone.
                 if (whisper) scope.launch { voiceInputService.loadEngineIfReady() }
-                whisper to (tier != ModelSetup.Tier.FULL || downloadGemmaTracked())
+                whisper to (plan.gemma && downloadGemmaTracked())
             }
             confirmation(
                 context.getString(
@@ -795,7 +816,7 @@ class AppController(
                 )
             } else {
                 confirmation(
-                    "Voice model download failed. You can retry from settings.",
+                    context.getString(R.string.spoken_models_download_failed),
                     flush = false,
                 )
             }
@@ -1970,6 +1991,14 @@ class AppController(
                 is VoiceInputService.SttEvent.AutoStopped -> {
                     if (event.noSpeech) {
                         systemMessage(context.getString(R.string.spoken_nothing_heard), force = true)
+                    } else if (event.maxMs > 0) {
+                        // On-device Whisper stops earlier than the platform cap:
+                        // the model silently drops audio past ~30 s, so staying
+                        // quiet would look like a glitch instead of a limit.
+                        systemMessage(
+                            context.getString(R.string.spoken_recording_max, event.maxMs / 1000),
+                            force = true,
+                        )
                     }
                 }
                 VoiceInputService.SttEvent.Empty -> {

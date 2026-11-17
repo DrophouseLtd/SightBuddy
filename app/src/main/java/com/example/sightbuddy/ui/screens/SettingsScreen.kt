@@ -50,10 +50,12 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.sightbuddy.R
 import com.example.sightbuddy.ui.DialogWindowTitle
 import com.example.sightbuddy.ui.buttonSemantics
+import com.example.sightbuddy.core.ModelSetup
 import com.example.sightbuddy.core.SettingsManager
 import com.example.sightbuddy.ui.theme.actionButtonBackground
 import com.example.sightbuddy.ui.theme.actionButtonText
 import kotlinx.coroutines.launch
+import android.text.format.Formatter
 import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.foundation.focusable
@@ -119,6 +121,11 @@ fun SettingsScreen(
     onSttChoiceCycle: () -> Unit = {},
     onLeaveFeedback: () -> Unit = {},
 ) {
+    /** Bytes as the phone says them ("154 MB"), for the download's own size line. */
+    val whisperDownloadSizeLabel = Formatter.formatShortFileSize(
+        LocalContext.current,
+        ModelSetup.WHISPER_BYTES,
+    )
     val textPreview by settingsManager.textPreviewEnabled.collectAsState()
     val scanLight by settingsManager.scanLightEnabled.collectAsState()
     val scanColour by settingsManager.scanColourEnabled.collectAsState()
@@ -289,7 +296,7 @@ fun SettingsScreen(
                             sttModelsReady -> stringResource(R.string.settings_stt_downloaded)
                             sttDownloadPercent != null ->
                                 stringResource(R.string.settings_stt_downloading, sttDownloadPercent)
-                            else -> stringResource(R.string.settings_stt_not_downloaded)
+                            else -> stringResource(R.string.settings_stt_not_downloaded, whisperDownloadSizeLabel)
                         },
                         action = if (!sttModelsReady && sttDownloadPercent == null) {
                             stringResource(R.string.settings_action_download)
@@ -692,7 +699,7 @@ fun SettingsScreen(
                     if (whisperSupported && !whisperRecommended && !sttModelsReady && sttDownloadPercent == null) add {
                         SettingsNavRow(
                             label = stringResource(R.string.settings_stt_models),
-                            description = stringResource(R.string.settings_stt_not_downloaded),
+                            description = stringResource(R.string.settings_stt_not_downloaded, whisperDownloadSizeLabel),
                             action = stringResource(R.string.settings_action_download),
                             labelColor = labelColor,
                             highContrast = highContrast,

@@ -2,6 +2,7 @@ package com.example.sightbuddy.core
 
 import com.example.sightbuddy.core.ModelSetup.Tier
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ModelSetupTest {
@@ -30,7 +31,22 @@ class ModelSetupTest {
     }
 
     @Test
-    fun otherLanguagesGetNothing() {
-        assertEquals(Tier.NONE, ModelSetup.tier(totalRamBytes = 12 * gb, freeBytes = 100 * gb, english = false))
+    fun otherLanguagesNowGetWhisperButNeverGemma() {
+        // Whisper's multilingual model serves Polish and Finnish offline, so the
+        // old "other languages get nothing" rule no longer holds for speech. Gemma
+        // is still English-only: it is not part of the recommendation elsewhere.
+        assertEquals(Tier.WHISPER, ModelSetup.tier(totalRamBytes = 12 * gb, freeBytes = 100 * gb, english = false))
+        assertEquals(Tier.WHISPER, ModelSetup.tier(totalRamBytes = 5_700_000_000L, freeBytes = 10 * gb, english = false))
+        // The reserve still applies there: a full phone gets nothing.
+        assertEquals(Tier.NONE, ModelSetup.tier(totalRamBytes = 12 * gb, freeBytes = 1_600_000_000L, english = false))
+    }
+
+    @Test
+    fun theWhisperPackageIsTheMultilingualFilesRealSize() {
+        // 29,120,534 + 130,672,026 + 816,730 + 643,854
+        assertEquals(161_253_144L, ModelSetup.WHISPER_BYTES)
+        assertEquals(161_253_144L, ModelSetup.packageBytes(Tier.WHISPER))
+        assertTrue(ModelSetup.packageBytes(Tier.FULL) == ModelSetup.GEMMA_BYTES + 161_253_144L)
+        assertEquals(0L, ModelSetup.packageBytes(Tier.NONE))
     }
 }

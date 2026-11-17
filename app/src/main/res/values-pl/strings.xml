@@ -65,6 +65,7 @@
     <string name="spoken_looking_for">Szukam: %1$s</string>
     <string name="spoken_repeat">Przepraszam, czy możesz powtórzyć?</string>
     <string name="spoken_nothing_heard">Nic nie usłyszałem. Spróbuj ponownie.</string>
+    <string name="spoken_recording_max">Nagranie zatrzymane po %1$d sekundach. Model offline obsługuje około pół minuty.</string>
     <string name="spoken_llm_off">Rozmowa z AI jest wyłączona w ustawieniach.</string>
     <string name="spoken_capture_first">Najpierw zrób zdjęcie.</string>
     <string name="spoken_capture_text_first">Najpierw zrób zdjęcie tekstu.</string>
@@ -75,7 +76,9 @@
     <string name="spoken_api_key_removed">Klucz API usunięty. Funkcje rozmowy z AI są wyłączone.</string>
     <string name="spoken_speech_rate">Tempo mowy: %1$s</string>
     <string name="spoken_models_downloading">Pobieranie modeli mowy. Może to potrwać kilka minut.</string>
-    <string name="spoken_models_installed">Model Whisper zainstalowany. Obsługuje język angielski, nie polski.</string>
+    <string name="spoken_models_download_failed">Nie udało się pobrać modelu mowy. Możesz spróbować ponownie w ustawieniach.</string>
+    <string name="spoken_feature_must_stay_on">Przynajmniej jedna funkcja musi pozostać włączona.</string>
+    <string name="spoken_models_installed">Model mowy zainstalowany. Mowa jest rozpoznawana na tym urządzeniu.</string>
     <string name="spoken_models_deleted">Modele mowy usunięte.</string>
     <string name="spoken_models_damaged">Modele mowy były uszkodzone i zostały usunięte. Możesz je ponownie pobrać w ustawieniach.</string>
     <string name="spoken_models_delete_failed">Nie można teraz usunąć modeli mowy. Spróbuj ponownie.</string>
@@ -213,9 +216,9 @@
     <string name="gemma_model_delete_confirm">Usunąć model AI z urządzenia i zwolnić %1$s?</string>
     <string name="spoken_gemma_deleted">Model AI został usunięty z urządzenia.</string>
     <string name="spoken_gemma_damaged">Model AI na urządzeniu był uszkodzony i został usunięty. Możesz go ponownie pobrać w ustawieniach.</string>
-    <string name="settings_stt_downloaded">Pobrano model Whisper dla języka angielskiego. Do polskiej mowy używany jest silnik systemowy Androida lub opcjonalnie OpenAI</string>
+    <string name="settings_stt_downloaded">Pobrano. Mowa jest rozpoznawana na tym urządzeniu</string>
     <string name="settings_stt_downloading">Pobieranie… %1$d%%</string>
-    <string name="settings_stt_not_downloaded">Nie pobrano. Model mowy angielskiej, 154 MB</string>
+    <string name="settings_stt_not_downloaded">Nie pobrano. %1$s</string>
     <string name="settings_show_in_carousel">Pokaż na pasku funkcji: %1$s</string>
     <string name="settings_auto_capture">Automatyczne robienie zdjęć</string>
     <string name="settings_auto_capture_desc">Naciśnij Zapytaj, gdy nie ma zdjęcia, aby zrobić je automatycznie. Po wyłączeniu najpierw naciśnij Zrób zdjęcie</string>
@@ -270,8 +273,8 @@
     <string name="picker_filter_hint">Wpisz, aby filtrować…</string>
     <string name="picker_search_cd">Szukaj przedmiotów. Wpisz nazwę przedmiotu, aby przefiltrować listę.</string>
     <string name="picker_cancel_cd">Anuluj i wróć</string>
-    <string name="stt_models_body">Pobrany model Whisper zajmuje %1$s i rozpoznaje tylko mowę angielską. Do polskiej mowy używany jest silnik systemowy Androida lub opcjonalnie OpenAI. Ich działanie może wymagać internetu.</string>
-    <string name="stt_models_delete_confirm">Usunąć model mowy i zwolnić %1$s? Model Whisper służy do rozpoznawania języka angielskiego. Polska mowa korzysta z silnika systemowego lub opcjonalnie OpenAI.</string>
+    <string name="stt_models_body">Model mowy jest na tym urządzeniu i zajmuje %1$s. Mowa jest rozpoznawana na telefonie, także bez internetu.</string>
+    <string name="stt_models_delete_confirm">Usunąć model mowy i zwolnić %1$s? Rozpoznawanie mowy wróci do silnika systemowego, dopóki nie pobierzesz modelu ponownie w ustawieniach.</string>
     <string name="stt_models_delete">Usuń modele</string>
     <string name="stt_models_delete_cd">Usuń modele mowy. Najpierw poprosi o potwierdzenie.</string>
     <string name="stt_models_delete_yes">Tak, usuń</string>
@@ -323,6 +326,7 @@
     <string name="model_smart_desc">Najlepszy do złożonych pytań. Wolniejszy i droższy</string>
     <string name="error_api_off">Odpowiedzi AI są wyłączone. Włącz opcję Używaj API w ustawieniach lub zainstaluj model na urządzeniu.</string>
     <string name="error_too_long">Twoja wiadomość jest zbyt długa. Czy możesz ją streścić?</string>
+    <string name="error_unreadable">Otrzymałem odpowiedź, ale nie udało mi się jej odczytać. Spróbuj ponownie.</string>
     <string name="error_chat_full">Ta rozmowa osiągnęła maksymalną długość. Możesz ją zapisać, wybierając Więcej, a potem Zapisz rozmowę. Zrób kolejne zdjęcie, aby rozpocząć nową rozmowę.</string>
     <string name="error_local_failed">Model na urządzeniu nie mógł odpowiedzieć. Spróbuj ponownie.</string>
     <string name="error_no_api_key">Nie ustawiono klucza API. Dodaj klucz API OpenAI w ustawieniach, aby korzystać z funkcji AI.</string>
