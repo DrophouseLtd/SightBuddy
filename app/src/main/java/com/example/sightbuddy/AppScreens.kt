@@ -285,23 +285,15 @@ private fun SettingsHost(
                 // Named in the app's language ("switch to Finnish"), not in
                 // their own ("Suomi"), which only the language picker uses.
                 currentLanguageName = stringResource(
-                    when (languageStore.language()) {
-                        LanguageStore.LANG_FI -> R.string.language_name_finnish
-                        LanguageStore.LANG_PL -> R.string.language_name_polish
-                        else -> R.string.language_name_english
-                    }
+                    LanguageStore.languageNameRes(languageStore.language())
                 ),
                 otherLanguageName = stringResource(
-                    when (LanguageStore.nextLanguage(languageStore.language())) {
-                        LanguageStore.LANG_FI -> R.string.language_name_finnish
-                        LanguageStore.LANG_PL -> R.string.language_name_polish
-                        else -> R.string.language_name_english
-                    }
+                    LanguageStore.languageNameRes(LanguageStore.nextLanguage(languageStore.language()))
                 ),
                 onSwitchLanguage = { showLanguageDialog = true },
                 onFeatureHideBlocked = {
                     confirmation(
-                        context.getString(R.string.spoken_feature_must_stay_on),
+                        "At least one feature must stay on.",
                         flush = true,
                     )
                 },
@@ -640,13 +632,7 @@ private fun AppDialogs(c: AppController, highContrast: Boolean, whiteMode: Boole
         if (showLanguageDialog) {
             val target = LanguageStore.nextLanguage(languageStore.language())
             LanguageSwitchDialog(
-                targetLanguageName = stringResource(
-                    when (target) {
-                        LanguageStore.LANG_FI -> R.string.language_finnish
-                        LanguageStore.LANG_PL -> R.string.language_polish
-                        else -> R.string.language_english
-                    }
-                ),
+                targetLanguageName = stringResource(LanguageStore.languageNameRes(target)),
                 highContrast = highContrast,
                 whiteMode = whiteMode,
                 onConfirm = {

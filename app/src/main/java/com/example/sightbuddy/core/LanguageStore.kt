@@ -45,6 +45,12 @@ class LanguageStore(context: Context) {
             else -> LANG_EN
         }
 
+        fun languageNameRes(tag: String): Int = when (tag) {
+            LANG_FI -> com.example.sightbuddy.R.string.language_name_finnish
+            LANG_PL -> com.example.sightbuddy.R.string.language_name_polish
+            else -> com.example.sightbuddy.R.string.language_name_english
+        }
+
         fun localeOf(tag: String): Locale = Locale.forLanguageTag(tag)
 
         /** Returns [base] re-configured so all resources resolve in [tag]. */

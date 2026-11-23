@@ -84,7 +84,7 @@ class ObjectCommandResolver(
      * other language, so English behaviour is untouched.
      */
     private fun activeAliases(): Map<String, String> =
-        aliasMap + (CocoFinnish.aliases() + CocoPolish.aliases()).mapKeys { (term, _) -> normalize(term) }
+        aliasMap + CocoFinnish.aliases().mapKeys { (term, _) -> normalize(term) }
 
     /**
      * Every spoken form that should score against a given COCO item: the English
@@ -94,7 +94,7 @@ class ObjectCommandResolver(
      */
     private fun surfaceForms(): Map<String, List<String>> {
         val forms = COCO_OBJECTS.associateWith { mutableListOf(normalize(it)) }
-        (CocoFinnish.aliases() + CocoPolish.aliases()).forEach { (term, item) -> forms[item]?.add(normalize(term)) }
+        CocoFinnish.aliases().forEach { (term, item) -> forms[item]?.add(normalize(term)) }
         return forms
     }
 
@@ -138,10 +138,38 @@ class ObjectCommandResolver(
 
         val normalized = normalize(raw)
 
-        val localMatch = findLocalMatch(raw, llmEnabled)
-        if (localMatch != null) return@withContext localMatch
+        // --- Path 1a: direct alias lookup ---
+        val directAlias = activeAliases()[normalized]
+        if (directAlias != null && directAlias in COCO_OBJECTS) {
+            PrivateLog.i(TAG) { "Resolved locally by alias: '$raw' -> '$directAlias'" }
+            return@withContext ResolveResult.Activate(directAlias, Source.LOCAL, 1.0f)
+        }
+
+        // --- Path 1b: exact COCO label match (after normalization) ---
+        val exactMatch = COCO_OBJECTS.find { normalize(it) == normalized }
+        if (exactMatch != null) {
+            PrivateLog.i(TAG) { "Resolved locally by exact match: '$raw' -> '$exactMatch'" }
+            return@withContext ResolveResult.Activate(exactMatch, Source.LOCAL, 1.0f)
+        }
+
+        // --- Path 1c: item/alias embedded inside a longer spoken phrase ---
+        val embeddedMatch = findEmbeddedLocalMatch(normalized)
+        if (embeddedMatch != null) {
+            Log.i(
+                TAG,
+                "Resolved locally by embedded match: '$raw' -> '${embeddedMatch.item}' (${embeddedMatch.matchDetail})"
+            )
+            return@withContext ResolveResult.Activate(embeddedMatch.item, Source.LOCAL, embeddedMatch.score)
+        }
+
+        // --- Path 1d: very-high-confidence fuzzy match ---
         val scored = scoreCandidates(normalized)
         val top = scored.firstOrNull()
+        val activationThreshold = if (llmEnabled) localActivationThreshold else localOnlyActivationThreshold
+        if (top != null && top.score >= activationThreshold) {
+            Log.i(TAG, "Resolved locally by fuzzy match: '${top.item}' (${top.score})")
+            return@withContext ResolveResult.Activate(top.item, Source.LOCAL, top.score)
+        }
 
         if (!llmEnabled) {
             PrivateLog.i(TAG) { "LLM disabled. Returning local-only unavailable for '$raw'" }
@@ -159,7 +187,7 @@ class ObjectCommandResolver(
             return@withContext mapApiDecision(apiResult)
         }
 
-        if (!CocoPolish.isActive() && top != null && top.score >= localOnlyActivationThreshold) {
+        if (top != null && top.score >= localOnlyActivationThreshold) {
             Log.i(TAG, "API fallback failed. Resolved locally by relaxed fuzzy match: '${top.item}' (${top.score})")
             return@withContext ResolveResult.Activate(top.item, Source.LOCAL, top.score)
         }
@@ -171,33 +199,6 @@ class ObjectCommandResolver(
             message = itemListUnavailableMessage(raw),
             suggestions = localHints
         )
-    }
-
-    /** The same offline matching path used by resolve; null means no safe match. */
-    internal fun findLocalMatch(input: String, llmEnabled: Boolean = true): ResolveResult.Activate? {
-        val normalized = normalize(input.trim())
-        if (normalized.isBlank()) return null
-        if (CocoPolish.isActive()) {
-            // COCO's mouse is a computer device, not a field mouse or animal.
-            if (Regex("\\bmysz[a-z]*\\b").containsMatchIn(normalized) &&
-                (!Regex("\\bkomputer[a-z]*\\b").containsMatchIn(normalized) ||
-                    Regex("\\b(?:zwierz[a-z]*|poln[a-z]*)\\b").containsMatchIn(normalized))) return null
-            // Multiple explicitly named objects are ambiguous, not an invitation to
-            // activate whichever happens to appear first in the COCO list.
-            val matches = activeAliases().mapNotNull { (term, item) ->
-                if (Regex("\\b${Regex.escape(term)}\\b").containsMatchIn(normalized)) item else null
-            }.toSet()
-            if (matches.size > 1) return null
-        }
-        val direct = activeAliases()[normalized]
-            ?: COCO_OBJECTS.find { normalize(it) == normalized }
-        if (direct != null && direct in COCO_OBJECTS) return ResolveResult.Activate(direct, Source.LOCAL, 1f)
-        val embedded = findEmbeddedLocalMatch(normalized)
-        if (embedded != null) return ResolveResult.Activate(embedded.item, Source.LOCAL, embedded.score)
-        val top = scoreCandidates(normalized).firstOrNull()
-        val threshold = if (llmEnabled) localActivationThreshold else localOnlyActivationThreshold
-        return if (top != null && top.score >= threshold)
-            ResolveResult.Activate(top.item, Source.LOCAL, top.score) else null
     }
 
     private fun mapApiDecision(decision: ApiDecision): ResolveResult {
@@ -231,8 +232,7 @@ class ObjectCommandResolver(
         val lower = camelSpaced.lowercase(Locale.US)
         // Fold the Finnish vowels before the a-z filter below strips them: without
         // this, "henkilö" would normalize to "henkil" and never match its alias.
-        val folded = java.text.Normalizer.normalize(lower.replace('ł', 'l'), java.text.Normalizer.Form.NFD)
-            .replace(Regex("\\p{M}+"), "")
+        val folded = lower.replace('ä', 'a').replace('ö', 'o').replace('å', 'a')
         val cleaned = folded.replace(Regex("[^a-z0-9\\s]"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
@@ -400,11 +400,7 @@ class ObjectCommandResolver(
      * Finnish user pays no English ones.
      */
     private fun systemPrompt(): String =
-        when {
-            CocoFinnish.isActive() -> SYSTEM_PROMPT_FI
-            CocoPolish.isActive() -> SYSTEM_PROMPT + "\nThe user speaks Polish. Map Polish names and inflections to the allowed English items. Always write message in Polish."
-            else -> SYSTEM_PROMPT
-        }
+        if (CocoFinnish.isActive()) SYSTEM_PROMPT_FI else SYSTEM_PROMPT
 
     private fun parseApiDecision(content: String): ApiDecision? {
         return try {

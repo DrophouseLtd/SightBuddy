@@ -490,11 +490,7 @@ class AppController(
         phone = Build.MANUFACTURER.replaceFirstChar { it.uppercase() } + " " + Build.MODEL,
         screenReaderOn = isScreenReaderOn(context),
         appLanguage = context.getString(
-            when (languageStore.language()) {
-                LanguageStore.LANG_FI -> R.string.language_name_finnish
-                LanguageStore.LANG_PL -> R.string.language_name_polish
-                else -> R.string.language_name_english
-            }
+            LanguageStore.languageNameRes(languageStore.language())
         ),
         featuresShown = pages.map { ModeNames.display(context, it) },
         cameraPreview = settingsManager.cameraPreview.value,
@@ -596,7 +592,7 @@ class AppController(
     val useLocalChat get() = settingsManager.useLocalChat.value
     // Gemma answers in any language (Finnish prompts as for OpenAI); it is only
     // recommended, and used for speech, in English.
-    val english get() = languageStore.language() == LanguageStore.LANG_EN
+    val english get() = !languageStore.isFinnish()
     val localAiReady get() = gemmaInstalled && useLocalChat
     // Gemma holds about 2 GB: load it only while something will use it.
     // The phone's specs decide the recommended setup. Re-read when models come
@@ -634,7 +630,7 @@ class AppController(
         chosen = SttChoice.fromKey(sttChoiceKey),
         whisperReady = sttModelsReady,
         gemmaInstalled = gemmaInstalled,
-        english = languageStore.language() == LanguageStore.LANG_EN,
+        english = !languageStore.isFinnish(),
     )
     suspend fun syncGemmaLoaded() {
         val forSpeech = effectiveStt == SttChoice.GEMMA
@@ -657,7 +653,7 @@ class AppController(
     val cloudSttEnabled get() = settingsManager.cloudStt.value
     val speech get() = run {
         SpeechAvailability(
-            modelServesLanguage = languageStore.language() == LanguageStore.LANG_EN,
+            modelServesLanguage = !languageStore.isFinnish(),
             modelDownloaded = sttModelsReady || gemmaInstalled,
             cloudEnabled = cloudSttEnabled && apiAllowed,
             localEnabled = effectiveStt != SttChoice.ANDROID,
@@ -795,7 +791,7 @@ class AppController(
                 )
             } else {
                 confirmation(
-                    context.getString(R.string.spoken_models_download_failed),
+                    "Voice model download failed. You can retry from settings.",
                     flush = false,
                 )
             }
@@ -1034,11 +1030,7 @@ class AppController(
      */
     var modelWasReady by mutableStateOf(sttModelsReady)
     suspend fun onSttModelsReadyChanged() {
-        if (SpeechAvailability(
-                modelServesLanguage = speech.modelServesLanguage,
-                modelDownloaded = sttModelsReady,
-                cloudEnabled = cloudSttEnabled,
-            ).shouldDisableCloudOnModelReady(modelWasReady)) {
+        if (sttModelsReady && !modelWasReady && cloudSttEnabled) {
             settingsManager.setCloudStt(false)
         }
         modelWasReady = sttModelsReady
