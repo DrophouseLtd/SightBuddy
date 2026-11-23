@@ -120,6 +120,7 @@ With looping off, the first and last features say when there is no feature furth
     <string name="btn_ask">Ask</string>
     <string name="btn_send">Send</string>
     <string name="btn_capture">Capture</string>
+    <string name="btn_capture_text">Capture</string>
     <string name="btn_find_page">Find page</string>
     <string name="btn_back">Back</string>
     <string name="btn_play">Play</string>
@@ -140,6 +141,7 @@ With looping off, the first and last features say when there is no feature furth
     <!-- The area around Text chat's frozen live text boxes: tap to let it go live again. -->
     <string name="live_text_area">Live text</string>
     <string name="chat_empty_text">Nothing here yet. Capture or Find page to read some text. AI can make mistakes.</string>
+    <string name="chat_empty_image_no_ai">Nothing here yet. Capture or Find page to read some text. AI can make mistakes.</string>
     <string name="chat_empty_text_live_off">Nothing here yet. Capture or Find page to read text, or enable live text. AI can make mistakes.</string>
     <string name="chat_working">Working…</string>
     <string name="chat_input_hint">Type a question</string>
@@ -451,4 +453,6 @@ With looping off, the first and last features say when there is no feature furth
     <string name="cloud_stt_local_enable_cd">Use the paid OpenAI speech recognition instead of the free on-device model</string>
     <string name="cloud_stt_local_decline">Keep the free model</string>
     <string name="cloud_stt_local_decline_cd">Keep using the free on-device speech recognition</string>
+    <string name="chat_describe_image">Describe this image</string>
+    <string name="error_unreadable_response">I received a response but couldn\'t read it. Please try again.</string>
 </resources>

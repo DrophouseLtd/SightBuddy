@@ -236,6 +236,7 @@ class MainActivity : ComponentActivity() {
                 localFailed = getString(R.string.error_local_failed),
                 tooLong = getString(R.string.error_too_long),
                 chatFull = getString(R.string.error_chat_full),
+                unreadable = getString(R.string.error_unreadable_response),
             ),
             apiAllowed = { settingsManager.useApi.value },
             online = { networkStatusManager.isOnline.value },

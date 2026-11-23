@@ -747,7 +747,7 @@ private fun BoxScope.FeatureBody(
                     feature == ModeNames.TEXT_CHAT && !liveTextOn -> stringResource(R.string.chat_empty_text_live_off)
                     feature == ModeNames.TEXT_CHAT -> stringResource(R.string.chat_empty_text)
                     feature == ModeNames.FIND_OBJECTS -> stringResource(R.string.chat_empty_find)
-                    else -> stringResource(if (llmChatEnabled) R.string.chat_empty_ai else R.string.chat_empty_text)
+                    else -> stringResource(if (llmChatEnabled) R.string.chat_empty_ai else R.string.chat_empty_image_no_ai)
                 },
                 textColor = onLayerColor,
                 accent = accent,
@@ -849,7 +849,7 @@ private fun BoxScope.FeatureBody(
                 // No "Busy" state while a picture or answer is on its way: TalkBack
                 // announced it on every press, as focus is on Capture then. Extra
                 // presses are ignored quietly (CaptureGate); the working tick tells.
-                add(BottomButton(stringResource(R.string.btn_capture)) {
+                add(BottomButton(stringResource(if (feature == ModeNames.TEXT_CHAT) R.string.btn_capture_text else R.string.btn_capture)) {
                     keyboard?.hide()
                     onTakePicture()
                 })

@@ -3,26 +3,22 @@ package com.example.sightbuddy.features.vision
 import java.util.Locale
 
 /**
- * Finnish names and voice aliases for the COCO objects.
+ * Finnish voice aliases and localized display names for the COCO objects.
  *
- * The COCO labels themselves stay English everywhere in the app's logic — they
- * are the detector's own vocabulary and the identifiers the resolver activates
- * on. This layer only adds, for Finnish:
- *
- *  - [displayName]: what the user reads in the picker and hears announced.
- *  - [aliases]: Finnish words (plus common synonyms and inflected forms) that
- *    map *back* to the English label, so saying "kuppi" activates "cup".
- *
- * Everything here is inert unless the app language is Finnish, so the English
- * build behaves exactly as before.
+ * Detector identifiers remain English. Display names are translated for Finnish
+ * and Polish; the existing Finnish voice aliases are unchanged. Polish display
+ * names do not change the detector, command resolver or selected target IDs.
  */
 object CocoFinnish {
 
     fun isActive(): Boolean = Locale.getDefault().language == "fi"
 
-    /** Finnish name for a COCO label, or the label itself in any other language. */
-    fun displayName(label: String): String =
-        if (isActive()) NAMES[label] ?: label else label
+    /** Localized display words; detector IDs and the Finnish voice aliases stay unchanged. */
+    fun displayName(label: String): String = when (Locale.getDefault().language) {
+        "pl" -> PolishObjectNames.displayName(label)
+        "fi" -> NAMES[label] ?: label
+        else -> label
+    }
 
     /** Finnish voice aliases, or empty when the app is not in Finnish. */
     fun aliases(): Map<String, String> = if (isActive()) ALIASES else emptyMap()
