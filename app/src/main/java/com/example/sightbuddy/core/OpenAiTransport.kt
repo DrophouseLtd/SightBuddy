@@ -50,7 +50,6 @@ class OpenAiTransport(
         val apiOff: String = "AI answers are off. Turn on Use API in settings, or install the on-device model.",
         val localFailed: String = "The on-device model could not answer. Please try again.",
         val tooLong: String = "Sorry, your message was too long. Can you summarize it?",
-        val unreadable: String = "I received a response but couldn't read it. Please try again.",
         val chatFull: String = "This chat has reached its maximum length. You can save it with Save chat under More. Capture again to start a new chat.",
     )
 
@@ -126,9 +125,7 @@ class OpenAiTransport(
          */
         const val CANCELLED: String = ""
 
-        /** What a reply OpenAI sent but that could not be parsed is said as.
-         * Kept for callers outside the transport's localised [Errors]; new code
-         * should use [Errors.unreadable] so the message follows the app language. */
+        /** What a reply OpenAI sent but that could not be parsed is said as. */
         const val UNREADABLE_RESPONSE: String = "I received a response but couldn't read it. Please try again."
 
         /**
@@ -264,7 +261,7 @@ class OpenAiTransport(
                     .trim()
             } catch (e: Exception) {
                 Log.e(logTag, "Failed to parse chat response", e)
-                transport.errors.unreadable
+                UNREADABLE_RESPONSE
             }
         }
     }

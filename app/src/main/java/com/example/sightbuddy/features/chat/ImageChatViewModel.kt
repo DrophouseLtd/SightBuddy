@@ -109,7 +109,7 @@ class ImageChatViewModel(
 
                 val response = callOpenAIVision(ChatPrompts.imageFirst(userPrompt, transport.answersOnDevice()), onDelta = onDelta)
 
-                record(userPrompt.ifBlank { context.getString(R.string.chat_describe_image) }, response)
+                record(userPrompt.ifBlank { "Describe this image" }, response)
 
                 _lastResponse.value = response
                 _isProcessing.value = false

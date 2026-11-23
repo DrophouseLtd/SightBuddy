@@ -235,7 +235,6 @@ class MainActivity : ComponentActivity() {
                 apiOff = getString(R.string.error_api_off),
                 localFailed = getString(R.string.error_local_failed),
                 tooLong = getString(R.string.error_too_long),
-                unreadable = getString(R.string.error_unreadable),
                 chatFull = getString(R.string.error_chat_full),
             ),
             apiAllowed = { settingsManager.useApi.value },

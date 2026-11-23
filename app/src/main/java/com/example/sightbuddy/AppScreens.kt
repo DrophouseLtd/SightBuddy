@@ -301,7 +301,7 @@ private fun SettingsHost(
                 onSwitchLanguage = { showLanguageDialog = true },
                 onFeatureHideBlocked = {
                     confirmation(
-                        context.getString(R.string.spoken_feature_must_stay_on),
+                        "At least one feature must stay on.",
                         flush = true,
                     )
                 },
