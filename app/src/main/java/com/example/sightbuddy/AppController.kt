@@ -795,7 +795,7 @@ class AppController(
                 )
             } else {
                 confirmation(
-                    "Voice model download failed. You can retry from settings.",
+                    context.getString(R.string.spoken_models_download_failed),
                     flush = false,
                 )
             }
