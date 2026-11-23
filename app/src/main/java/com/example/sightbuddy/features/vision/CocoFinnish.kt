@@ -5,9 +5,8 @@ import java.util.Locale
 /**
  * Finnish voice aliases and localized display names for the COCO objects.
  *
- * Detector identifiers remain English. Display names are translated for Finnish
- * and Polish; the existing Finnish voice aliases are unchanged. Polish display
- * names do not change the detector, command resolver or selected target IDs.
+ * Detector identifiers remain English. Display names and voice aliases are
+ * localized for Finnish and Polish; selected target IDs remain unchanged.
  */
 object CocoFinnish {
 
@@ -20,8 +19,12 @@ object CocoFinnish {
         else -> label
     }
 
-    /** Finnish voice aliases, or empty when the app is not in Finnish. */
-    fun aliases(): Map<String, String> = if (isActive()) ALIASES else emptyMap()
+    /** Finnish or Polish voice aliases, selected by the active language. */
+    fun aliases(): Map<String, String> = when (Locale.getDefault().language) {
+        "fi" -> ALIASES
+        "pl" -> PolishObjectNames.aliases
+        else -> emptyMap()
+    }
 
     /** English COCO label -> Finnish name shown and spoken. */
     private val NAMES: Map<String, String> = mapOf(

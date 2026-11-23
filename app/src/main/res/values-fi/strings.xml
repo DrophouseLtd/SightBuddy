@@ -1,4 +1,6 @@
 <resources>
+    <string name="feature_last_enabled">Vähintään yhden toiminnon on oltava käytössä.</string>
+    <string name="document_history_default">Describe this document</string>
     <string name="app_name">Sight Buddy</string>
 
     <!-- Pakollinen kielivalinta, näytetään käyttöehtojen yhteydessä. -->

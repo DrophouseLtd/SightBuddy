@@ -20,11 +20,19 @@ class PolishDisplayNamesTest {
             assertEquals("kubek", CocoFinnish.displayName("cup"))
             assertEquals("mysz komputerowa", CocoFinnish.displayName("mouse"))
             assertEquals("unknown-detector-label", CocoFinnish.displayName("unknown-detector-label"))
-            // Only the displayed words change; no new voice resolver is introduced.
+            assertEquals("cup", CocoFinnish.aliases()["kubek"])
+            assertEquals("person", CocoFinnish.aliases()["osobę"])
+            assertEquals("mouse", CocoFinnish.aliases()["mysz komputerowa"])
+            assertFalse(CocoFinnish.aliases().containsKey("mysz"))
+        }
+        inLanguage("en") {
+            assertEquals("cup", CocoFinnish.displayName("cup"))
             assertTrue(CocoFinnish.aliases().isEmpty())
         }
-        inLanguage("en") { assertEquals("cup", CocoFinnish.displayName("cup")) }
-        inLanguage("fi") { assertEquals("kuppi", CocoFinnish.displayName("cup")) }
+        inLanguage("fi") {
+            assertEquals("kuppi", CocoFinnish.displayName("cup"))
+            assertEquals("cup", CocoFinnish.aliases()["kuppi"])
+        }
     }
 
     @Test fun allExistingDetectorNamesHavePolishDisplayWords() {

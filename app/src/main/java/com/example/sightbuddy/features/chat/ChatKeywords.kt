@@ -8,7 +8,7 @@ import java.util.Locale
  * exactly as captured, with no AI. ("Read from image" was one too, in Text
  * chat, until the phone round of 2026-10-24: withdrawn.)
  *
- * Only the keyword as the whole message counts, in English or Finnish
+ * Only the keyword as the whole message counts, in English, Finnish or Polish
  * whatever the app language; case, spacing and the punctuation speech
  * recognition adds ("Read original.") do not matter. Anything said with it
  * ("read the original menu") is a question for the AI, which reads the
@@ -21,6 +21,8 @@ object ChatKeywords {
         "read original" to Keyword.READ_ORIGINAL,
         "read the original" to Keyword.READ_ORIGINAL,
         "lue alkuperäinen" to Keyword.READ_ORIGINAL,
+        "przeczytaj oryginał" to Keyword.READ_ORIGINAL,
+        "odczytaj oryginał" to Keyword.READ_ORIGINAL,
     )
 
     private val SPACES = Regex("\\s+")
