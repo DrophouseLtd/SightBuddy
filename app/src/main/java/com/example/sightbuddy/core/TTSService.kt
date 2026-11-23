@@ -93,8 +93,10 @@ class TTSService(
      * Told the languages a line was in that the phone has no voice for, as
      * it is said (said in the app's language instead): for the one-time hint.
      */
-    @Volatile
-    var onVoiceMissing: ((Set<String>) -> Unit)? = null
+    private val missingVoiceEvents = com.example.sightbuddy.core.language.MissingVoiceEvents()
+    var onVoiceMissing: ((Set<String>) -> Unit)?
+        get() = missingVoiceEvents.listener
+        set(value) { missingVoiceEvents.listener = value }
 
     /** The phone's voices, asked for at most every [VOICES_KEPT_MS]. */
     private var voices: List<VoiceInfo>? = null
@@ -180,10 +182,16 @@ class TTSService(
             val preferred = Locale.getDefault()
             var result = tts?.setLanguage(preferred)
             appVoiceLocale = preferred
+            var appVoiceMissing = false
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 Log.w("TTSService", "No voice for $preferred; falling back to English")
                 result = tts?.setLanguage(Locale.US)
                 appVoiceLocale = Locale.US
+                appVoiceMissing = true
+            }
+            if (appVoiceMissing && (preferred.language != Locale.US.language ||
+                    result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED)) {
+                missingVoiceEvents.report(setOf(preferred.toLanguageTag()))
             }
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 Log.e("TTSService", "The Language specified is not supported!")
@@ -367,7 +375,7 @@ class TTSService(
             emptyList()
         } else {
             val picked = VoiceChoice.pick(found, ::localeFor)
-            if (picked.missing.isNotEmpty()) onVoiceMissing?.invoke(picked.missing)
+            if (picked.missing.isNotEmpty()) missingVoiceEvents.report(picked.missing)
             picked.spans
         }
         if (output == SpeechRoute.Output.SCREEN_READER) {

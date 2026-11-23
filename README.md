@@ -27,11 +27,11 @@ Answers are spoken as they are written, sentence by sentence, so you don't wait 
 
 **AI on the phone.** Settings offers a model to download once (about 2.6 GB). With it, Image chat and Text chat answer with no key, no account and no connection. It is offered where the phone can run it well (a phone with 8 GB of memory and about 4.3 GB free); on other phones it stays available under Advanced settings.
 
-**Speech recognition can run on your device too:** optional Whisper models (about 160 MB, downloaded once on request) give offline, accent-tolerant transcription. Until you download them the app uses Android's own speech recognition, which is provided by your phone (usually Google's) and may process what you say online, under that provider's terms.
+**Speech recognition can run on your device too:** the optional English-only Whisper model (about 160 MB, downloaded once on request) gives offline transcription in English. Finnish and Polish use Android's own speech recognition or optional OpenAI transcription; these may need an internet connection and are subject to the provider's terms.
 
 Every surface is built accessibility-first: TalkBack labels throughout, an option to speak through TalkBack in its own voice and speed, haptics, high-contrast light and dark themes, adjustable speech rate (1× to 3×), a feature bar you can swipe or tap, and per-feature show and hide. Text in another language is read with that language's voice. What the app says is written into the conversation too, so a screen reader can read it back.
 
-The interface is in English, Finnish and Polish. When the app's language differs from the phone's, TalkBack still reads the app's words in the app's language, and the on-device AI is instructed to answer in the chosen language. Polish includes spoken cues and object names and commands. The optional on-device Whisper speech model supports English only; Finnish and Polish use the phone's speech recognizer or optional OpenAI transcription instead. More languages are welcome: see the [open issues](../../issues).
+The interface is in English, Finnish and Polish. When the app's language differs from the phone's, TalkBack still reads the app's words in the app's language, and the on-device AI is instructed to answer in the chosen language. Polish includes spoken cues and object names and commands. The optional on-device Whisper speech model supports English only; Finnish and Polish use the phone's speech recognizer or optional OpenAI transcription instead. The Polish wording was developed with AI assistance; testing on a physical phone with TalkBack is still needed. More languages are welcome: see the [open issues](../../issues).
 
 ## Install
 

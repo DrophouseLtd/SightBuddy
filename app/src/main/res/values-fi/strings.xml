@@ -421,7 +421,7 @@
     <string name="choice_respected_body">Kunnioitamme valintaasi ja pyrimme tarjoamaan parhaan ratkaisun laitteellesi ja tarpeisiisi. Järjestelmän oma puheentunnistus saattaa toisinaan katkaista viestin kesken. Jos haluat harkita uudelleen, vaihtoehto löytyy asetuksista.</string>
     <string name="choice_respected_ok">Jatka</string>
     <string name="missing_voice_title">Kielelle ei ole ääntä</string>
-    <string name="missing_voice_body">Puhelimessa ei ole puheääntä tälle kielelle (%1$s), joten teksti luetaan tavallisella äänellä. Äänen voi lisätä puhelimen asetuksista.</string>
+    <string name="missing_voice_body">Puhelimessa ei ole puheääntä tälle kielelle (%1$s). Jos toinen ääni on käytettävissä, sitä voidaan käyttää. Äänen voi lisätä puhelimen asetuksista.</string>
     <string name="missing_voice_ok">OK</string>
     <!-- Enabling the paid API while the free model is present. -->
     <string name="cloud_stt_local_title">Ilmainen malli on jo käytössä</string>
@@ -430,4 +430,9 @@
     <string name="cloud_stt_local_enable_cd">Käytä maksullista OpenAI-puheentunnistusta ilmaisen laitteella toimivan mallin sijaan</string>
     <string name="cloud_stt_local_decline">Pidä ilmainen malli</string>
     <string name="cloud_stt_local_decline_cd">Jatka ilmaisella laitteella toimivalla puheentunnistuksella</string>
+    <string name="spoken_models_download_failed">Puhemallin lataus epäonnistui. Voit yrittää uudelleen asetuksista.</string>
+    <string name="spoken_feature_must_stay_on">Vähintään yksi toiminto on pysyttävä käytössä.</string>
+    <string name="error_unreadable">Sain vastauksen, mutta en pystynyt lukemaan sitä. Yritä uudelleen.</string>
+    <string name="chat_describe_image">Kuvaile tämä kuva</string>
+    <string name="legal_documents_language_notice">Linkitetyt käyttöehdot ja tietosuojakäytäntö ovat tekijöiden toimittamia englanninkielisiä asiakirjoja.</string>
 </resources>

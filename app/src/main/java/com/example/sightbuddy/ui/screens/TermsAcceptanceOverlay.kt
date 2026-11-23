@@ -142,6 +142,13 @@ fun TermsAcceptanceOverlay(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            Text(
+                text = stringResource(R.string.legal_documents_language_notice),
+                style = MaterialTheme.typography.bodyMedium,
+                color = textColor,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+            )
             Spacer(modifier = Modifier.height(40.dp))
 
             TermsActionButton(
