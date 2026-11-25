@@ -130,6 +130,12 @@ Release builds fall back to debug signing when no keystore is configured, so a c
 
 Contributions are welcome, especially from blind and low-vision Android users and people who build for them. Read **[CONTRIBUTING.md](CONTRIBUTING.md)** first: it covers how to build, what a good change looks like here, and how to test with TalkBack. Good places to start are the [open issues](../../issues), in particular those labelled `good first issue` and `help wanted`.
 
+Before you open a pull request:
+
+- for anything bigger than a small fix, agree on it in an issue first;
+- keep one change per pull request, and push fixes to the same pull request instead of opening new ones on top of it;
+- test it on a phone with TalkBack, and say in the pull request what you heard.
+
 Please also read our [Code of Conduct](CODE_OF_CONDUCT.md). To report a security problem, see [SECURITY.md](SECURITY.md); please don't open a public issue for it.
 
 ## Credits
