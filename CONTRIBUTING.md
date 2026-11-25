@@ -30,6 +30,16 @@ This is exactly what CI runs on every pull request; please run it before you pus
 - **Heard, not just seen.** Describe in the pull request how you tested it with TalkBack: what you swiped to, what was read out, what happened.
 - **Explained.** Comments say *why*, not *what*. Commit messages say what changes for the person using the app.
 
+## How pull requests work
+
+1. **Agree on it in an issue first.** For anything bigger than a small fix (a new language, a new model or download, a new feature), open an issue or comment on one, and wait for a reply before you write the code.
+2. **One change, one pull request.** A translation, a new model and a refactor are three pull requests, not one.
+3. **Keep fixes in the same pull request.** When a pull request needs changes, push them to the same branch: the pull request updates itself. Please don't open new pull requests on top of one that hasn't been merged; open the next one after the first is in.
+4. **Test it on a phone before you ask for a merge.** Install the debug APK and use the change with TalkBack, then say in the pull request what you heard. If you can't test on a phone, say so: the pull request waits until someone can.
+5. **Expect a reply within about a week.** Sight Buddy is maintained by a small team.
+
+How a merge happens: Sight Buddy is developed in a private repository, and this one is updated with each release. When your pull request is accepted, we bring it into the development repository with you as the author, merge it here, and it ships in the next release. GitHub's own tests run on your pull request once a maintainer has approved them.
+
 ## Accessibility rules
 
 These are not optional:
