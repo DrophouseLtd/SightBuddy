@@ -53,6 +53,7 @@ class VoiceInputService(
     private val localGemma: LocalGemma? = null,
     /** The user's speech recognition choice in Settings. */
     private val sttChoice: () -> SttChoice = { SttChoice.WHISPER },
+    private val appLanguage: String = java.util.Locale.getDefault().language,
 ) {
 
     sealed class SttEvent {
@@ -80,9 +81,9 @@ class VoiceInputService(
     /** Which engine runs right now, from the choice and what is installed and loaded. */
     private fun effectiveChoice(): SttChoice = SttChoice.effective(
         chosen = sttChoice(),
-        whisperReady = engine != null,
+        whisperReady = engine != null && com.example.sightbuddy.core.LanguageStore.supportsWhisper(appLanguage),
         gemmaInstalled = localGemma?.installed == true,
-        english = Locale.getDefault().language == "en",
+        english = appLanguage == com.example.sightbuddy.core.LanguageStore.LANG_EN,
     )
 
     private fun usingGemma(): Boolean = effectiveChoice() == SttChoice.GEMMA
@@ -161,6 +162,9 @@ class VoiceInputService(
     private var engine: WhisperEngine? = null
 
     private val engineLoadStarted = AtomicBoolean(false)
+    private val engineLock = Any()
+    @Volatile
+    private var closed = false
 
     @Volatile
     private var recordJob: Job? = null
@@ -211,21 +215,24 @@ class VoiceInputService(
 
     /** Load the Whisper engine when model files are available. Single-flight. */
     fun loadEngineIfReady() {
-        // The bundled model is Whisper base.en — English only. In any other app
-        // language stay on the system recogniser, which does support it.
-        if (Locale.getDefault().language != "en") return
+        // Load only for languages explicitly supported by this app.
+        if (!com.example.sightbuddy.core.LanguageStore.supportsWhisper(appLanguage)) return
         if (!models.isReady() || !engineLoadStarted.compareAndSet(false, true)) return
         scope.launch {
             // Only files that have matched their SHA-256 are handed out: files from
             // an earlier version are hashed here once. One that fails is deleted and
             // the download is offered again; until then the system recogniser.
             val files = withContext(Dispatchers.IO) { models.verifiedFiles() }
-            val loaded = files?.let { WhisperEngine.load(it) }
-            if (loaded != null) {
-                engine = loaded
-                _whisperReady.value = true
-            } else {
-                engineLoadStarted.set(false) // allow a later retry
+            val loaded = files?.let { WhisperEngine.load(it, appLanguage) }
+            synchronized(engineLock) {
+                if (closed) {
+                    loaded?.release()
+                } else if (loaded != null) {
+                    engine = loaded
+                    _whisperReady.value = true
+                } else {
+                    engineLoadStarted.set(false)
+                }
             }
         }
     }
@@ -234,16 +241,17 @@ class VoiceInputService(
      * Drops the loaded Whisper engine so its model files can be deleted; the
      * system recogniser takes over. Refused while a recording is using it.
      */
-    fun unloadEngine(): Boolean {
-        if (recordJob?.isActive == true) return false
+    fun unloadEngine(): Boolean = synchronized(engineLock) {
+        if (recordJob?.isActive == true || (engineLoadStarted.get() && engine == null)) return@synchronized false
         engine?.release()
         engine = null
         _whisperReady.value = false
         engineLoadStarted.set(false)
-        return true
+        true
     }
 
-    fun startListening() {
+    fun startListening() = synchronized(engineLock) {
+        if (closed) return@synchronized
         _lastError.value = 0
         recordingGate.reset()
         takeAudioFocus()
@@ -257,9 +265,9 @@ class VoiceInputService(
         val eng = engine?.takeIf { usingWhisper() }
         if (cloud == null && gemma == null && eng == null) {
             legacy.startListening()
-            return
+            return@synchronized
         }
-        if (recordJob?.isActive == true) return
+        if (recordJob?.isActive == true) return@synchronized
         stopRequested = false
         _isListening.value = true
         recordJob = scope.launch {
@@ -407,6 +415,7 @@ class VoiceInputService(
                 pos += chunk.size
             }
             val text = withContext(Dispatchers.Default) { eng.transcribe(samples) }
+            if (closed || recordingGate.discardsTranscript()) return
             if (text.isBlank()) {
                 finishWithError()
             } else {
@@ -537,11 +546,21 @@ class VoiceInputService(
     }
 
     fun shutdown() {
-        stopRequested = true
+        val retiring = synchronized(engineLock) {
+            closed = true
+            stopRequested = true
+            recordingGate.discardPending()
+            val old = engine to recordJob
+            engine = null
+            _whisperReady.value = false
+            old
+        }
+        // Cancellation does not interrupt blocking JNI. Completion, unlike a
+        // cancellation request, guarantees that VAD/decode no longer uses it.
+        retireEngineAfter(retiring.second) { retiring.first?.release() }
         scope.cancel()
         legacy.shutdown()
-        engine?.release()
-        engine = null
+        releaseAudioFocus()
     }
 
     companion object {

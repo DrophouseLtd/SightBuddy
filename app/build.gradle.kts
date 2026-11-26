@@ -109,7 +109,7 @@ val downloadSherpaOnnx = tasks.register("downloadSherpaOnnx") {
 // Default to the public model release so clones work out of the box;
 // override via local.properties/env to self-host.
 val sttModelBaseUrl = localOrEnv("STT_MODEL_BASE_URL").ifEmpty {
-    "https://github.com/DrophouseLtd/sightbuddy-stt-models/releases/download/whisper-base-en-v1"
+    "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/bb53ee204431c90d314c1cc08d28d23e5b7927cc"
 }
 
 android {

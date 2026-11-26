@@ -202,6 +202,7 @@ class MainActivity : ComponentActivity() {
             sttModelManager,
             localGemma,
             sttChoice = { SttChoice.fromKey(settingsManager.sttChoice.value) },
+            appLanguage = languageStore.language(),
         )
         // Whisper models are downloaded only on user request (Settings or the
         // first-launch prompt) — no automatic 154 MB download.

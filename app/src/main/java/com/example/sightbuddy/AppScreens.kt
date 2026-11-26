@@ -199,6 +199,7 @@ private fun SettingsHost(
         val sttDownloadPercent = (sttModelDownloadState as? SttModelManager.DownloadState.Downloading)?.percent
         val gemmaInstalled by localGemma.installedState.collectAsState()
         val gemmaDownloadPercent by localGemma.downloadPercent.collectAsState()
+        val whisperReady by voiceInputService.whisperReady.collectAsState()
         settingsManager.sttChoice.collectAsState().value
         settingsManager.cloudStt.collectAsState().value
         settingsManager.useApi.collectAsState().value
@@ -270,13 +271,20 @@ private fun SettingsHost(
                 gemmaDownloadPercent = gemmaDownloadPercent,
                 onManageGemma = { showGemmaDialog = true },
                 onRequestGemmaDownload = { showGemmaDownloadDialog = true },
-                sttChoiceLabel = stringResource(effectiveStt.labelRes),
+                sttChoiceLabel = if (speech.engine == com.example.sightbuddy.core.stt.SpeechEngine.CLOUD) stringResource(R.string.settings_cloud_stt) else stringResource(effectiveStt.labelRes),
+                sttChoiceCanCycle = speech.engine != com.example.sightbuddy.core.stt.SpeechEngine.CLOUD,
                 onSttChoiceCycle = {
-                    val options = SttChoice.available(sttModelsReady, gemmaInstalled)
-                    val next = options[(options.indexOf(effectiveStt) + 1) % options.size]
-                    settingsManager.setSttChoice(next.key)
+                    val cloudActive = speech.engine == com.example.sightbuddy.core.stt.SpeechEngine.CLOUD
+                    val next = SttChoice.nextAvailable(
+                        SttChoice.fromKey(sttChoiceKey),
+                        whisperSupported && whisperReady,
+                        gemmaInstalled,
+                        cloudEnabled = cloudActive,
+                    )
+                    if (!cloudActive) settingsManager.setSttChoice(next.key)
+                    val actualLabel = if (cloudActive) R.string.settings_cloud_stt else next.labelRes
                     confirmation(
-                        context.getString(R.string.spoken_stt_choice, context.getString(next.labelRes)),
+                        context.getString(R.string.spoken_stt_choice, context.getString(actualLabel)),
                         flush = true,
                     )
                 },

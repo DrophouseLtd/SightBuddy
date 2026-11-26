@@ -32,7 +32,7 @@ licence texts, under **Settings → Privacy → Open-source licences**.
 - **Gemma 4 E2B**, the on-device AI model, by Google, converted for LiteRT-LM by
   [LiteRT Community](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm)
   and downloaded from Hugging Face at a pinned revision — Apache-2.0
-- **Whisper base (English)**, the speech recognition model, by OpenAI — MIT.
+- **Whisper base (multilingual)**, the speech recognition model, by OpenAI — MIT.
   Converted to ONNX by the sherpa-onnx project — Apache-2.0
 - **Silero VAD**, the voice activity detector, by Silero — MIT
 

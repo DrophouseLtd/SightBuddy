@@ -12,14 +12,14 @@ import android.os.StatFs
  * - [Tier.WHISPER] (tier 2): Whisper for speech. No on-device answers.
  * - [Tier.NONE] (tier 1): nothing to download; the platform recogniser.
  *
- * Both models are English only, so other languages are always tier 1.
+ * Whisper is multilingual; the FULL recommendation is English only.
  */
 object ModelSetup {
 
     enum class Tier { NONE, WHISPER, FULL }
 
-    /** Whisper base.en int8 plus the VAD, as downloaded. */
-    const val WHISPER_BYTES = 161_300_000L
+    /** Whisper base multilingual int8 plus the VAD, as downloaded. */
+    const val WHISPER_BYTES = 161_253_144L
 
     /** Gemma 4 E2B, as downloaded. */
     const val GEMMA_BYTES = 2_588_147_712L
@@ -34,8 +34,7 @@ object ModelSetup {
     const val MIN_GEMMA_RAM_BYTES = 7_000_000_000L
 
     fun tier(totalRamBytes: Long, freeBytes: Long, english: Boolean): Tier = when {
-        !english -> Tier.NONE
-        totalRamBytes >= MIN_GEMMA_RAM_BYTES &&
+        english && totalRamBytes >= MIN_GEMMA_RAM_BYTES &&
             freeBytes >= GEMMA_BYTES + WHISPER_BYTES + RESERVE_BYTES -> Tier.FULL
         freeBytes >= WHISPER_BYTES + RESERVE_BYTES -> Tier.WHISPER
         else -> Tier.NONE

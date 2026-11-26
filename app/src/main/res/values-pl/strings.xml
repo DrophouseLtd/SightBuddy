@@ -77,7 +77,7 @@
     <string name="spoken_api_key_removed">Usunięto klucz API OpenAI.</string>
     <string name="spoken_speech_rate">Tempo mowy: %1$s</string>
     <string name="spoken_models_downloading">Pobieranie modeli mowy. Może to potrwać kilka minut.</string>
-    <string name="spoken_models_installed">Zainstalowano modele rozpoznawania mowy angielskiej. Nie rozpoznają one polskiej mowy.</string>
+    <string name="spoken_models_installed">Zainstalowano wielojęzyczny model rozpoznawania mowy Whisper. Obsługuje język polski.</string>
     <string name="spoken_models_deleted">Usunięto modele mowy.</string>
     <string name="spoken_models_damaged">Modele mowy zostały uszkodzone i usunięte. Możesz pobrać je ponownie w ustawieniach.</string>
     <string name="spoken_models_delete_failed">Nie udało się teraz usunąć modeli mowy. Spróbuj ponownie.</string>
@@ -197,7 +197,7 @@
     <string name="settings_cycle_action">przełącz na następną opcję</string>
     <string name="settings_action_download">pobierz</string>
     <string name="settings_action_continue_download">wznów pobieranie</string>
-    <string name="stt_choice_whisper">Whisper (rozpoznawanie mowy angielskiej)</string>
+    <string name="stt_choice_whisper">Whisper (rozpoznawanie mowy)</string>
     <string name="stt_choice_gemma">Gemma</string>
     <string name="stt_choice_android">Android</string>
     <string name="spoken_stt_choice">Rozpoznawanie mowy: %1$s</string>
@@ -217,7 +217,7 @@
     <string name="gemma_model_delete_confirm">Usunąć model AI z urządzenia i zwolnić %1$s?</string>
     <string name="spoken_gemma_deleted">Usunięto model AI z urządzenia.</string>
     <string name="spoken_gemma_damaged">Model AI na urządzeniu został uszkodzony i usunięty. Możesz pobrać go ponownie w ustawieniach.</string>
-    <string name="settings_stt_downloaded">Pobrano model rozpoznawania mowy angielskiej. Nie obsługuje polskiej mowy</string>
+    <string name="settings_stt_downloaded">Pobrano wielojęzyczny model Whisper obsługujący język polski</string>
     <string name="settings_stt_downloading">Pobieranie… %1$d%%</string>
     <string name="settings_stt_not_downloaded">Nie pobrano. 154 MB</string>
     <string name="settings_show_in_carousel">Pokaż w karuzeli: %1$s</string>
@@ -274,7 +274,7 @@
     <string name="picker_filter_hint">Wpisz, aby filtrować…</string>
     <string name="picker_search_cd">Szukaj obiektów. Wpisz nazwę obiektu, aby przefiltrować listę.</string>
     <string name="picker_cancel_cd">Anuluj i wróć</string>
-    <string name="stt_models_body">Modele rozpoznawania mowy angielskiej znajdują się na urządzeniu i zajmują %1$s. Działają bez internetu, ale nie obsługują polskiej mowy.</string>
+    <string name="stt_models_body">Na urządzeniu znajduje się wielojęzyczny model Whisper zajmujący %1$s. Rozpoznaje polską mowę bez internetu. Wynik może zawierać błędy.</string>
     <string name="stt_models_delete_confirm">Usunąć modele Whisper i zwolnić %1$s? Po usunięciu rozpoznawanie mowy będzie korzystać z innej dostępnej opcji.</string>
     <string name="stt_models_delete">Usuń modele</string>
     <string name="stt_models_delete_cd">Usuń modele mowy. Najpierw pojawi się prośba o potwierdzenie.</string>
@@ -380,7 +380,7 @@
     <string name="settings_cloud_stt">Rozpoznawanie mowy OpenAI</string>
     <string name="settings_cloud_stt_desc">Wysyłaj nagrania do OpenAI w celu rozpoznania mowy. Użycie API jest płatne i wymaga własnego klucza</string>
     <string name="cloud_stt_dialog_title">Używać rozpoznawania mowy OpenAI?</string>
-    <string name="cloud_stt_dialog_body">Czy chcesz używać rozpoznawania mowy OpenAI? Nagrania będą wysyłane do OpenAI, a korzystanie z API będzie rozliczane na Twoim koncie według stawek usługi. Może to poprawić rozpoznawanie mowy, ale wiąże się z kosztem. Lokalny Whisper jest przeznaczony do rozpoznawania mowy angielskiej, nie polskiej.</string>
+    <string name="cloud_stt_dialog_body">Czy chcesz używać rozpoznawania mowy OpenAI? Nagrania będą wysyłane do OpenAI, a korzystanie z API będzie rozliczane na Twoim koncie według stawek usługi. Może to poprawić rozpoznawanie mowy, ale wiąże się z kosztem. Lokalny Whisper obsługuje także polski i działa bez wysyłania nagrań do internetu. Włączenie OpenAI jest opcjonalne.</string>
     <string name="cloud_stt_enable">Włącz</string>
     <string name="cloud_stt_enable_cd">Włącz rozpoznawanie mowy OpenAI</string>
     <string name="cloud_stt_decline">Nie teraz</string>
