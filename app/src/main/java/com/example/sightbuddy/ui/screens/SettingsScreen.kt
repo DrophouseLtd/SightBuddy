@@ -109,6 +109,7 @@ fun SettingsScreen(
     onManageGemma: () -> Unit = {},
     onRequestGemmaDownload: () -> Unit = {},
     sttChoiceLabel: String = "",
+    sttChoiceCanCycle: Boolean = true,
     setupOffered: Boolean = false,
     setupDescription: String = "",
     onRequestSetup: () -> Unit = {},
@@ -334,7 +335,7 @@ fun SettingsScreen(
                 }
                 // Which recogniser runs, cycled like the speech rate. Only a choice
                 // once a speech model is on the device.
-                if (whisperSupported && (sttModelsReady || gemmaInstalled)) add {
+                if (sttChoiceCanCycle && whisperSupported && (sttModelsReady || gemmaInstalled)) add {
                     SettingsNavRow(
                         label = stringResource(R.string.settings_stt_engine),
                         description = stringResource(R.string.settings_stt_engine_desc, sttChoiceLabel),

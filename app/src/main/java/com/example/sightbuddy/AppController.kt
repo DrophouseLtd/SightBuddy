@@ -398,8 +398,6 @@ class AppController(
     // Torch is runtime-only: off on every launch, and forced off whenever the app
     // is backgrounded (pauseForBackground unbinds the camera, which clears it).
     var torchOn by mutableStateOf(false)
-    // On-device Whisper ships as base.en — English only. In any other language the
-    // app stays on the system recogniser: no download prompt, no Settings row.
     var showHelp by mutableStateOf(false)
     var helpContent by mutableStateOf<HelpContent?>(null)
     /** Text chat's text in view: read out, and shown over the camera while Preview is on. */
@@ -490,7 +488,7 @@ class AppController(
         phone = Build.MANUFACTURER.replaceFirstChar { it.uppercase() } + " " + Build.MODEL,
         screenReaderOn = isScreenReaderOn(context),
         appLanguage = context.getString(
-            if (languageStore.isFinnish()) R.string.language_name_finnish else R.string.language_name_english
+            LanguageStore.languageNameRes(languageStore.language())
         ),
         featuresShown = pages.map { ModeNames.display(context, it) },
         cameraPreview = settingsManager.cameraPreview.value,
@@ -592,7 +590,7 @@ class AppController(
     val useLocalChat get() = settingsManager.useLocalChat.value
     // Gemma answers in any language (Finnish prompts as for OpenAI); it is only
     // recommended, and used for speech, in English.
-    val english get() = !languageStore.isFinnish()
+    val english get() = languageStore.isEnglish()
     val localAiReady get() = gemmaInstalled && useLocalChat
     // Gemma holds about 2 GB: load it only while something will use it.
     // The phone's specs decide the recommended setup. Re-read when models come
@@ -611,14 +609,15 @@ class AppController(
         }
     // Follows the free space, as the remembered value it replaces did: reading
     // the RAM is a call into the system.
-    private var deviceTierFor: Long? = null
+    private var deviceTierFor: Pair<Long, String>? = null
     private var deviceTierRead = ModelSetup.Tier.NONE
     val deviceTier: ModelSetup.Tier
         get() {
             val space = freeSpace
-            if (space != deviceTierFor) {
-                deviceTierFor = space
-                deviceTierRead = ModelSetup.tier(ModelSetup.totalRamBytes(context), space, english = english)
+            val key = space to languageStore.language()
+            if (key != deviceTierFor) {
+                deviceTierFor = key
+                deviceTierRead = if (languageStore.supportsWhisper()) ModelSetup.tier(ModelSetup.totalRamBytes(context), space, english = english) else ModelSetup.Tier.NONE
             }
             return deviceTierRead
         }
@@ -628,9 +627,9 @@ class AppController(
         gemmaDownloadPercent == null && sttModelDownloadState !is SttModelManager.DownloadState.Downloading
     val effectiveStt get() = SttChoice.effective(
         chosen = SttChoice.fromKey(sttChoiceKey),
-        whisperReady = sttModelsReady,
+        whisperReady = languageStore.supportsWhisper() && voiceInputService.whisperReady.value,
         gemmaInstalled = gemmaInstalled,
-        english = !languageStore.isFinnish(),
+        english = english,
     )
     suspend fun syncGemmaLoaded() {
         val forSpeech = effectiveStt == SttChoice.GEMMA
@@ -653,8 +652,8 @@ class AppController(
     val cloudSttEnabled get() = settingsManager.cloudStt.value
     val speech get() = run {
         SpeechAvailability(
-            modelServesLanguage = !languageStore.isFinnish(),
-            modelDownloaded = sttModelsReady || gemmaInstalled,
+            modelServesLanguage = languageStore.supportsWhisper(),
+            modelDownloaded = voiceInputService.whisperReady.value,
             cloudEnabled = cloudSttEnabled && apiAllowed,
             localEnabled = effectiveStt != SttChoice.ANDROID,
         )
@@ -791,7 +790,7 @@ class AppController(
                 )
             } else {
                 confirmation(
-                    "Voice model download failed. You can retry from settings.",
+                    context.getString(R.string.spoken_setup_failed),
                     flush = false,
                 )
             }

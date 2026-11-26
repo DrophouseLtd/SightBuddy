@@ -137,23 +137,43 @@ class ObjectCommandResolver(
         }
 
         val normalized = normalize(raw)
+        // In Polish, "mysz" alone can mean an animal. The COCO class is hardware.
+        val allowMouse = Locale.getDefault().language != "pl" || normalized.contains("komputerow")
+        if (Locale.getDefault().language == "pl") {
+            val targetTerms = activeAliases() + COCO_OBJECTS.associateWith { it }
+            val matchedTerms = targetTerms.asSequence()
+                .filter { (_, item) -> allowMouse || item != "mouse" }
+                .map { (term, item) -> normalize(term) to item }
+                .filter { (term, _) -> Regex("\\b${Regex.escape(term)}\\b").containsMatchIn(normalized) }
+                .toList()
+            // A compound label such as "hot dog" is one target, not hot dog plus dog.
+            val targets = matchedTerms.asSequence()
+                .filter { (term, _) ->
+                    matchedTerms.none { (longer, _) ->
+                        longer.length > term.length &&
+                            Regex("\\b${Regex.escape(term)}\\b").containsMatchIn(longer)
+                    }
+                }
+                .map { it.second }.distinct().take(2).toList()
+            if (targets.size > 1) return@withContext ResolveResult.Clarify(messages.couldNotMatch)
+        }
 
         // --- Path 1a: direct alias lookup ---
         val directAlias = activeAliases()[normalized]
-        if (directAlias != null && directAlias in COCO_OBJECTS) {
+        if (directAlias != null && directAlias in COCO_OBJECTS && (allowMouse || directAlias != "mouse")) {
             PrivateLog.i(TAG) { "Resolved locally by alias: '$raw' -> '$directAlias'" }
             return@withContext ResolveResult.Activate(directAlias, Source.LOCAL, 1.0f)
         }
 
         // --- Path 1b: exact COCO label match (after normalization) ---
-        val exactMatch = COCO_OBJECTS.find { normalize(it) == normalized }
+        val exactMatch = COCO_OBJECTS.find { normalize(it) == normalized && (allowMouse || it != "mouse") }
         if (exactMatch != null) {
             PrivateLog.i(TAG) { "Resolved locally by exact match: '$raw' -> '$exactMatch'" }
             return@withContext ResolveResult.Activate(exactMatch, Source.LOCAL, 1.0f)
         }
 
         // --- Path 1c: item/alias embedded inside a longer spoken phrase ---
-        val embeddedMatch = findEmbeddedLocalMatch(normalized)
+        val embeddedMatch = findEmbeddedLocalMatch(normalized, allowMouse)
         if (embeddedMatch != null) {
             Log.i(
                 TAG,
@@ -163,7 +183,7 @@ class ObjectCommandResolver(
         }
 
         // --- Path 1d: very-high-confidence fuzzy match ---
-        val scored = scoreCandidates(normalized)
+        val scored = scoreCandidates(normalized).filter { allowMouse || it.item != "mouse" }
         val top = scored.firstOrNull()
         val activationThreshold = if (llmEnabled) localActivationThreshold else localOnlyActivationThreshold
         if (top != null && top.score >= activationThreshold) {
@@ -233,7 +253,11 @@ class ObjectCommandResolver(
         // Fold the Finnish vowels before the a-z filter below strips them: without
         // this, "henkilö" would normalize to "henkil" and never match its alias.
         val folded = lower.replace('ä', 'a').replace('ö', 'o').replace('å', 'a')
-        val cleaned = folded.replace(Regex("[^a-z0-9\\s]"), " ")
+        val localized = if (Locale.getDefault().language == "pl") folded
+            .replace('ą', 'a').replace('ć', 'c').replace('ę', 'e').replace('ł', 'l')
+            .replace('ń', 'n').replace('ó', 'o').replace('ś', 's').replace('ź', 'z').replace('ż', 'z')
+        else folded
+        val cleaned = localized.replace(Regex("[^a-z0-9\\s]"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
         return when {
@@ -245,7 +269,7 @@ class ObjectCommandResolver(
 
     // --- Local fuzzy scoring ---
 
-    private fun findEmbeddedLocalMatch(normalizedInput: String): ScoredCandidate? {
+    private fun findEmbeddedLocalMatch(normalizedInput: String, allowMouse: Boolean): ScoredCandidate? {
         if (normalizedInput.isBlank()) return null
 
         val inputTokens = normalizedInput.split(" ").filter { it.isNotBlank() }.toSet()
@@ -257,7 +281,7 @@ class ObjectCommandResolver(
 
         return terms.asSequence()
             .mapNotNull { (term, item) ->
-                if (item !in COCO_OBJECTS) return@mapNotNull null
+                if (item !in COCO_OBJECTS || (!allowMouse && item == "mouse")) return@mapNotNull null
 
                 val normalizedTerm = normalize(term)
                 val termTokens = normalizedTerm.split(" ").filter { it.isNotBlank() }

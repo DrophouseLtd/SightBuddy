@@ -11,7 +11,7 @@ import com.k2fsa.sherpa.onnx.Vad
 import com.k2fsa.sherpa.onnx.VadModelConfig
 
 /**
- * Local Whisper (base.en, int8) speech-to-text plus silero voice-activity
+ * Local Whisper (multilingual base, int8) speech-to-text plus silero voice-activity
  * detection, both via sherpa-onnx. Heavy to construct (~seconds) — create on a
  * background thread via [load] and reuse.
  *
@@ -33,14 +33,16 @@ class WhisperEngine private constructor(
 
     /** Blocking transcription of the full utterance. */
     fun transcribe(samples: FloatArray): String {
-        val stream = recognizer.createStream()
-        return try {
-            stream.acceptWaveform(samples, SAMPLE_RATE)
-            recognizer.decode(stream)
-            recognizer.getResult(stream).text.trim()
-        } finally {
-            stream.release()
-        }
+        return audioWindows(samples).mapNotNull { window ->
+            val stream = recognizer.createStream()
+            try {
+                stream.acceptWaveform(window, SAMPLE_RATE)
+                recognizer.decode(stream)
+                recognizer.getResult(stream).text.trim().takeIf { it.isNotEmpty() }
+            } finally {
+                stream.release()
+            }
+        }.joinToString(" ")
     }
 
     fun release() {
@@ -52,11 +54,23 @@ class WhisperEngine private constructor(
         private const val TAG = "WhisperEngine"
         const val SAMPLE_RATE = 16000
 
+        /** Each 27.5 s of speech gets 2 s silence within the 29.5 s window. */
+        fun audioWindows(samples: FloatArray): List<FloatArray> {
+            if (samples.isEmpty()) return emptyList()
+            val window = SAMPLE_RATE * 27 + SAMPLE_RATE / 2
+            val padding = SAMPLE_RATE * 2
+            return (samples.indices step window).map { start ->
+                val end = minOf(start + window, samples.size)
+                samples.copyOfRange(start, end).copyOf(end - start + padding)
+            }
+        }
+
         /** Samples per VAD call — fixed by the silero model. */
         const val VAD_WINDOW = 512
 
         /** Blocking load; call from a background dispatcher. Null on failure. */
-        fun load(files: SttModelManager.WhisperFiles): WhisperEngine? = try {
+        fun load(files: SttModelManager.WhisperFiles, language: String): WhisperEngine? = try {
+            require(language in setOf("en", "fi", "pl"))
             val recognizer = OfflineRecognizer(
                 config = OfflineRecognizerConfig(
                     featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
@@ -64,7 +78,7 @@ class WhisperEngine private constructor(
                         whisper = OfflineWhisperModelConfig(
                             encoder = files.encoder.file.absolutePath,
                             decoder = files.decoder.file.absolutePath,
-                            language = "en",
+                            language = language,
                             task = "transcribe",
                         ),
                         tokens = files.tokens.file.absolutePath,

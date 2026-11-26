@@ -28,8 +28,8 @@ Release builds are **arm64-only** (`minSdk 30` ⇒ every supported device is arm
 | **Memories** | Save chat stores the chat on the phone (`core/MemoryStore.kt`); Gemma names it; list, read, rename, share, delete. Share sends a chat as plain text through Android's share sheet |
 | **Scan colour** | Median of a centre patch sampled straight from the YUV planes, mapped to colour names (incl. brown/beige); on-screen focus frame |
 | **Scan light** | Y-plane luma average |
-| **Speech-to-text** | Chosen in Settings: Whisper `base.en` int8 via sherpa-onnx (default), Gemma 4 E2B, or the Android recogniser; OpenAI transcription when enabled. English only on-device |
-| **Model setup** | `core/ModelSetup.kt` picks a tier from memory and free space (Gemma + Whisper / Whisper / nothing; Finnish: nothing) and offers it with sizes and free space. Downloads run under `ModelDownloadService` |
+| **Speech-to-text** | Chosen in Settings: Whisper multilingual `base` int8 via sherpa-onnx (default) or the Android recogniser; OpenAI transcription when enabled. Whisper supports English, Finnish and Polish. |
+| **Model setup** | `core/ModelSetup.kt` picks a tier from memory and free space (Gemma + Whisper / Whisper / nothing; Gemma recommended in English only) and offers it with sizes and free space. Downloads run under `ModelDownloadService` |
 
 Each carousel feature can be hidden in Settings, with a guard that keeps at least one enabled.
 

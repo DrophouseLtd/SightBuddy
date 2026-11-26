@@ -30,7 +30,7 @@ class ModelSetupTest {
     }
 
     @Test
-    fun otherLanguagesGetNothing() {
-        assertEquals(Tier.NONE, ModelSetup.tier(totalRamBytes = 12 * gb, freeBytes = 100 * gb, english = false))
+    fun nonEnglishGetsWhisperButNotGemma() {
+        assertEquals(Tier.WHISPER, ModelSetup.tier(totalRamBytes = 12 * gb, freeBytes = 100 * gb, english = false))
     }
 }

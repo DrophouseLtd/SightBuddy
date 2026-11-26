@@ -110,6 +110,16 @@ fun TermsAcceptanceOverlay(
                     onClick = { onSelectLanguage("fi") },
                     modifier = Modifier.weight(1f),
                 )
+                Spacer(modifier = Modifier.width(12.dp))
+                LanguageChoiceButton(
+                    label = stringResource(R.string.language_polish),
+                    contentDescription = stringResource(R.string.language_polish_cd),
+                    selected = languageChosen && currentLanguage == "pl",
+                    fallbackBg = secondaryBg,
+                    fallbackText = textColor,
+                    onClick = { onSelectLanguage("pl") },
+                    modifier = Modifier.weight(1f),
+                )
             }
 
             Spacer(modifier = Modifier.height(36.dp))

@@ -27,6 +27,10 @@ class LanguageStore(context: Context) {
 
     fun isFinnish(): Boolean = language() == LANG_FI
 
+    fun isEnglish(): Boolean = language() == LANG_EN
+
+    fun supportsWhisper(): Boolean = supportsWhisper(language())
+
     fun setLanguage(tag: String) {
         prefs.edit().putString(KEY_LANGUAGE, tag).apply()
     }
@@ -37,6 +41,21 @@ class LanguageStore(context: Context) {
 
         const val LANG_EN = "en"
         const val LANG_FI = "fi"
+        const val LANG_PL = "pl"
+
+        fun supportsWhisper(tag: String): Boolean = tag in setOf(LANG_EN, LANG_FI, LANG_PL)
+
+        fun nextLanguage(tag: String): String = when (tag) {
+            LANG_EN -> LANG_FI
+            LANG_FI -> LANG_PL
+            else -> LANG_EN
+        }
+
+        fun languageNameRes(tag: String): Int = when (tag) {
+            LANG_FI -> com.example.sightbuddy.R.string.language_name_finnish
+            LANG_PL -> com.example.sightbuddy.R.string.language_name_polish
+            else -> com.example.sightbuddy.R.string.language_name_english
+        }
 
         fun localeOf(tag: String): Locale = Locale.forLanguageTag(tag)
 

@@ -51,6 +51,7 @@ class OpenAiTransport(
         val localFailed: String = "The on-device model could not answer. Please try again.",
         val tooLong: String = "Sorry, your message was too long. Can you summarize it?",
         val chatFull: String = "This chat has reached its maximum length. You can save it with Save chat under More. Capture again to start a new chat.",
+        val unreadable: String = UNREADABLE_RESPONSE,
     )
 
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
@@ -146,6 +147,7 @@ class OpenAiTransport(
         fun replyLanguageInstruction(): String =
             when (Locale.getDefault().language) {
                 "fi" -> " Vastaa aina suomeksi, vaikka kysymys olisi muulla kielellä. Always reply in Finnish."
+                "pl" -> " Odpowiadaj zawsze po polsku, nawet jeśli pytanie jest w innym języku. Always reply in Polish."
                 else -> " Always reply in English, even if the question is in another language."
             }
 
@@ -162,6 +164,9 @@ class OpenAiTransport(
                     "Ääneen luettava teksti pysyy alkuperäisellä kielellään, ellei käyttäjä pyydä käännöstä. " +
                     "Always reply in Finnish in your own words; text you read out stays in its original " +
                     "language unless the user asks for a translation."
+                "pl" -> " Pisz własne słowa zawsze po polsku, nawet jeśli pytanie jest w innym języku. " +
+                    "Odczytywany tekst pozostaje w języku oryginału, chyba że użytkownik poprosi o tłumaczenie. " +
+                    "Always reply in Polish in your own words; text you read out stays in its original language unless asked to translate."
                 else -> " Always reply in English in your own words, even if the question is in another language. " +
                     "Text you read out stays in its original language, unless the user asks for a translation."
             }
@@ -257,7 +262,7 @@ class OpenAiTransport(
                     .trim()
             } catch (e: Exception) {
                 Log.e(logTag, "Failed to parse chat response", e)
-                UNREADABLE_RESPONSE
+                transport.errors.unreadable
             }
         }
     }

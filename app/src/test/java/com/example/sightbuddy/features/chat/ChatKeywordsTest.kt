@@ -12,6 +12,14 @@ import org.junit.Test
 class ChatKeywordsTest {
 
     @Test
+    fun `Polish read original commands are exact keywords`() {
+        listOf("przeczytaj oryginał", "Odczytaj oryginał.").forEach {
+            assertEquals(it, Keyword.READ_ORIGINAL, ChatKeywords.match(it))
+        }
+        assertNull(ChatKeywords.match("przeczytaj oryginał dokumentu"))
+    }
+
+    @Test
     fun `read original, in English and Finnish`() {
         listOf("read original", "read the original", "lue alkuperäinen").forEach {
             assertEquals(it, Keyword.READ_ORIGINAL, ChatKeywords.match(it))

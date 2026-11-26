@@ -32,11 +32,24 @@ class SttModelVerifyTest {
     /** A finished download as an earlier version left it: every file and the marker. */
     private fun installed(vararg replaced: Pair<String, String>): SttModelManager {
         val filesDir = temp.newFolder("files")
-        val dir = File(filesDir, "stt").apply { mkdirs() }
+        val dir = File(filesDir, "stt-multilingual").apply { mkdirs() }
         val texts = contents + replaced
         texts.forEach { (name, text) -> File(dir, name).writeText(text) }
         File(dir, SttModelManager.MARKER).writeText("v1")
         return SttModelManager(filesDir, baseUrl = "", files = pins)
+    }
+
+    @Test
+    fun legacyFilesAreNotMultilingualAndArePreserved() {
+        val filesDir = temp.newFolder("legacy")
+        val old = File(filesDir, "stt").apply { mkdirs() }
+        contents.forEach { (name, text) -> File(old, name).writeText(text) }
+        File(old, SttModelManager.MARKER).writeText("v1")
+        val models = SttModelManager(filesDir, baseUrl = "", files = pins)
+        assertFalse(models.isReady())
+        assertNull(models.verifiedFiles())
+        assertTrue(models.deleteModels())
+        assertTrue(old.exists())
     }
 
     @Test

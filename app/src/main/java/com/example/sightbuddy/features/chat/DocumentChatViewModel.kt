@@ -103,7 +103,7 @@ class DocumentChatViewModel(
                 // A cancelled answer belongs to a session already reset: keep no turn.
                 if (response != OpenAiTransport.CANCELLED) {
                     val newHistory = _chatHistory.value.toMutableList()
-                    newHistory.add(ChatMessage("user", userPrompt.ifBlank { "Describe this document" }))
+                    newHistory.add(ChatMessage("user", userPrompt.ifBlank { context.getString(R.string.document_history_default) }))
                     newHistory.add(ChatMessage("assistant", response))
                     _chatHistory.value = newHistory
                 }

@@ -7,6 +7,12 @@ import org.junit.Test
 class SttModelHashesTest {
 
     @Test
+    fun multilingualManifestIsNotLegacy() {
+        assertEquals("base-encoder.int8.onnx", SttModelManager.ENCODER)
+        assertEquals("0b8fb1304b6109976038efff5ace81720e00386f3ff6b54ee8c75291ca0a1e11", SttModelManager.FILES.getValue(SttModelManager.ENCODER).sha256)
+    }
+
+    @Test
     fun everyWhisperFileHasAPinnedSha256() {
         val files = SttModelManager.FILES
         assertEquals(

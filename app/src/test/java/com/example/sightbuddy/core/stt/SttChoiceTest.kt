@@ -28,8 +28,8 @@ class SttChoiceTest {
     }
 
     @Test
-    fun otherLanguagesAlwaysUseAndroid() {
-        assertEquals(ANDROID, eff(WHISPER, whisper = true, gemma = true, english = false))
+    fun multilingualWhisperWorksOutsideEnglish() {
+        assertEquals(WHISPER, eff(WHISPER, whisper = true, gemma = true, english = false))
     }
 
     @Test

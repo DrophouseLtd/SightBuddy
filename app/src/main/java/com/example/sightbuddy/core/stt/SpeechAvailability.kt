@@ -28,10 +28,9 @@ enum class SttChoice(val key: String, val labelRes: Int) {
 
         /**
          * What actually runs: the choice when its model is here, otherwise the other
-         * model, otherwise the platform. Both models are English only.
+         * model, otherwise the platform. Gemma speech, if enabled, is English only.
          */
         fun effective(chosen: SttChoice, whisperReady: Boolean, gemmaInstalled: Boolean, english: Boolean): SttChoice {
-            if (!english) return ANDROID
             val order = when (chosen) {
                 WHISPER -> listOf(WHISPER, GEMMA, ANDROID)
                 GEMMA -> listOf(GEMMA, WHISPER, ANDROID)
@@ -39,11 +38,18 @@ enum class SttChoice(val key: String, val labelRes: Int) {
             }
             return order.first {
                 it == ANDROID || (it == WHISPER && whisperReady) ||
-                    (it == GEMMA && gemmaInstalled && GEMMA_SPEECH_OFFERED)
+                    (it == GEMMA && english && gemmaInstalled && GEMMA_SPEECH_OFFERED)
             }
         }
 
-        /** The options Settings cycles through: installed models, then the platform. */
+        /** Cycle from the stored preference, offering only successfully loaded models. */
+        fun nextAvailable(chosen: SttChoice, whisperReady: Boolean, gemmaInstalled: Boolean, cloudEnabled: Boolean = false): SttChoice {
+            if (cloudEnabled) return chosen
+            val options = available(whisperReady, gemmaInstalled)
+            return options[(options.indexOf(chosen) + 1) % options.size]
+        }
+
+        /** The options Settings cycles through: loaded models, then the platform. */
         fun available(whisperReady: Boolean, gemmaInstalled: Boolean): List<SttChoice> =
             listOfNotNull(
                 WHISPER.takeIf { whisperReady },

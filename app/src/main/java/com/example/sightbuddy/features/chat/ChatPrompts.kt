@@ -42,7 +42,7 @@ object ChatPrompts {
      * picture, which has no question of the user's, in English (issue #28).
      */
     fun languageRule(onDevice: Boolean, reading: Boolean = false): String = when {
-        onDevice && Locale.getDefault().language == "fi" -> OpenAiTransport.readingLanguageInstruction()
+        onDevice && Locale.getDefault().language in setOf("fi", "pl") -> OpenAiTransport.readingLanguageInstruction()
         onDevice -> ON_DEVICE_LANGUAGE_INSTRUCTION
         reading -> OpenAiTransport.readingLanguageInstruction()
         else -> OpenAiTransport.replyLanguageInstruction()

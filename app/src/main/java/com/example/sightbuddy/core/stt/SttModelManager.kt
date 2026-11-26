@@ -20,14 +20,9 @@ import java.util.concurrent.TimeUnit
  * app-private storage). The app remains fully functional without them — the
  * voice service falls back to the system recognizer until [isReady].
  *
- * Files (Whisper base.en int8 + silero VAD, ~154 MB total):
- *   filesDir/stt/base.en-encoder.int8.onnx
- *   filesDir/stt/base.en-decoder.int8.onnx
- *   filesDir/stt/base.en-tokens.txt
- *   filesDir/stt/silero_vad.onnx
- *
- * Download source is BuildConfig.STT_MODEL_BASE_URL; when empty, automatic
- * download is disabled (dev builds get files via adb push).
+ * The multilingual encoder, decoder, tokens and VAD live in stt-multilingual.
+ * The old stt/base.en files remain separate and are never treated as this model.
+ * STT_MODEL_BASE_URL overrides the source for all four files.
  *
  * Every file is checked against its pinned SHA-256 ([FILES]) before it is
  * used: a download before it is moved into place, files already on the phone
@@ -56,7 +51,7 @@ class SttModelManager internal constructor(
         val vad: ForLoad.Verified,
     )
 
-    val modelDir: File = File(filesDir, "stt")
+    val modelDir: File = File(filesDir, "stt-multilingual")
 
     private val verified = VerifiedModels(File(filesDir, VerifiedModels.DIR))
 
@@ -178,7 +173,7 @@ class SttModelManager internal constructor(
                     continue
                 }
                 val tmp = File(modelDir, "$name.part")
-                val url = baseUrl.trimEnd('/') + "/" + name
+                val url = if (name == VAD && baseUrl.trimEnd('/') == DEFAULT_BASE_URL) DEFAULT_VAD_URL else baseUrl.trimEnd('/') + "/" + name
                 Log.i(TAG, "Downloading $url")
                 client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
                     if (!resp.isSuccessful) error("HTTP ${resp.code} for $name")
@@ -222,27 +217,20 @@ class SttModelManager internal constructor(
 
     companion object {
         private const val TAG = "SttModelManager"
-        const val ENCODER = "base.en-encoder.int8.onnx"
-        const val DECODER = "base.en-decoder.int8.onnx"
-        const val TOKENS = "base.en-tokens.txt"
+        internal const val DEFAULT_BASE_URL = "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/bb53ee204431c90d314c1cc08d28d23e5b7927cc"
+        internal const val DEFAULT_VAD_URL = "https://github.com/DrophouseLtd/sightbuddy-stt-models/releases/download/whisper-base-en-v1/silero_vad.onnx"
+        const val ENCODER = "base-encoder.int8.onnx"
+        const val DECODER = "base-decoder.int8.onnx"
+        const val TOKENS = "base-tokens.txt"
         const val VAD = "silero_vad.onnx"
         internal const val MARKER = ".download-complete"
 
-        /**
-         * Minimum plausible sizes (bytes) reject truncated files; the SHA-256 is
-         * what each file must be. The hashes are the release assets of
-         * DrophouseLtd/sightbuddy-stt-models, tag whisper-base-en-v1 (the
-         * default STT_MODEL_BASE_URL): GitHub's `digest` for each asset,
-         * checked against a download of each on 2026-10-28. A build with its
-         * own STT_MODEL_BASE_URL must serve these same files: anything else
-         * fails the check and is never loaded. A new model release needs new
-         * hashes here.
-         */
+        /** Pinned multilingual base files and the existing Silero VAD. */
         internal val FILES = linkedMapOf(
-            ENCODER to Pinned(25_000_000L, "ef6b936f4c9b1d90a3b68634b60c4ed8576b26172b33c2535ec0e933c9edb823"),
-            DECODER to Pinned(110_000_000L, "f7162ad6db2dbef16cfaeaa7f945b9d7dd9c1b8d472f6aca82f2273d185e4d41"),
-            TOKENS to Pinned(100_000L, "306cd27f03c1a714eca7108e03d66b7dc042abe8c258b44c199a7ed9838dd930"),
-            VAD to Pinned(400_000L, "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"),
+            ENCODER to Pinned(29_120_534L, "0b8fb1304b6109976038efff5ace81720e00386f3ff6b54ee8c75291ca0a1e11"),
+            DECODER to Pinned(130_672_026L, "9759d217388a01b3a4c7c15533201067b48ae819c4daafc8624e64b9409dc02d"),
+            TOKENS to Pinned(816_730L, "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126"),
+            VAD to Pinned(643_854L, "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"),
         )
     }
 }

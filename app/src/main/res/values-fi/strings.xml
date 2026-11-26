@@ -1,14 +1,19 @@
 <resources>
+    <string name="feature_last_enabled">Vähintään yhden toiminnon on oltava käytössä.</string>
+    <string name="document_history_default">Describe this document</string>
     <string name="app_name">Sight Buddy</string>
 
     <!-- Pakollinen kielivalinta, näytetään käyttöehtojen yhteydessä. -->
     <string name="language_title">Valitse kieli</string>
     <string name="language_english">English</string>
     <string name="language_finnish">Suomi</string>
+    <string name="language_polish">Polski</string>
     <string name="language_name_english">englanti</string>
     <string name="language_name_finnish">suomi</string>
+    <string name="language_name_polish">puola</string>
     <string name="language_english_cd">English. Käytä sovellusta englanniksi</string>
     <string name="language_finnish_cd">Suomi. Käytä sovellusta suomeksi</string>
+    <string name="language_polish_cd">Polski. Käytä sovellusta puolaksi</string>
 
     <!-- Taskulamppu -->
     <!-- Short form for the round button face; the full word is used when spoken. -->
@@ -104,6 +109,7 @@
     <string name="btn_ask">Kysy</string>
     <string name="btn_send">Lähetä</string>
     <string name="btn_capture">Kuvaa</string>
+    <string name="btn_capture_text">Kuvaa</string>
     <string name="btn_find_page">Etsi sivu</string>
     <string name="btn_back">Taakse</string>
     <string name="btn_play">Toista</string>
@@ -122,6 +128,7 @@
     <string name="chat_empty_ai">Täällä ei ole vielä mitään. Ota kuva tai esitä kysymys. Tekoäly voi tehdä virheitä.</string>
     <string name="live_text_area">Live-teksti</string>
     <string name="chat_empty_text">Täällä ei ole vielä mitään. Ota kuva tai etsi sivu lukeaksesi tekstiä. Tekoäly voi tehdä virheitä.</string>
+    <string name="chat_empty_image_no_ai">Täällä ei ole vielä mitään. Ota kuva tai etsi sivu lukeaksesi tekstiä. Tekoäly voi tehdä virheitä.</string>
     <string name="chat_empty_text_live_off">Täällä ei ole vielä mitään. Ota kuva tekstistä, etsi sivu tai ota live-teksti käyttöön. Tekoäly voi tehdä virheitä.</string>
     <string name="chat_working">Työstetään…</string>
     <string name="chat_input_hint">Kirjoita kysymys</string>
@@ -427,4 +434,6 @@
     <string name="cloud_stt_local_enable_cd">Käytä maksullista OpenAI-puheentunnistusta ilmaisen laitteella toimivan mallin sijaan</string>
     <string name="cloud_stt_local_decline">Pidä ilmainen malli</string>
     <string name="cloud_stt_local_decline_cd">Jatka ilmaisella laitteella toimivalla puheentunnistuksella</string>
+    <string name="chat_describe_image">Kuvaile tätä kuvaa</string>
+    <string name="error_unreadable_response">Sain vastauksen, mutta en voinut lukea sitä. Yritä uudelleen.</string>
 </resources>

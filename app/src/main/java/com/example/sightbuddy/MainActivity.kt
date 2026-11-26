@@ -202,6 +202,7 @@ class MainActivity : ComponentActivity() {
             sttModelManager,
             localGemma,
             sttChoice = { SttChoice.fromKey(settingsManager.sttChoice.value) },
+            appLanguage = languageStore.language(),
         )
         // Whisper models are downloaded only on user request (Settings or the
         // first-launch prompt) — no automatic 154 MB download.
@@ -236,6 +237,7 @@ class MainActivity : ComponentActivity() {
                 localFailed = getString(R.string.error_local_failed),
                 tooLong = getString(R.string.error_too_long),
                 chatFull = getString(R.string.error_chat_full),
+                unreadable = getString(R.string.error_unreadable_response),
             ),
             apiAllowed = { settingsManager.useApi.value },
             online = { networkStatusManager.isOnline.value },
